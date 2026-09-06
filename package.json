@@ -1,0 +1,29 @@
+{
+  "name": "bullmq-visualizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A fast, self-hosted dashboard for BullMQ and BullMQ Pro. Free core, one-time Pro upgrade.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.4.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/server --filter ./apps/web dev",
+    "dev:simulator": "pnpm --filter @bullmq-visualizer/simulator dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "start": "pnpm --filter @bullmq-visualizer/server start",
+    "license:keygen": "tsx scripts/gen-license.ts keygen",
+    "license:sign": "tsx scripts/gen-license.ts sign",
+    "demo": "docker compose -f docker-compose.demo.yml up --build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "ws": "^8.21.3"
+  }
+}

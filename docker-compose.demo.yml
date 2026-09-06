@@ -1,0 +1,89 @@
+# BullMQ Visualizer — live demo / playground.
+#
+#   pnpm demo            (= docker compose -f docker-compose.demo.yml up --build)
+#   open http://localhost:3000   login demo@bullmq-visualizer.dev / demo1234
+#
+# Everything from docker-compose.yml plus a throwaway Redis and the simulator
+# that keeps it busy. DEMO_MODE unlocks Pro with a "demo" badge, auto-creates
+# the admin, seeds the Redis connection and blocks destructive settings.
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    image: bullmq-visualizer:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: mysql://bmv:bmv@mysql:3306/bmv
+      SESSION_SECRET: ${SESSION_SECRET:-demo-only-secret-please-change-0123456789}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      DEMO_MODE: "true"
+      DEMO_REDIS_URL: redis://redis:6379
+      DEMO_ADMIN_EMAIL: demo@bullmq-visualizer.dev
+      DEMO_ADMIN_PASSWORD: demo1234
+      BMV_CHECKOUT_URL: ${BMV_CHECKOUT_URL:-https://bullmq-visualizer.dev/pro}
+      BMV_ALERTS_INTERVAL: 15
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  simulator:
+    build:
+      context: .
+      target: simulator
+    image: bullmq-visualizer-simulator:local
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      BULL_PREFIX: bull
+      # 0.2 (quiet) .. 3 (hammering). 1 ≈ a busy mid-sized company.
+      SIM_INTENSITY: ${SIM_INTENSITY:-1}
+      # Start from a clean prefix every boot; the demo Redis is not persistent anyway.
+      SIM_RESET: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # No persistence, hard memory cap, and *noeviction* so BullMQ never loses
+    # keys behind its back (evicting a job hash corrupts a queue).
+    command: >
+      redis-server --save "" --appendonly no
+      --maxmemory 512mb --maxmemory-policy noeviction
+    ports:
+      # Handy for `redis-cli -p 16379` from the host. Defaults to 16379 so it never collides with a local Redis.
+      - "${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: --mysql-native-password=ON --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: bmv
+      MYSQL_USER: bmv
+      MYSQL_PASSWORD: bmv
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - mysql-demo-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  mysql-demo-data:
