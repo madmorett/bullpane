@@ -28,6 +28,7 @@ import { QueueMetricsPanel } from "./QueueMetricsPanel";
 import { AddJobDialog } from "./AddJobDialog";
 import { CleanDialog } from "./CleanDialog";
 import { QueueSetupPanel } from "./QueueSetupPanel";
+import { QueueAlerts, QueueAlertsPill, useQueueAlerts } from "./QueueAlerts";
 import { GroupCombobox } from "./GroupCombobox";
 
 type StateTab = JobState | "groups" | "metrics";
@@ -80,6 +81,9 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
   );
 
   const summary = useQueue(connectionId, queue);
+  // Alerts covering this queue, directly or through a folder. Uses the already
+  // cached /alerts and /folders queries, so it costs no extra request.
+  const queueAlerts = useQueueAlerts(connectionId, queue);
   const isPro = !!summary.data && (summary.data.isPro || summary.data.groupsCount > 0);
   const searching = q.trim().length > 0;
   const filteringByGroup = !searching && !!groupId;
@@ -193,6 +197,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
                 </span>
               </span>
             )}
+            <QueueAlertsPill matches={queueAlerts.matches} firing={queueAlerts.firing} />
           </p>
         </div>
 
@@ -236,6 +241,16 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
 
       {/* Setup (what Redis knows about this queue's configuration) */}
       <QueueSetupPanel connectionId={connectionId} queue={queue} className="mb-3" />
+
+      {/* Alerts already watching this queue (directly, or via a folder it belongs to) */}
+      <div className="mb-3">
+        <QueueAlerts
+          connectionId={connectionId}
+          queueName={queue}
+          matches={queueAlerts.matches}
+          onCreate={() => gate("alerts", () => setAlertOpen(true))}
+        />
+      </div>
 
       {/* Search — first thing in the toolbar (jobs view only) */}
       {!showingMetrics && (

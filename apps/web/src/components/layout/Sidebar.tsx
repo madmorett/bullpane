@@ -11,7 +11,6 @@ import {
   Search,
   Settings,
   Users,
-  Workflow,
 } from "lucide-react";
 import type { Folder as FolderModel, ProFeature, QueueSummary, RedisConnection } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
@@ -54,8 +53,8 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
   const folders = useFolders(foldersEnabled);
 
   const proNav: { to: string; label: string; icon: typeof Bell; feature: ProFeature; adminOnly?: boolean }[] = [
+    // Flows is hidden for now — see lib/featureFlags.ts
     { to: routes.alerts, label: "Alerts", icon: Bell, feature: "alerts" },
-    { to: routes.flows(), label: "Flows", icon: Workflow, feature: "flows" },
     { to: routes.users, label: "Users", icon: Users, feature: "users", adminOnly: true },
   ];
 

@@ -66,7 +66,9 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
       const inspector = app.ctx.connections.inspectorFor(row);
       const [info, queues, status] = await Promise.all([
         withRedis(() => inspector.serverInfo()),
-        app.ctx.connections.listQueues(row),
+        // withMetrics comes back from the SAME Lua script in the same round trip
+        // (an LRANGE of the metrics list), so the sparklines are free.
+        app.ctx.connections.listQueues(row, { withMetrics: true }),
         app.ctx.connections.getStatus(row),
       ]);
       return { info, queues, status };
@@ -77,6 +79,6 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
     const query = queuesQuerySchema.parse(request.query);
     const row = await app.ctx.connections.getRow(request.params.id);
     const refresh = query.refresh === "1" || query.refresh === "true";
-    return app.ctx.connections.listQueues(row, { refresh });
+    return app.ctx.connections.listQueues(row, { refresh, withMetrics: true });
   });
 }

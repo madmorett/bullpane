@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { isApiError } from "@/api/client";
+import { SHOW_FLOWS } from "@/lib/featureFlags";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { RedirectIfAuthed, RequireAuth } from "@/auth/guards";
 import { UpsellDialog } from "@/edition/UpsellDialog";
@@ -85,22 +86,30 @@ export function App() {
                 <Route path="folders/:folderId" element={<FolderPage />} />
                 <Route path="alerts" element={<AlertsPage />} />
                 <Route path="users" element={<UsersPage />} />
-                <Route
-                  path="flows"
-                  element={
-                    <Lazy>
-                      <FlowsIndexPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="flows/:connectionId"
-                  element={
-                    <Lazy>
-                      <FlowsPage />
-                    </Lazy>
-                  }
-                />
+                {/* Flows is built and working but hidden for now (lib/featureFlags.ts).
+                    While hidden, /flows redirects home instead of 404ing a stale bookmark. */}
+                {SHOW_FLOWS ? (
+                  <>
+                    <Route
+                      path="flows"
+                      element={
+                        <Lazy>
+                          <FlowsIndexPage />
+                        </Lazy>
+                      }
+                    />
+                    <Route
+                      path="flows/:connectionId"
+                      element={
+                        <Lazy>
+                          <FlowsPage />
+                        </Lazy>
+                      }
+                    />
+                  </>
+                ) : (
+                  <Route path="flows/*" element={<Navigate to="/" replace />} />
+                )}
                 <Route path="settings" element={<Navigate to="/settings/connections" replace />} />
                 <Route path="settings/:tab" element={<SettingsPage />} />
                 <Route path="*" element={<NotFoundPage />} />
