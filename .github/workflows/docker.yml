@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
   packages: write
+# Two pushes in quick succession used to race on the shared build cache
+# ("error writing layer blob: not_found"); one build at a time, newest wins.
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   image:
     runs-on: ubuntu-latest
@@ -29,7 +34,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/bullpane
           tags: |
-            type=ref,event=branch,enable={{is_default_branch}},value=edge
+            type=raw,value=edge,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
