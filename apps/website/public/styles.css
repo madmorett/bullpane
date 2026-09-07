@@ -124,6 +124,20 @@ td.w { color: var(--red); }
 .faq summary::after { content: "+"; color: var(--fg-subtle); }
 .faq details[open] summary::after { content: "–"; }
 .faq p { color: var(--fg-muted); margin: 10px 0 0; font-size: 15px; }
+.legal { padding: 56px 0 72px; }
+.legal .wrap { max-width: 760px; }
+.legal h1 { font-size: clamp(30px, 5vw, 42px); letter-spacing: -0.025em; margin: 0 0 6px; font-weight: 800; }
+.legal .updated { color: var(--fg-subtle); font-size: 13px; margin: 0 0 28px; }
+.legal .lead-sm { font-size: 17px; color: var(--fg-muted); margin: 0 0 32px; }
+.legal h2 { font-size: 19px; margin: 34px 0 10px; letter-spacing: -0.01em; font-weight: 700; }
+.legal h3 { font-size: 15px; margin: 0 0 6px; font-weight: 700; }
+.legal p { margin: 0 0 12px; color: var(--fg-muted); font-size: 15px; }
+.legal li { color: var(--fg-muted); font-size: 15px; margin-bottom: 7px; }
+.legal ul { margin: 0 0 12px; padding-left: 20px; }
+.legal strong { color: var(--fg); font-weight: 650; }
+.legal code { font-size: 13.5px; background: var(--bg-3); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; color: var(--fg); }
+.legal .callout { border: 1px solid rgba(245,165,36,.35); background: rgba(245,165,36,.06); border-radius: 12px; padding: 18px 20px; margin: 0 0 8px; }
+.legal .callout p { margin: 0; }
 footer { border-top: 1px solid var(--border); padding: 36px 0 48px; color: var(--fg-subtle); font-size: 13.5px; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; }
 footer a { color: var(--fg-muted); }

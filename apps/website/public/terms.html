@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css"><title>Terms of Service — Bullpane</title><meta name="description" content="Terms of Service for Bullpane, a self-hosted dashboard for BullMQ."></head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Terms of Service</h1>
+<p class="updated">Last updated 7 September 2026</p>
+
+<p class="lead-sm">These terms cover your use of the Bullpane software and the bullpane.com website. Plain language, no surprises. If something here is unclear, write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> before you buy.</p>
+
+<h2>1. Who you are contracting with</h2>
+<p>Bullpane is operated by Matheus Morett, a company registered in Brazil ("we", "us"). Purchases are processed by <strong>Creem</strong> (Armitage Labs OÜ, Estonia), which acts as the merchant of record and is the seller of record for your transaction. Creem's terms govern payment, invoicing and tax; these terms govern the software itself.</p>
+
+<h2>2. The two editions</h2>
+<p><strong>Free edition.</strong> Free to download, install and use, including commercially, with no time limit and no user limit. No account with us is required and no payment is involved.</p>
+<p><strong>Pro edition.</strong> A paid subscription (monthly or yearly) that unlocks alerts, users and roles, folders, the flow graph and the audit log. You get a license key.</p>
+
+<h2>3. What a license key allows</h2>
+<ul>
+  <li>One key activates <strong>one installation</strong> of Bullpane, with unlimited Redis connections, queues, jobs and users on that installation.</li>
+  <li>An installation is one running deployment. A staging copy and a production copy are two installations and need two keys.</li>
+  <li>You may move a key to a different server: remove it on the old installation (Settings → License), which frees the activation, then activate it on the new one. If you lost access to the old server, write to us and we free it.</li>
+  <li>You may not share, resell, sublicense or publish your key.</li>
+  <li>The license lasts as long as the subscription is paid. Cancel and the installation returns to the free edition; your data stays in your database.</li>
+</ul>
+
+<h2>4. How license checking works</h2>
+<p>A Pro installation contacts api.bullpane.com to activate the key and then about once a day to confirm it is still valid. It sends only the key, an activation identifier and a label for the installation (its hostname and public URL) plus the Bullpane version. It never sends your queues, your jobs, your job data, your Redis addresses or your credentials. If our server cannot be reached, the installation keeps working with Pro features for seven days and then falls back to the free edition. Nothing is deleted.</p>
+<p>Air-gapped or offline installations can be issued a key that never contacts us. Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
+
+<h2>5. The software runs on your infrastructure</h2>
+<p>You install and operate Bullpane yourself, on servers you control, against Redis instances you control. You are responsible for who you give access to, for the actions they take through it, and for your own backups. Bullpane can pause, drain, clean and obliterate queues; these are destructive operations on your data and we cannot undo them for you. Restricting them to trusted operators, and using read-only mode when you are unsure, is your call.</p>
+
+<h2>6. Acceptable use</h2>
+<p>Do not use Bullpane to break the law, and do not remove or bypass the licensing mechanism, redistribute the Pro features as your own product, or resell Bullpane as a hosted service without a written agreement with us. Reading and modifying the code for your own installation is fine.</p>
+
+<h2>7. Support and updates</h2>
+<p>Pro subscribers get email support at <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> and every update released while the subscription is active. We aim to answer within two business days. We do not promise a fix within any particular time. Free edition users are welcome to write, but paying customers come first.</p>
+
+<h2>8. Changes to the service and these terms</h2>
+<p>We may change the features, pricing or these terms. Price changes never apply retroactively to an active subscription period; if we raise the price, your renewal notice tells you before you are charged. Material changes to these terms are announced by email to Pro customers. Continuing to use Bullpane after a change means you accept it.</p>
+
+<h2>9. No warranty</h2>
+<p>Bullpane is provided "as is". We do not warrant that it will be uninterrupted, error-free, or fit for a particular purpose. You are pointing it at production infrastructure; test it against something disposable first.</p>
+
+<h2>10. Limitation of liability</h2>
+<p>To the extent the law allows, our total liability for any claim relating to Bullpane is limited to the amount you paid us in the twelve months before the claim. We are not liable for lost profits, lost data, lost jobs, or business interruption. Nothing here excludes liability that cannot legally be excluded, including consumer rights you may have in your own country.</p>
+
+<h2>11. Termination</h2>
+<p>You can cancel at any time from the customer portal link on your receipt. We can suspend or terminate a license if these terms are broken, in which case we refund the unused portion of the current period. On termination the installation returns to the free edition.</p>
+
+<h2>12. Governing law</h2>
+<p>These terms are governed by the laws of Brazil, and the courts of the seller's domicile have jurisdiction, without prejudice to mandatory consumer protections in your country of residence.</p>
+
+<h2>13. Contact</h2>
+<p>Matheus Morett · <a href="mailto:hello@bullpane.com">hello@bullpane.com</a></p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>
