@@ -1,6 +1,6 @@
 # REST API contract
 
-All routes are under `/api`, JSON in/out. Auth is a signed httpOnly cookie session (`bmv_session`).
+All routes are under `/api`, JSON in/out. Auth is a signed httpOnly cookie session (`bullpane_session`).
 Errors: `{ error: string, message: string, feature?: ProFeature, details?: unknown }`.
 
 Status codes: 400 validation (`error: "validation"`), 401 `unauthenticated`, 403 `forbidden`

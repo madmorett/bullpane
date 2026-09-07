@@ -11,7 +11,7 @@ import { isHttps } from "../config";
 import type { Db } from "../db";
 import { sessions, users, type UserRow } from "../db/schema";
 
-export const SESSION_COOKIE = "bmv_session";
+export const SESSION_COOKIE = "bullpane_session";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function toUserDto(row: UserRow): User {
