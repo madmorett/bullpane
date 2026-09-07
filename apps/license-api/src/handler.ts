@@ -1,6 +1,6 @@
 /**
  * Request handling, kept free of Worker globals so it runs under vitest with a
- * scripted fetch.
+ * scripted store.
  *
  *   POST /v1/license/activate    { key, instance }        → { lease }
  *   POST /v1/license/refresh     { key, activationId }    → { lease }
@@ -19,15 +19,13 @@ import {
   licenseRefreshRequestSchema,
 } from "@bullpane/shared";
 import { ZodError } from "zod";
-import { ApiFail, type PolarLicenseKey, PolarClient, statusFor } from "./polar";
 import { signLease } from "./sign";
+import { ApiFail, type StoreClient, type StoreLicense, statusFor } from "./store";
 
 export interface Deps {
-  fetchImpl: typeof fetch;
+  store: StoreClient;
   now: () => number;
   privateKey: CryptoKey;
-  polarBase: string;
-  organizationId: string;
   leaseDays: number;
 }
 
@@ -57,24 +55,16 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-function customerOf(lk: PolarLicenseKey): { licensee: string; email: string } {
-  const c = lk.customer ?? lk.user ?? null;
-  const email = (c?.email ?? "").trim() || "unknown";
-  const licensee = (c?.name ?? "").trim() || email;
-  return { licensee, email };
-}
-
-function leasePayload(lk: PolarLicenseKey, activationId: string, deps: Deps): LicensePayload {
+function leasePayload(lic: StoreLicense, deps: Deps): LicensePayload {
   const now = deps.now();
-  const { licensee, email } = customerOf(lk);
   return {
-    licensee,
-    email,
+    licensee: lic.licensee,
+    email: lic.email,
     plan: "pro",
     issuedAt: now,
     expiresAt: now + deps.leaseDays * DAY,
-    subscriptionExpiresAt: lk.expires_at ? Date.parse(lk.expires_at) : null,
-    activationId,
+    subscriptionExpiresAt: lic.subscriptionExpiresAt,
+    activationId: lic.activationId,
     billing: "subscription",
   };
 }
@@ -86,26 +76,26 @@ export async function handle(request: Request, deps: Deps): Promise<Response> {
   if (request.method === "GET" && path === "/v1/health") return json(200, { ok: true });
   if (request.method !== "POST") return fail(405, "validation", "Method not allowed");
 
-  const polar = new PolarClient({ base: deps.polarBase, organizationId: deps.organizationId, fetchImpl: deps.fetchImpl });
+  const store = deps.store;
 
   try {
     switch (path) {
       case "/v1/license/activate": {
         const body = licenseActivateRequestSchema.parse(await readJson(request));
-        const activation = await polar.activate(body.key, body.instance.label, body.instance.version ? { version: body.instance.version } : {});
-        const lease = await signLease(leasePayload(activation.license_key, activation.id, deps), deps.privateKey);
+        const lic = await store.activate(body.key, body.instance.label, body.instance.version ? { version: body.instance.version } : {});
+        const lease = await signLease(leasePayload(lic, deps), deps.privateKey);
         return json(200, { lease } satisfies LicenseLeaseResponse);
       }
       case "/v1/license/refresh": {
         const body = licenseRefreshRequestSchema.parse(await readJson(request));
-        const validation = await polar.validate(body.key, body.activationId);
-        const lease = await signLease(leasePayload(validation, body.activationId, deps), deps.privateKey);
+        const lic = await store.validate(body.key, body.activationId);
+        const lease = await signLease(leasePayload(lic, deps), deps.privateKey);
         return json(200, { lease } satisfies LicenseLeaseResponse);
       }
       case "/v1/license/deactivate": {
         const body = licenseRefreshRequestSchema.parse(await readJson(request));
         try {
-          await polar.deactivate(body.key, body.activationId);
+          await store.deactivate(body.key, body.activationId);
         } catch (err) {
           // Already gone is the outcome the caller wanted.
           if (!(err instanceof ApiFail) || !["license_not_found", "license_activation_mismatch"].includes(err.code)) throw err;

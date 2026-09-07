@@ -32,7 +32,7 @@ export const licensePayloadSchema = z.object({
 
 /**
  * An offline token is `payload.signature` (two base64url parts). Anything else
- * the admin pastes is treated as a store key (Polar: `BULLPANE-XXXX-…`, no dot)
+ * the admin pastes is treated as a store key (issued by the store at checkout, no dot)
  * and goes through the license API.
  */
 export function isOfflineToken(key: string): boolean {

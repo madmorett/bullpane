@@ -15,7 +15,7 @@ bullpane/
 │   └── redis-inspector/ ioredis + Lua scripts. All reads of a customer's Redis go through here.
 ├── scripts/gen-license.ts   Ed25519 keypair + offline license signing (vendor side).
 ├── apps/license-api/        Cloudflare Worker at api.bullpane.com: activates subscription
-│                            keys at the store (Polar) and signs 7-day leases.
+│                            keys at the store (Creem) and signs 7-day leases.
 ├── Dockerfile               Multi-stage: build web + server, run one node process.
 ├── docker-compose.yml       app + mysql (bring your own Redis).
 └── docker-compose.demo.yml  app + mysql + redis + simulator, DEMO_MODE=true.
@@ -208,7 +208,7 @@ shows the locked feature with a lock icon and an upsell instead of hiding it.
 Two kinds of key, one verifier. Both are `base64url(payload).base64url(signature)`
 signed with the vendor Ed25519 key whose public half is compiled into the server:
 
-* **Subscription key** (`BULLPANE-…`, sold on bullpane.com through Polar). Pasting it
+* **Subscription key** (sold on bullpane.com through Creem). Pasting it
   makes the server call the license API (`apps/license-api`, api.bullpane.com), which
   activates the key at the store — activation limit 1, so a key works on exactly one
   installation — and answers with a **7-day signed lease**. The server refreshes the

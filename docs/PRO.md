@@ -3,7 +3,7 @@
 The Pro edition is the same binary as the free edition. A license key unlocks
 `alerts`, `users`, `folders`, `flows` and `audit` (see the editions table in
 `ARCHITECTURE.md`). USD 19/month or 149/year, per installation, unlimited users.
-Sold on bullpane.com through Polar (merchant of record).
+Sold on bullpane.com through Creem (merchant of record).
 
 `audit` is the one feature whose data is collected in every edition: the
 `onResponse` hook writes rows regardless of the licence, and only reading and
@@ -16,7 +16,7 @@ is in `ARCHITECTURE.md`, "Why Pro and not Free".
 | | Subscription key | Offline key |
 |---|---|---|
 | Looks like | `BULLPANE-XXXX-XXXX-XXXX` | `eyJsaWNlbnNlZSI6…​.MEUCIQ…` |
-| Issued by | Polar, after checkout on bullpane.com | `scripts/gen-license.ts` by hand |
+| Issued by | Creem, after checkout on bullpane.com | `scripts/gen-license.ts` by hand |
 | Verified by | the license API turns it into a signed **lease**; the server verifies the lease | the server, locally |
 | Talks to the internet | api.bullpane.com once on activation, then every 24 h | never |
 | Installations | exactly one (activation limit 1; remove to move) | whatever the payload says |
@@ -29,8 +29,8 @@ is a subscription key.
 
 1. Admin pastes the key in Settings → License (or sets `BULLPANE_LICENSE_KEY`).
 2. Server `POST api.bullpane.com/v1/license/activate { key, instance: { label, version } }`.
-   The API activates the key at Polar (`label` = hostname + PUBLIC_URL, shown in the
-   customer portal) and answers `{ lease }`. Polar refusing because the key is already
+   The API activates the key at Creem (`label` = hostname + PUBLIC_URL, the instance name
+   in the Creem dashboard) and answers `{ lease }`. Creem refusing because the key is already
    active elsewhere becomes **409 `license_already_activated`** in the dashboard.
 3. Server verifies the lease with the compiled-in public key, stores key + activation id
    + lease in `settings`, and is Pro.
@@ -47,10 +47,15 @@ is a subscription key.
 6. Removing the key calls `/v1/license/deactivate` (best effort) so the same key can be
    activated on the next server. Data (alerts, folders, users) stays in the database.
 
+Why Creem: it is a merchant of record (handles worldwide tax and invoices) that pays
+out to a Brazilian company. Polar and Dodo Payments have the same feature set but do
+not pay out to Brazil, which we found out after building against Polar.
+
 The license API is `apps/license-api`, a Cloudflare Worker. It holds the vendor
-private key and the Polar organization id as secrets and uses Polar's unauthenticated
-customer-portal license endpoints (`activate`, `validate`, `deactivate`). The dashboard
-never sees Polar, and Polar never sees the dashboard's data.
+private key and the Creem store API key as secrets and calls Creem's license
+endpoints (`/v1/licenses/activate`, `validate`, `deactivate`) behind a `StoreClient`
+seam, so swapping the store touches one file. The dashboard never sees Creem, and
+Creem never sees the dashboard's data.
 
 ## Token format (offline keys and leases alike)
 
@@ -114,7 +119,7 @@ key like a production secret (offline, backed up, never in CI).
 ## Activating
 
 1. Buy at the checkout URL (`BULLPANE_CHECKOUT_URL`, shown on the "Unlock Pro" button).
-   The key is on the receipt and in the Polar customer portal.
+   The key is on the receipt email (sent by Creem).
 2. Paste the key in **Settings → License**, or set `BULLPANE_LICENSE_KEY` in the
    environment. A key stored through the UI wins over the env var on boot; an env
    key with no stored activation is activated a few seconds after boot.
@@ -125,15 +130,15 @@ key like a production secret (offline, backed up, never in CI).
 
 ```sh
 cd apps/license-api
-pnpm test                                   # scripted Polar, real Ed25519
+pnpm test                                   # scripted Creem, real Ed25519
 wrangler secret put LICENSE_PRIVATE_KEY_PEM  # paste keys/license-private.pem
-wrangler secret put POLAR_ORGANIZATION_ID
+wrangler secret put CREEM_API_KEY            # a test-mode key, with CREEM_API_BASE=https://test-api.creem.io
 pnpm dev                                    # http://localhost:8787
 # then run the server with BULLPANE_LICENSE_API_URL=http://localhost:8787
 ```
 
-To test the whole loop without paying, the Polar discount code in
-`private/bullpane/polar.json` gives a 100% off subscription and a real key.
+To test the whole loop without paying, the 100%-off discount code in
+`private/bullpane/creem.json` gives a free subscription and a real key.
 
 ## DEMO_MODE
 

@@ -7,7 +7,7 @@ instructions (voice, chapters, YODA) when working here.
 Self-hosted dashboard for BullMQ and BullMQ Pro, sold as **Bullpane** (bullpane.com).
 Metabase model: free edition does everything bull-board does; Pro (USD 19/month or
 149/year, one installation) unlocks Alerts, Users & roles, Folders, Flows, Audit log.
-Pro keys are sold through Polar and activated via the license API in `apps/license-api`
+Pro keys are sold through Creem and activated via the license API in `apps/license-api`
 (Cloudflare Worker, api.bullpane.com) which signs 7-day Ed25519 leases; hand-signed
 offline keys still exist for air-gapped customers. A public live demo runs in
 `DEMO_MODE=true` against the simulator. Website: `apps/website` (bullpane.com).
@@ -37,7 +37,8 @@ em `docs/`, `deploy/` ou `README.md` — o repositório pode virar open source.
 O equivalente genérico usa placeholders (`<ACCOUNT_ID>`, `<REGION>`).
 
 Instalação em produção da Monest: `private/monest/INSTALACAO-ATUAL.md`.
-Polar (IDs de produto, benefit, checkout link, cupom de teste): `private/bullpane/polar.json`.
+Creem (IDs de produto, payment links, cupom de teste): `private/bullpane/creem.json`. Polar foi
+descartado (não paga no Brasil); `private/bullpane/polar.json` é só histórico.
 Chave privada de licença (backup): `private/bullpane/license-private.pem` — nunca sai daqui.
 
 ## Commands

@@ -114,7 +114,7 @@ export const LICENSE_API_ERROR_CODES = [
   "license_expired",
   /** the activation this install holds no longer exists (deactivated from the portal) */
   "license_activation_mismatch",
-  /** the store (Polar) could not be reached or answered 5xx */
+  /** the store (Creem) could not be reached or answered 5xx */
   "upstream_unavailable",
   "validation",
 ] as const;

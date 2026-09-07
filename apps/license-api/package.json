@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "api.bullpane.com — activates Bullpane Pro keys against Polar and signs short-lived leases.",
+  "description": "api.bullpane.com — activates Bullpane Pro keys against the store (Creem) and signs short-lived leases.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

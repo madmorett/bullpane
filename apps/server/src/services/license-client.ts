@@ -1,6 +1,6 @@
 /**
  * Client for the license API (api.bullpane.com). The dashboard never talks to
- * the store (Polar) directly: the API activates the key there and answers with
+ * the store (Creem) directly: the API activates the key there and answers with
  * an Ed25519-signed lease that the server verifies like any offline token.
  *
  * Only the key, an instance label and the activation id ever leave the server.

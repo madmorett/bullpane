@@ -125,7 +125,7 @@ docker run -d --name bullpane -p 3000:3000 \
 <section id="pricing">
   <div class="wrap">
     <h2>Pricing</h2>
-    <p class="sub">Per installation, not per connection, not per seat. Taxes and invoices are handled by Polar, our merchant of record, in your currency.</p>
+    <p class="sub">Per installation, not per connection, not per seat. Taxes and invoices are handled by Creem, our merchant of record.</p>
     <div class="pricing">
       <div class="card plan">
         <h3>Free</h3>
@@ -152,7 +152,7 @@ docker run -d --name bullpane -p 3000:3000 \
           <li>Unlimited users, one installation</li>
         </ul>
         <div class="spacer"></div>
-        <a class="btn pro" href="https://buy.polar.sh/polar_cl_r2E8jNvyMy69FtSIeustp9qAtT4sPu3A3lJ6e0P9D5h" rel="noopener">Get Pro monthly</a>
+        <a class="btn pro" href="https://creem.io/product/prod_1MIOAspTe6CHBfGwxpaYYE" rel="noopener">Get Pro monthly</a>
       </div>
       <div class="card plan pro">
         <h3>Pro · yearly</h3>
@@ -164,7 +164,7 @@ docker run -d --name bullpane -p 3000:3000 \
           <li>Cancel any time, data stays</li>
         </ul>
         <div class="spacer"></div>
-        <a class="btn pro" href="https://buy.polar.sh/polar_cl_r2E8jNvyMy69FtSIeustp9qAtT4sPu3A3lJ6e0P9D5h" rel="noopener">Get Pro yearly</a>
+        <a class="btn pro" href="https://creem.io/product/prod_7RnATtB5hqVii5RqDvfy4j" rel="noopener">Get Pro yearly</a>
       </div>
     </div>
   </div>
@@ -173,7 +173,7 @@ docker run -d --name bullpane -p 3000:3000 \
 <section id="faq" class="faq">
   <div class="wrap">
     <h2>Questions</h2>
-    <details><summary>How does the license work?</summary><p>You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one (or from your customer portal) and paste it on the new one.</p></details>
+    <details><summary>How does the license work?</summary><p>You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one and paste it on the new one. Lost access to the old server? Write to hello@bullpane.com and we free it.</p></details>
     <details><summary>What if my server cannot reach the internet?</summary><p>After a successful check the installation keeps Pro for seven days without any contact, and shows a "grace period" badge so you know. Air-gapped for real? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> for an offline key that never phones home.</p></details>
     <details><summary>Does anything about my queues leave my network?</summary><p>No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all.</p></details>
     <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups, batches and group concurrency are shown in both editions. Bullpane reads the same Redis keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>

@@ -3,10 +3,10 @@
 # Secrets (set with `wrangler secret put`, never in this file):
 #   LICENSE_PRIVATE_KEY_PEM   Ed25519 private key (PKCS#8 PEM) whose public half is
 #                             compiled into the server as LICENSE_PUBLIC_KEY_B64
-#   POLAR_ORGANIZATION_ID     the Polar organization that sells the product
+#   CREEM_API_KEY             the Creem store API key (x-api-key)
 #
-# Optional vars: POLAR_API_BASE (default https://api.polar.sh; sandbox is
-# https://sandbox-api.polar.sh), LEASE_DAYS (default 7).
+# Optional vars: CREEM_API_BASE (default https://api.creem.io; test mode is
+# https://test-api.creem.io), LEASE_DAYS (default 7).
 name = "bullpane-license-api"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"

@@ -1,6 +1,6 @@
 # Deploys the license API and the website when their folders change on main.
 # Needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
-# Worker secrets (LICENSE_PRIVATE_KEY_PEM, POLAR_ORGANIZATION_ID) are set once
+# Worker secrets (LICENSE_PRIVATE_KEY_PEM, CREEM_API_KEY) are set once
 # with `wrangler secret put` and survive deploys.
 name: Deploy Cloudflare
 on:
