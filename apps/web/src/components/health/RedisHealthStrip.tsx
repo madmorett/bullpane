@@ -13,15 +13,15 @@ import { aggregate, useHealthMonitor } from "./useHealthMonitor";
 /**
  * Redis health for the Overview, in the smallest shape that still tells the truth.
  *
- * Up to INLINE_MAX connections it is one line per connection, which is what the
- * page looked like when it was good. Above that the line becomes a summary
- * ("10 connections · 9 ok · 1 with problems · 11.9K cmd/s · 8% cpu") with a
- * disclosure that opens a WRAPPING grid of every connection.
+ * Up to INLINE_MAX connections it is one line per connection, stacked
+ * vertically — never two connections sharing a row. Above that the block
+ * becomes a summary ("10 connections · 9 ok · 1 with problems · 11.9K cmd/s ·
+ * 8% cpu") with a disclosure that opens the same one-row-per-connection list.
  *
  * The old version put all connections in a single `overflow-x-auto` row, which
  * with ten connections showed two and hid eight behind a scrollbar nobody finds
  * — the last visible name was even cut mid-word. Nothing here scrolls sideways:
- * it either aggregates or wraps.
+ * it either aggregates or stacks.
  *
  * Deliberately NOT here: sparklines, the Details disclosure, per-connection
  * tiles. `warn` warnings are only the colour of the status dot plus a tooltip;
@@ -59,8 +59,8 @@ export function RedisHealthStrip({ className }: { className?: string }) {
           ) : collapsible ? (
             <AggregateLine health={health} paused={paused} expanded={expanded} onToggle={toggleExpanded} />
           ) : (
-            /* few connections: the original layout, wrapping instead of scrolling */
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+            /* few connections: one row per connection, stacked — never sharing a line */
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
               {health.map((h) => (
                 <ConnectionLine key={h.connectionId} health={h} paused={paused} />
               ))}
@@ -89,10 +89,7 @@ export function RedisHealthStrip({ className }: { className?: string }) {
         </div>
 
         {collapsible && expanded && (
-          <div
-            className="mt-2 grid gap-x-4 gap-y-1 border-t border-border pt-2"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}
-          >
+          <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
             {health.map((h) => (
               <ConnectionLine key={h.connectionId} health={h} paused={paused} className="min-w-0" />
             ))}
