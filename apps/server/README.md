@@ -53,7 +53,7 @@ Every variable in `/.env.example` is read in `src/config.ts`; nothing else touch
 |---|---|---|
 | `PORT` | `3000` | |
 | `HOST` | `0.0.0.0` | |
-| `SESSION_SECRET` | — | **Required** unless `DEMO_MODE=true` (then a random one is generated with a loud warning: every restart logs everyone out). Signs the `bmv_session` cookie. |
+| `SESSION_SECRET` | — | **Required** unless `DEMO_MODE=true` (then a random one is generated with a loud warning: every restart logs everyone out). Signs the `bullpane_session` cookie. |
 | `PUBLIC_URL` | `http://localhost:3000` | Used in Slack/webhook links (`/c/:connectionId/q/:queue`). `https://` makes the cookie `Secure`. |
 | `DATABASE_URL` | `mysql://bullpane:bullpane@localhost:3306/bullpane` | |
 | `BULLPANE_LICENSE_KEY` | empty | Pro license. A key saved via `PUT /api/license` (settings table) wins over the env var. |
@@ -98,7 +98,7 @@ the exact command. Before shipping, replace the constant with the vendor public 
 
 ## Auth and roles
 
-Cookie session `bmv_session`: httpOnly, `SameSite=Lax`, `Secure` when `PUBLIC_URL` is https,
+Cookie session `bullpane_session`: httpOnly, `SameSite=Lax`, `Secure` when `PUBLIC_URL` is https,
 signed by `@fastify/cookie`, 30-day expiry, random 32-byte id stored in `sessions`. Passwords are
 bcrypt (10 rounds).
 
