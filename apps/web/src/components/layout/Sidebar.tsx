@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import {
   Bell,
@@ -8,14 +8,19 @@ import {
   Folder,
   FolderLock,
   LayoutDashboard,
+  ScrollText,
   Search,
   Settings,
   Users,
+  Workflow,
 } from "lucide-react";
 import type { Folder as FolderModel, ProFeature, QueueSummary, RedisConnection } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
+import { queueLandingState } from "@/lib/queueLanding";
+import { SHOW_FLOWS } from "@/lib/featureFlags";
 import { formatCompact } from "@/lib/format";
+import { usePersistedToggle } from "@/lib/usePersistedToggle";
 import { modKeyLabel } from "@/lib/useHotkey";
 import { useAllQueues, useFolders } from "@/api/hooks";
 import { useAuth } from "@/auth/AuthProvider";
@@ -53,16 +58,19 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
   const folders = useFolders(foldersEnabled);
 
   const proNav: { to: string; label: string; icon: typeof Bell; feature: ProFeature; adminOnly?: boolean }[] = [
-    // Flows is hidden for now — see lib/featureFlags.ts
     { to: routes.alerts, label: "Alerts", icon: Bell, feature: "alerts" },
+    ...(SHOW_FLOWS ? [{ to: routes.flows(), label: "Flows", icon: Workflow, feature: "flows" as ProFeature }] : []),
     { to: routes.users, label: "Users", icon: Users, feature: "users", adminOnly: true },
+    // Audit é admin: a trilha mostra ações que só admin faz (conexões, usuários,
+    // licença), então lê-la é um direito diferente de pausar uma fila.
+    { to: routes.audit(), label: "Audit log", icon: ScrollText, feature: "audit", adminOnly: true },
   ];
 
   return (
     <aside className={cn("flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface", className)} aria-label="Sidebar">
       <div className="flex h-12 items-center gap-2 border-b border-border px-3">
         <Logo />
-        <span className="truncate text-[13px] font-semibold tracking-tight">BullMQ Visualizer</span>
+        <span className="truncate text-[13px] font-semibold tracking-tight">Bullpane</span>
         <EditionPill className="ml-auto" />
       </div>
 
@@ -97,6 +105,7 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
             queues={queues}
             error={error}
             onNavigate={onNavigate}
+            defaultOpen={byConnection.length <= SIDEBAR_COLLAPSE_ABOVE}
           />
         ))}
 
@@ -189,43 +198,49 @@ function NavItem({
   );
 }
 
+/**
+ * Sidebar disclosure state, persisted under `bmv.sidebar.<key>`.
+ * The key namespace is unchanged, so choices made before this refactor survive.
+ */
 function useExpanded(key: string, defaultOpen = true) {
-  const [open, setOpen] = useState<boolean>(() => {
-    try {
-      const v = localStorage.getItem(`bmv.sidebar.${key}`);
-      return v == null ? defaultOpen : v === "1";
-    } catch {
-      return defaultOpen;
-    }
-  });
-  const toggle = () =>
-    setOpen((o) => {
-      try {
-        localStorage.setItem(`bmv.sidebar.${key}`, o ? "0" : "1");
-      } catch {
-        /* ignore */
-      }
-      return !o;
-    });
-  return [open, toggle] as const;
+  const [open, toggle, set] = usePersistedToggle(`sidebar.${key}`, defaultOpen);
+  return [open, toggle, set] as const;
 }
+
+/**
+ * Above this many connections the sidebar stops expanding every connection.
+ * With ten connections and 81 queues the fully expanded tree is an endless
+ * list; collapsed, it is ten rows with counters and you expand the one you want.
+ */
+const SIDEBAR_COLLAPSE_ABOVE = 3;
 
 function ConnectionGroup({
   connection,
   queues,
   error,
   onNavigate,
+  defaultOpen,
 }: {
   connection: RedisConnection;
   queues: QueueSummary[];
   error: unknown;
   onNavigate?: () => void;
+  defaultOpen: boolean;
 }) {
   const params = useParams();
   const isCurrent = params.connectionId === connection.id;
-  const [open, toggle] = useExpanded(`conn.${connection.id}`);
+  const [open, toggle, setOpen] = useExpanded(`conn.${connection.id}`, defaultOpen);
   const sorted = useMemo(() => [...queues].sort((a, b) => a.name.localeCompare(b.name)), [queues]);
   const failed = queues.reduce((s, q) => s + q.counts.failed, 0);
+  const waiting = queues.reduce((s, q) => s + q.counts.waiting + q.counts.prioritized, 0);
+
+  // The connection you are looking at is always expanded, so the tree never
+  // hides the page you are on. Collapsing it by hand still works — this only
+  // fires when the route changes to a different connection.
+  useEffect(() => {
+    if (isCurrent && !open) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrent, connection.id]);
 
   return (
     <div className="mt-0.5">
@@ -237,10 +252,19 @@ function ConnectionGroup({
           <Database className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
           <span className="truncate">{connection.name}</span>
         </NavLink>
-        {failed > 0 && !open && (
-          <span className="num text-[10px] text-danger" title={`${failed} failed`}>
-            {formatCompact(failed)}
-          </span>
+        {/*
+          Collapsed, only `failed` gets its own number. Queue count and waiting
+          live in the tooltip: three counters in a 256px rail truncated the
+          connection name down to "redis-mone…", and the name is what you
+          navigate by.
+        */}
+        {!open && (
+          <Tooltip content={`${queues.length} ${queues.length === 1 ? "queue" : "queues"} · ${formatCompact(waiting)} waiting · ${formatCompact(failed)} failed`}>
+            <span className="flex shrink-0 cursor-help items-center gap-1">
+              <span className="num text-[10px] text-fg-subtle">{queues.length}</span>
+              {failed > 0 && <span className="num text-[10px] text-danger">{formatCompact(failed)}</span>}
+            </span>
+          </Tooltip>
         )}
         <ConnectionStatusDot status={connection.status} pulse />
       </div>
@@ -263,7 +287,10 @@ function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: str
   return (
     <li>
       <NavLink
-        to={routes.queue(connectionId, queue.name)}
+        // Mesma regra do card e da tabela: o clique cai no estado que importa
+        // (failed → waiting → completed), não no `waiting` padrão. Ver
+        // lib/queueLanding.ts.
+        to={routes.queue(connectionId, queue.name, queueLandingState(queue.counts))}
         onClick={onNavigate}
         className={cn("nav-item h-6.5 pr-1.5 pl-2 text-xs", active && "active")}
         title={hint ? `${hint} / ${queue.name}` : queue.name}
@@ -276,8 +303,11 @@ function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: str
         <span className="num text-[10px] text-fg-subtle" title="waiting">
           {formatCompact(queue.counts.waiting + queue.counts.prioritized)}
         </span>
+        {/* A pílula de falhas NÃO pode virar um <a>: já estamos dentro de um
+            NavLink e link dentro de link é HTML inválido. Não faz falta — quando
+            há falhas, a própria linha já leva para `failed` (queueLandingState). */}
         {queue.counts.failed > 0 && (
-          <Tooltip content={`${formatCompact(queue.counts.failed)} failed`}>
+          <Tooltip content={`${formatCompact(queue.counts.failed)} failed · click to open them`}>
             <span className="flex items-center gap-1 text-[10px] text-danger">
               <span className="status-dot size-1.5 bg-danger" />
               <span className="num">{formatCompact(queue.counts.failed)}</span>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bullpane — the self-hosted BullMQ dashboard you can put in front of production</title>
+<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, flows and groups behind a real login, in one container next to your stack. Free core; Pro adds alerts, roles, folders, flow graphs and an audit log.">
+<meta property="og:title" content="Bullpane — self-hosted BullMQ dashboard">
+<meta property="og:description" content="Everything bull-board does, faster and behind a login. Pro adds alerts, users & roles, folders, flows and an audit log. USD 19/month or 149/year per installation.">
+<meta property="og:url" content="https://bullpane.com/">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d12'/%3E%3Cpath d='M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z' fill='%23f5a524'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="logo" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>
+      Bullpane
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#pro">Pro</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="#install" class="btn sm">Install</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span> Self-hosted · BullMQ &amp; BullMQ Pro</span>
+    <h1>The BullMQ dashboard you can <em>put in front of production.</em></h1>
+    <p class="lead">One container next to your stack. Queues, jobs, failures, progress, logs, flows and Pro groups, behind a real login. No <code>KEYS</code>, one round trip per screen, payloads truncated inside Redis before they travel.</p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install the free edition</a>
+      <a class="btn" href="#pricing">See Pro pricing</a>
+      <span class="note">Free core, MIT-style honesty: Pro features are shown locked, never hidden.</span>
+    </div>
+
+    <div class="terminal" id="install">
+      <div class="bar"><span></span><span></span><span></span></div>
+<pre><span class="c"># 1. run it next to the Redis your workers already use</span>
+docker run -d --name bullpane -p 3000:3000 \
+  -e SESSION_SECRET=<span class="k">$(openssl rand -base64 32)</span> \
+  -e DATABASE_URL=<span class="k">mysql://user:pass@mysql:3306/bullpane</span> \
+  ghcr.io/madmorett/bullpane:latest
+
+<span class="c"># 2. open http://localhost:3000, create the admin, add a Redis connection</span>
+<span class="c"># 3. that's the whole install. Pro is a key you paste in Settings → License.</span>
+<span class="g">✓</span> works with Redis, Redis Cluster, Valkey · BullMQ 4/5 and BullMQ Pro</pre>
+    </div>
+  </div>
+</header>
+
+<section id="why">
+  <div class="wrap">
+    <h2>Why not bull-board or a hosted dashboard?</h2>
+    <p class="sub">bull-board has no auth and a UI from 2016. Hosted dashboards ship your job payloads out of your network and price per connection. Bullpane runs where your queues run.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>bull-board</th><th>Hosted dashboards</th><th>Bullpane</th></tr></thead>
+        <tbody>
+          <tr><td>Runs inside your network</td><td class="y">yes</td><td class="w">no — payloads leave</td><td class="y">yes</td></tr>
+          <tr><td>Login, users and roles</td><td class="w">none</td><td class="y">yes</td><td class="y">yes (roles in Pro)</td></tr>
+          <tr><td>Safe on a busy production Redis</td><td class="n">unbounded reads</td><td class="y">yes</td><td class="y">no KEYS, one round trip per screen</td></tr>
+          <tr><td>Search inside job data</td><td class="n">no</td><td class="y">yes</td><td class="y">yes, free</td></tr>
+          <tr><td>BullMQ Pro groups &amp; batches</td><td class="n">partial</td><td class="y">yes</td><td class="y">yes, free</td></tr>
+          <tr><td>Alerts to Slack / webhook</td><td class="n">no</td><td class="y">yes</td><td class="y">Pro</td></tr>
+          <tr><td>Audit log: who drained what, from which IP</td><td class="n">no</td><td class="n">in their account</td><td class="y">Pro, in your database</td></tr>
+          <tr><td>Price</td><td>free</td><td>per connection, per month</td><td>free · Pro $19/mo per installation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Free, and complete</h2>
+    <p class="sub">The free edition is not a trial. It does everything the open-source dashboards do, on unlimited connections and queues, and it is built for the Redis that runs your business.</p>
+    <div class="grid">
+      <div class="card"><h3>Every queue, every state</h3><p>Waiting, active, delayed, prioritized, completed, failed, paused. Per-minute completed/failed rates. Attention view surfaces the queues that need you.</p></div>
+      <div class="card"><h3>Jobs you can actually read</h3><p>Data, options, progress, logs, stack traces, parent/child links. Search inside job data. Add, retry, promote, remove, discard, in bulk if you like.</p></div>
+      <div class="card"><h3>Queue operations, with guard rails</h3><p>Pause, resume, clean, retry-all, drain and obliterate. The destructive ones need the admin role and are recorded.</p></div>
+      <div class="card"><h3>BullMQ Pro aware</h3><p>Groups, batches and group-level concurrency are first-class. Job schedulers are listed and removable.</p></div>
+      <div class="card"><h3>Built for production Redis</h3><p>No <code>KEYS</code>. Discovery via <code>SCAN</code>, cached. One Lua round trip per queue, payloads truncated inside Redis. Cluster-safe.</p></div>
+      <div class="card"><h3>Real login, read-only mode</h3><p>Admin account with sessions. <code>BMV_READ_ONLY=true</code> refuses every write while you point it at production for the first time.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pro">
+  <div class="wrap">
+    <h2>Pro: the features a team needs</h2>
+    <p class="sub">One key unlocks everything below for one installation, unlimited users. The key is verified with bullpane.com once a day and keeps working for seven days without internet.</p>
+    <div class="grid">
+      <div class="card pro"><span class="tag">Pro</span><h3>Alerts</h3><p>Per queue or per folder: waiting depth, failures, failure rate over a window. Delivered to Slack or any webhook, with a link straight to the queue.</p></div>
+      <div class="card pro"><span class="tag">Pro</span><h3>Users &amp; roles</h3><p>Admin, operator and viewer. Viewers see everything and change nothing; operators run the queues; only admins drain, obliterate or manage access.</p></div>
+      <div class="card pro"><span class="tag">Pro</span><h3>Folders</h3><p>Group hundreds of queues across connections by team, product or environment. Totals and alerts per folder.</p></div>
+      <div class="card pro"><span class="tag">Pro</span><h3>Flow graph</h3><p>Detected from your BullMQ flows, plus manual edges for the hops your code does by hand. See where a failure upstream will land.</p></div>
+      <div class="card pro"><span class="tag">Pro</span><h3>Audit log</h3><p>Who paused, cleaned or drained which queue, when, from which IP, including refused attempts. Persisted in your database, filterable, CSV export. Never stores job payloads.</p></div>
+      <div class="card pro"><span class="tag">Pro</span><h3>Priority support</h3><p>Email answered by the person who wrote the code, and a say in what gets built next.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2>Pricing</h2>
+    <p class="sub">Per installation, not per connection, not per seat. Taxes and invoices are handled by Polar, our merchant of record, in your currency.</p>
+    <div class="pricing">
+      <div class="card plan">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+        <ul>
+          <li>Unlimited connections and queues</li>
+          <li>Jobs, search, bulk actions</li>
+          <li>BullMQ Pro groups &amp; batches</li>
+          <li>Single admin login</li>
+          <li>Read-only mode</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn" href="#install">Install</a>
+      </div>
+      <div class="card plan pro">
+        <h3>Pro · monthly</h3>
+        <div class="price">$19 <small>/ month</small></div>
+        <ul>
+          <li>Everything in Free</li>
+          <li>Alerts to Slack / webhook</li>
+          <li>Users &amp; roles</li>
+          <li>Folders and flow graph</li>
+          <li>Audit log with CSV export</li>
+          <li>Unlimited users, one installation</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn pro" href="https://buy.polar.sh/polar_cl_r2E8jNvyMy69FtSIeustp9qAtT4sPu3A3lJ6e0P9D5h" rel="noopener">Get Pro monthly</a>
+      </div>
+      <div class="card plan pro">
+        <h3>Pro · yearly</h3>
+        <div class="price">$149 <small>/ year</small></div>
+        <span class="save">Save 35% — 12 months for the price of 8</span>
+        <ul>
+          <li>Everything in Pro monthly</li>
+          <li>One invoice a year for procurement</li>
+          <li>Cancel any time, data stays</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn pro" href="https://buy.polar.sh/polar_cl_r2E8jNvyMy69FtSIeustp9qAtT4sPu3A3lJ6e0P9D5h" rel="noopener">Get Pro yearly</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <details><summary>How does the license work?</summary><p>You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one (or from your customer portal) and paste it on the new one.</p></details>
+    <details><summary>What if my server cannot reach the internet?</summary><p>After a successful check the installation keeps Pro for seven days without any contact, and shows a "grace period" badge so you know. Air-gapped for real? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> for an offline key that never phones home.</p></details>
+    <details><summary>Does anything about my queues leave my network?</summary><p>No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all.</p></details>
+    <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups, batches and group concurrency are shown in both editions. Bullpane reads the same Redis keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>
+    <details><summary>Can it hurt my production Redis?</summary><p>That was the design constraint. No <code>KEYS</code>, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with <code>BMV_READ_ONLY=true</code> if you want to watch before you trust it.</p></details>
+    <details><summary>What happens when I cancel?</summary><p>The installation goes back to the free edition. Alerts, folders, users and the audit log stay in your database and become accessible again the moment a key is activated.</p></details>
+    <details><summary>Which database does it need?</summary><p>MySQL 8 (or MariaDB) for users, sessions, alerts and the audit log. Redis is only ever read, and written through the official BullMQ API for job actions.</p></details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© <span id="y"></span> Bullpane · Made by engineers running 10M+ BullMQ jobs a day.</div>
+    <div style="display:flex;gap:18px">
+      <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>
+      <a href="https://github.com/madmorett" rel="noopener">GitHub</a>
+      <a href="/thanks">After checkout</a>
+    </div>
+  </div>
+</footer>
+<script>document.getElementById("y").textContent = new Date().getFullYear();</script>
+</body>
+</html>

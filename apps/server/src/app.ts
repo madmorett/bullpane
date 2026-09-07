@@ -18,8 +18,11 @@ import type { Db } from "./db";
 import { registerErrorHandling } from "./plugins/errors";
 import { apiPlugin } from "./routes";
 import { AlertsService } from "./services/alerts";
+import { AuditService } from "./services/audit";
 import { ConnectionsService } from "./services/connections";
 import { EditionService } from "./services/edition";
+import { HttpLicenseClient } from "./services/license-client";
+import { DrizzleSettingsStore } from "./services/settings-store";
 import { FlowsService } from "./services/flows";
 import { FoldersService } from "./services/folders";
 import { HealthService } from "./services/health";
@@ -55,7 +58,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     }),
   });
 
-  const edition = new EditionService(config, db, app.log);
+  const version = readVersion();
+  const edition = new EditionService({
+    config,
+    settings: new DrizzleSettingsStore(db),
+    log: app.log,
+    client: new HttpLicenseClient(config.licenseApiUrl, { userAgent: `bullpane-server/${version}` }),
+    version,
+  });
   const sessions = new SessionService(db);
   const users = new UsersService(db);
   const connections = new ConnectionsService(db, pool);
@@ -64,6 +74,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   connections.onEvict((id) => health.evict(id));
   const flows = new FlowsService(db, connections);
   const alerts = new AlertsService(db, connections, folders);
+  const audit = new AuditService(db, app.log);
   const alertsEngine = new AlertsEngine({ config, alerts, connections, folders, edition, log: app.log });
 
   const ctx: AppContext = {
@@ -79,7 +90,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     flows,
     alerts,
     alertsEngine,
-    version: readVersion(),
+    audit,
+    version,
   };
   app.decorate("ctx", ctx);
 

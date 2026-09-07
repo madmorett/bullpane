@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { JobState } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
@@ -27,6 +28,12 @@ export function StateBadge({ state, size, className }: { state: JobState | "unkn
 /**
  * Coloured count chip, e.g. `completed 1.2K`. `muted` states render gray.
  * Use `hideZero` to drop the chip entirely when the count is 0.
+ *
+ * `to` turns the chip into a deep link to that state. It matters on the queue
+ * card, which is covered by a stretched link overlay (`after:absolute
+ * after:inset-0`): a plain `<span>` there is unclickable, so a chip with `to`
+ * gets `relative z-10` to sit ABOVE the overlay — the same trick the search icon
+ * on the card already used.
  */
 export function StateChip({
   state,
@@ -35,6 +42,7 @@ export function StateChip({
   short,
   className,
   title,
+  to,
 }: {
   state: ColoredState;
   count: number;
@@ -43,14 +51,35 @@ export function StateChip({
   short?: boolean;
   className?: string;
   title?: string;
+  /** deep link to this state; renders the chip as a link above any card overlay */
+  to?: string;
 }) {
   if (hideZero && !count) return null;
   const c = stateColor(state);
   const label = short && state === "waiting-children" ? "children" : c.label;
-  return (
-    <span className={cn("state-chip", c.muted && "muted", className)} style={c.muted ? undefined : chipStyle(state)} title={title ?? `${formatCompact(count)} ${c.label}`}>
+  const body = (
+    <>
       <span className="opacity-80">{label}</span>
       <span className="num font-semibold">{formatCompact(count)}</span>
+    </>
+  );
+  const style = c.muted ? undefined : chipStyle(state);
+  const tip = title ?? `${formatCompact(count)} ${c.label}`;
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={cn("state-chip relative z-10 hover:brightness-125 hover:underline", c.muted && "muted", className)}
+        style={style}
+        title={`${tip} — open the ${c.label} tab`}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <span className={cn("state-chip", c.muted && "muted", className)} style={style} title={tip}>
+      {body}
     </span>
   );
 }

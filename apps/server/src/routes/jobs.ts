@@ -1,5 +1,9 @@
 import {
   addJobSchema,
+  BULK_JOB_ACTIONS,
+  bulkJobActionSchema,
+  type BulkJobAction,
+  type BulkJobActionResult,
   type JobDetail,
   type JobSearchResult,
   type JobsPage,
@@ -55,7 +59,11 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const input = addJobSchema.parse(request.body ?? {});
     const inspector = await app.ctx.connections.getInspector(request.params.id);
     const result = await withRedis(() => inspector.addJob(request.params.queue, input.name, input.data, input.opts));
-    // Never log job data.
+    // Never log job data — here or in the audit row. The audit `detail` gets the
+    // job NAME, the resulting id and the payload SIZE; the payload itself would
+    // put customer PII in a table admins can export as CSV.
+    request.auditDetail({ name: input.name, dataBytes: JSON.stringify(input.data ?? null).length });
+    request.auditTarget({ jobId: result.id });
     request.log.info({ queue: request.params.queue, jobId: result.id, name: input.name, by: request.user?.id }, "job added");
     reply.status(201);
     return { id: result.id };
@@ -101,4 +109,43 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     request.log.info({ queue: request.params.queue, jobId: request.params.jobId, by: request.user?.id }, "job discarded");
     return { ok: true };
   });
+
+  /**
+   * Ações em lote: retry / remove / promote sobre uma lista de ids.
+   *
+   * Por que existem: entre "um job" e "todos os 1.000" não havia nada, e o caso
+   * real é o do meio — as falhas vêm agrupadas (um webhook de um tenant
+   * devolvendo 410), a busca server-side acha exatamente esses 50 e o operador
+   * quer reprocessar esses e descartar os outros.
+   *
+   * Duas regras do contrato, iguais nas três rotas:
+   *  - TETO de BULK_JOB_LIMIT ids por chamada, validado no zod (400 com a
+   *    mensagem). Sem teto alguém cola 100 mil ids e prende o Redis.
+   *  - RESULTADO PARCIAL com 200: `{ ok, failed }`. Um id podado ou em estado
+   *    incompatível não derruba os outros 47, e o operador vê quais 3 falharam.
+   */
+  for (const action of BULK_JOB_ACTIONS) {
+    app.post<QueueParams>(`${base}/bulk/${action}`, { preHandler: [operator] }, async (request): Promise<BulkJobActionResult> => {
+      const input = bulkJobActionSchema.parse(request.body ?? {});
+      const inspector = await app.ctx.connections.getInspector(request.params.id);
+      const result = await withRedis(() =>
+        inspector.bulkJobAction(request.params.queue, action as BulkJobAction, input.jobIds),
+      );
+      // Auditoria: só CONTAGENS e os ids, nunca o payload dos jobs (regra do
+      // CLAUDE.md; `sanitizeDetail` também derrubaria `data`, mas o handler não
+      // deve nem chegar perto). Os motivos das falhas são erros do BullMQ, não
+      // dados do cliente, então cabem — limitados para a linha não explodir.
+      request.auditDetail({
+        requested: result.requested,
+        ok: result.ok.length,
+        failed: result.failed.length,
+        ...(result.failed.length > 0 ? { reasons: result.failed.slice(0, 10).map((f) => `${f.jobId}: ${f.reason}`) } : {}),
+      });
+      request.log.info(
+        { queue: request.params.queue, action, requested: result.requested, ok: result.ok.length, failed: result.failed.length, by: request.user?.id },
+        "bulk job action",
+      );
+      return result;
+    });
+  }
 }

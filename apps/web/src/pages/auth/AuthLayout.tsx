@@ -8,7 +8,7 @@ export function AuthLayout({ title, description, children, footer }: { title: st
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
           <Logo className="size-8" />
-          <span className="text-base font-semibold tracking-tight">BullMQ Visualizer</span>
+          <span className="text-base font-semibold tracking-tight">Bullpane</span>
           <EditionPill />
         </div>
         <div className="card p-6 shadow-[var(--shadow)]">

@@ -1,5 +1,6 @@
 /**
- * Offline Ed25519 license verification.
+ * Ed25519 license verification. Used for both hand-signed perpetual keys and the
+ * short-lived leases the license API issues for subscription keys.
  * Key format: base64url(payloadJson) + "." + base64url(signature).
  * The signature is over the raw base64url payload string (ASCII bytes).
  */
@@ -8,11 +9,13 @@ import type { LicensePayload } from "@bullmq-visualizer/shared";
 import { z } from "zod";
 
 /**
- * DEV placeholder public key (DER/SPKI, base64). The matching private key is in
- * /keys/dev-license-private.pem (gitignored). Replace with the vendor key
- * before shipping; override at runtime with LICENSE_PUBLIC_KEY_B64.
+ * Bullpane vendor public key (DER/SPKI, base64). The private half signs offline
+ * keys (scripts/gen-license.ts) and the leases issued by api.bullpane.com; it
+ * lives in /keys/license-private.pem on the vendor machine (gitignored) and as
+ * a secret of the license API worker. Override at runtime with
+ * LICENSE_PUBLIC_KEY_B64, e.g. to test against a local license API.
  */
-export const LICENSE_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEAlDgGcQ9rqSEJPAVJD5n0LWfCTz/TvUYvgPOefelw5K8=";
+export const LICENSE_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEAiOdWgp41hqTFeVlG0WO0qH3T4bPZpoUeUHUlxk5Lwis=";
 
 export const licensePayloadSchema = z.object({
   licensee: z.string().min(1),
@@ -21,7 +24,21 @@ export const licensePayloadSchema = z.object({
   issuedAt: z.number().int(),
   expiresAt: z.number().int().nullable(),
   notes: z.string().optional(),
+  // Lease fields, written by the license API for subscription keys.
+  activationId: z.string().min(1).optional(),
+  subscriptionExpiresAt: z.number().int().nullable().optional(),
+  billing: z.enum(["subscription", "perpetual"]).optional(),
 });
+
+/**
+ * An offline token is `payload.signature` (two base64url parts). Anything else
+ * the admin pastes is treated as a store key (Polar: `BULLPANE-XXXX-…`, no dot)
+ * and goes through the license API.
+ */
+export function isOfflineToken(key: string): boolean {
+  const parts = key.trim().split(".");
+  return parts.length === 2 && parts[0] !== "" && parts[1] !== "";
+}
 
 export type LicenseVerification =
   | { valid: true; payload: LicensePayload; reason: null }

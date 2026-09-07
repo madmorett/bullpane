@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Database, RefreshCw, Settings } from "lucide-react";
 import { routes } from "@/lib/routes";
 import { formatBytes, formatNumber, formatUptime } from "@/lib/format";
 import { entryKey, groupQueues, matchesFilter, totals, type QueueEntry } from "@/lib/groupQueues";
 import { useTableState } from "@/lib/useTableState";
-import { useConnectionOverview, useConnections, useFolders, useQueueToggle, useRefreshQueues } from "@/api/hooks";
+import { useConnectionOverview, useConnections, useFolders, useHiddenQueues, useQueueToggle, useRefreshQueues } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useEdition } from "@/edition/useEdition";
@@ -19,6 +19,8 @@ import { QueueCardGrid, QueueCardSkeleton } from "@/components/queues/QueueCardG
 import { QueueTotalsStrip } from "@/components/queues/QueueTotalsStrip";
 import { QueueFilterInput } from "@/components/queues/QueueFilterInput";
 import { DEFAULT_QUEUE_SORT, QUEUE_TABLE_KEYS, QueuesTable } from "@/components/queues/QueuesTable";
+import { HiddenQueuesSection } from "@/components/queues/HiddenQueuesSection";
+import { useHideQueue } from "@/components/queues/hideQueue";
 
 export function ConnectionPage() {
   const { connectionId = "" } = useParams();
@@ -29,6 +31,10 @@ export function ConnectionPage() {
   const overview = useConnectionOverview(connectionId);
   const refresh = useRefreshQueues(connectionId);
   const toggle = useQueueToggle(connectionId);
+  const hiddenQueues = useHiddenQueues(connectionId);
+  const hiding = useHideQueue(connectionId);
+  const hiddenSectionRef = useRef<HTMLDivElement>(null);
+  const [revealHidden, setRevealHidden] = useState(false);
   const foldersEnabled = has("folders");
   const folders = useFolders(foldersEnabled);
   const navigate = useNavigate();
@@ -58,6 +64,18 @@ export function ConnectionPage() {
         )
     : undefined;
   const pendingKey = toggle.isPending && toggle.variables ? `${connectionId}/${toggle.variables.queue}` : null;
+
+  // Hide is reversible and destroys nothing, so it fires straight away and the
+  // toast carries the Undo. Obliterate — the destructive neighbour — keeps its
+  // type-the-name confirmation over on the queue page.
+  const onHide = isOperator ? (e: QueueEntry) => hiding.hide(e.queue.name) : undefined;
+  const hidePendingKey = hiding.pendingQueue ? `${connectionId}/${hiding.pendingQueue}` : null;
+
+  /** The "N hidden" chip in the totals strip scrolls to (and opens) the section. */
+  const revealHiddenSection = () => {
+    setRevealHidden(true);
+    requestAnimationFrame(() => hiddenSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
 
   return (
     <Page wide>
@@ -116,7 +134,12 @@ export function ConnectionPage() {
       </div>
 
       <section className="space-y-3" aria-label="Queues">
-        <QueueTotalsStrip totals={sums} title="Queues">
+        <QueueTotalsStrip
+          totals={sums}
+          title="Queues"
+          hiddenCount={overview.data?.hiddenCount ?? hiddenQueues.data?.length ?? 0}
+          onRevealHidden={revealHiddenSection}
+        >
           <QueueFilterInput value={filter} onChange={setFilter} aria-label="Filter queues" />
           <span className="num whitespace-nowrap text-xs text-fg-subtle">
             {visible.length} of {all.length}
@@ -126,7 +149,7 @@ export function ConnectionPage() {
         {overview.isLoading ? (
           <QueueCardSkeleton />
         ) : visible.length > 0 ? (
-          <QueueCardGrid sections={sections} hideSingleHeader />
+          <QueueCardGrid sections={sections} hideSingleHeader onHide={onHide} hidePendingKey={hidePendingKey} />
         ) : null}
 
         <div className="card overflow-hidden">
@@ -136,6 +159,8 @@ export function ConnectionPage() {
             onSort={setSort}
             onToggle={onToggle}
             pendingKey={pendingKey}
+            onHide={onHide}
+            hidePendingKey={hidePendingKey}
             message={
               overview.isLoading ? (
                 <Spinner label="Loading queues…" />
@@ -148,6 +173,19 @@ export function ConnectionPage() {
               )
             }
             messageClassName={overview.isError && !overview.data ? "text-danger" : undefined}
+          />
+        </div>
+
+        {/* The way back. Collapsed, at the bottom of the page whose list these
+            queues were removed from. */}
+        <div ref={hiddenSectionRef}>
+          <HiddenQueuesSection
+            connectionId={connectionId}
+            hidden={hiddenQueues.data ?? []}
+            canUnhide={isOperator}
+            onUnhide={(q) => hiding.unhide(q)}
+            pendingQueue={hiding.pendingQueue}
+            forceOpen={revealHidden}
           />
         </div>
       </section>

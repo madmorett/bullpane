@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { ALERT_KINDS, createAlertSchema, type Alert, type AlertChannel, type AlertCondition, type AlertKind, type AlertScope, type CreateAlertInput } from "@bullmq-visualizer/shared";
+import { ALERT_KINDS, createAlertSchema, isErrorAlertKind, type Alert, type AlertChannel, type AlertCondition, type AlertKind, type AlertScope, type CreateAlertInput } from "@bullmq-visualizer/shared";
 import { useConnections, useCreateAlert, useFolders, useQueues, useUpdateAlert } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { toast } from "@/components/Toast";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/Input";
+import { FolderMetricsWarning, QueueMetricsWarning } from "./MetricsRequirement";
 
 export const KIND_LABEL: Record<AlertKind, string> = {
-  waiting_above: "Waiting jobs above threshold",
-  failed_above: "Failures above threshold in a window",
-  failed_rate_above: "Failure rate above percent",
+  // Say exactly what is counted: paused jobs are excluded on purpose, so
+  // pausing a queue for maintenance no longer fires a backlog alert.
+  waiting_above: "Waiting jobs above threshold (incl. prioritized, excl. paused)",
+  failed_above: "Failures above threshold in a window (needs worker metrics)",
+  failed_rate_above: "Failure rate above percent (needs worker metrics)",
 };
 
 interface ChannelDraft {
@@ -260,6 +263,18 @@ export function AlertDialog({
               <Input label="Min sample (finished jobs)" type="number" min={1} value={draft.minSample} onChange={(e) => set("minSample", e.target.value)} error={errors.minSample} hint="Ignore windows with fewer finished jobs." />
             )}
           </div>
+          {isErrorAlertKind(draft.kind) && (
+            <>
+              <p className="text-xs text-fg-muted">
+                Measured by diffing BullMQ's own metrics counters between evaluations, so the number is right even when{" "}
+                <code className="font-mono">removeOnComplete</code> prunes the queue. After a server restart the alert reports
+                "warming up" until it has {draft.windowMinutes || "N"} minute(s) of history.
+              </p>
+              {draft.scopeType === "queue"
+                ? draft.connectionId && draft.queueName && <QueueMetricsWarning connectionId={draft.connectionId} queueName={draft.queueName} />
+                : draft.folderId && <FolderMetricsWarning folder={folders.data?.find((f) => f.id === draft.folderId)} />}
+            </>
+          )}
         </fieldset>
 
         <fieldset className="space-y-3 rounded-md border border-border p-3">

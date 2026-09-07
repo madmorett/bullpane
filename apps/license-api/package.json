@@ -1,0 +1,24 @@
+{
+  "name": "@bullmq-visualizer/license-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "api.bullpane.com — activates Bullpane Pro keys against Polar and signs short-lived leases.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'deployed by wrangler'",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bullmq-visualizer/shared": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260907.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.129.0"
+  }
+}

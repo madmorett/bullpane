@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AlertDialog } from "./AlertDialog";
+import { MeasurementBadge } from "./MetricsRequirement";
 
 export function AlertsPage() {
   const { has } = useEdition();
@@ -29,7 +30,7 @@ export function AlertsPage() {
 export function describeCondition(c: AlertCondition): string {
   switch (c.kind) {
     case "waiting_above":
-      return `waiting > ${formatNumber(c.threshold)}`;
+      return `wait+prioritized > ${formatNumber(c.threshold)}`;
     case "failed_above":
       return `failed > ${formatNumber(c.threshold)} in ${c.windowMinutes}m`;
     case "failed_rate_above":
@@ -37,7 +38,13 @@ export function describeCondition(c: AlertCondition): string {
   }
 }
 
-const EVENT_VARIANT: Record<AlertEvent["status"], BadgeVariant> = { fired: "danger", resolved: "success", delivery_failed: "warning" };
+const EVENT_VARIANT: Record<AlertEvent["status"], BadgeVariant> = {
+  fired: "danger",
+  resolved: "success",
+  delivery_failed: "warning",
+  // informative, not an incident: the alert could not measure and did NOT fire
+  no_metrics: "info",
+};
 
 function AlertsManager() {
   const { isOperator } = useAuth();
@@ -70,7 +77,7 @@ function AlertsManager() {
             )}
           </span>
         }
-        description="Server-side rules over live queue counts. Delivered to Slack or any webhook."
+        description="Server-side rules: backlog from live counts, failures from BullMQ metrics counters. Delivered to Slack or any webhook."
         actions={
           isOperator && (
             <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => setDialog({ alert: null })}>
@@ -133,9 +140,9 @@ function AlertsManager() {
                       <BellRing className="size-3" /> firing
                     </Badge>
                   ) : a.enabled ? (
-                    <Badge variant="success" dot>
-                      ok
-                    </Badge>
+                    // Never a bare green "ok": an alert that cannot measure
+                    // (no worker metrics) or has no history yet says so.
+                    <MeasurementBadge measurement={a.measurement} />
                   ) : (
                     <Badge variant="neutral">off</Badge>
                   )}

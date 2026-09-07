@@ -34,6 +34,15 @@ export const FEATURE_COPY: Record<ProFeature, FeatureCopy> = {
       "The default stays one folder per connection, so nothing breaks",
     ],
   },
+  audit: {
+    title: "Audit log",
+    tagline: "Who paused the payments queue, when, from which IP — persisted, filterable, exportable.",
+    bullets: [
+      "Every mutating action recorded: jobs, queues, connections, users, license, logins",
+      "Failed attempts included, so a refused obliterate is a finding and not silence",
+      "CSV export for compliance, one-year retention, and never the job payload",
+    ],
+  },
   flows: {
     title: "Flows",
     tagline: "See how queues feed each other, detected from BullMQ flow parents plus your own edges.",
@@ -50,4 +59,5 @@ export const FEATURE_ROUTE: Record<ProFeature, string> = {
   users: "/users",
   folders: "/folders",
   flows: "/flows",
+  audit: "/audit",
 };

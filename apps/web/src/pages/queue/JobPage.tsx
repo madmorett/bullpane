@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowUpToLine, Ban, ChevronLeft, GitBranch, RotateCcw, Trash2 } from "lucide-react";
-import type { JobDetail } from "@bullmq-visualizer/shared";
+import { ArrowUpToLine, Ban, ChevronLeft, GitBranch, RotateCcw, ScrollText, Trash2 } from "lucide-react";
+import { AUDIT_ACTION_LABEL, type JobDetail } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
 import { queueNameFromKey, routes } from "@/lib/routes";
 import { formatDateTimeMs, formatDuration, formatNumber, safeJsonStringify } from "@/lib/format";
-import { useJob, useJobAction, useJobLogs, type JobActionKind } from "@/api/hooks";
+import { useJob, useJobAction, useJobAudit, useJobLogs, type JobActionKind } from "@/api/hooks";
 import { errorMessage, isApiError } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "@/components/Toast";
@@ -22,13 +22,15 @@ import { PageSpinner } from "@/components/ui/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StateBadge, STATE_META } from "@/components/StateBadge";
 import { useNow } from "@/lib/useNow";
+import { useEdition } from "@/edition/useEdition";
 
-type Tab = "data" | "opts" | "returnvalue" | "error" | "logs";
+type Tab = "data" | "opts" | "returnvalue" | "error" | "logs" | "audit";
 
 export function JobPage() {
   const { connectionId = "", queue = "", jobId = "" } = useParams();
   const navigate = useNavigate();
-  const { isOperator } = useAuth();
+  const { has: hasFeature } = useEdition();
+  const { isOperator, isAdmin } = useAuth();
   const job = useJob(connectionId, queue, jobId);
   const action = useJobAction(connectionId, queue);
   const [tab, setTab] = useState<Tab>("data");
@@ -177,6 +179,9 @@ export function JobPage() {
           { value: "returnvalue", label: "Return value" },
           { value: "error", label: "Error", tone: hasError ? "bg-danger" : undefined },
           { value: "logs", label: "Logs", count: d.logsCount ?? d.logs?.length ?? 0 },
+          // Only for admins with the Pro audit feature: the endpoint is admin-only,
+          // so showing the tab to anyone else would just render a 403.
+          ...(isAdmin && hasFeature("audit") ? ([{ value: "audit" as const, label: "Audit" }]) : []),
         ]}
       />
 
@@ -185,6 +190,7 @@ export function JobPage() {
       {tab === "returnvalue" && <JsonPanel value={d.returnvalue} empty="No return value (job has not completed)" />}
       {tab === "error" && <ErrorPanel job={d} />}
       {tab === "logs" && <LogsPanel connectionId={connectionId} queue={queue} jobId={jobId} initial={d.logs} total={d.logsCount} />}
+      {tab === "audit" && <AuditPanel connectionId={connectionId} queue={queue} jobId={jobId} />}
 
       <ConfirmDialog
         open={confirm === "remove"}
@@ -357,6 +363,52 @@ function LogsPanel({ connectionId, queue, jobId, initial, total }: { connectionI
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * What people did to THIS job: retried, promoted, discarded, removed — and by
+ * whom. This is the most useful place for the trail, because "why is this job
+ * in failed again?" is usually answered by "someone retried it at 03:12".
+ *
+ * Recorded actions only: a job that nobody touched shows an empty panel, which
+ * is itself the answer.
+ */
+function AuditPanel({ connectionId, queue, jobId }: { connectionId: string; queue: string; jobId: string }) {
+  const audit = useJobAudit(connectionId, queue, jobId);
+  const entries = audit.data?.entries ?? [];
+
+  if (audit.isLoading) return <div className="card p-6 text-center text-xs text-fg-subtle">Loading history…</div>;
+  if (audit.isError) return <div className="card p-6 text-center text-xs text-fg-subtle">Could not read the audit log.</div>;
+  if (entries.length === 0) {
+    return (
+      <div className="card p-6 text-center text-xs text-fg-subtle">
+        Nobody has acted on this job through the dashboard. Worker activity is not audited — only what people do here.
+      </div>
+    );
+  }
+
+  return (
+    <div className="card divide-y divide-border">
+      {entries.map((e) => (
+        <div key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-xs">
+          <RelativeTime value={e.createdAt} className="w-24 shrink-0 text-fg-muted" />
+          <span className="font-medium text-fg">{e.actorName ?? e.actorEmail ?? "anonymous"}</span>
+          <span className="text-fg-muted">{AUDIT_ACTION_LABEL[e.action]}</span>
+          {e.result === "error" && (
+            <Badge variant="danger" size="xs" title={e.errorMessage ?? undefined}>
+              refused
+            </Badge>
+          )}
+          {e.ip && <span className="num ml-auto text-[11px] text-fg-subtle">{e.ip}</span>}
+        </div>
+      ))}
+      <div className="px-4 py-2">
+        <Link to={routes.audit({ connectionId, queueName: queue })} className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline">
+          <ScrollText className="size-3.5" aria-hidden /> Full audit log for this queue
+        </Link>
+      </div>
     </div>
   );
 }

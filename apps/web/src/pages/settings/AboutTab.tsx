@@ -15,7 +15,7 @@ export function AboutTab() {
         <div className="flex items-center gap-3">
           <Logo className="size-9" />
           <div>
-            <h2 className="text-sm font-semibold">BullMQ Visualizer</h2>
+            <h2 className="text-sm font-semibold">Bullpane</h2>
             <p className="text-xs text-fg-muted">Self-hosted dashboard for BullMQ and BullMQ Pro.</p>
           </div>
         </div>
@@ -53,7 +53,7 @@ export function AboutTab() {
           {checkoutUrl && (
             <li>
               <a href={checkoutUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-accent hover:underline">
-                Buy a Pro license (${edition.priceUsd} one-time) <ExternalLink className="size-3.5" />
+                Buy a Pro license (from ${edition.pricing.monthlyUsd}/mo) <ExternalLink className="size-3.5" />
               </a>
             </li>
           )}

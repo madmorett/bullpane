@@ -9,6 +9,7 @@ import type { SessionService } from "./auth/sessions";
 import type { Config } from "./config";
 import type { Db } from "./db";
 import type { AlertsService } from "./services/alerts";
+import type { AuditService } from "./services/audit";
 import type { ConnectionsService } from "./services/connections";
 import type { EditionService } from "./services/edition";
 import type { FlowsService } from "./services/flows";
@@ -29,6 +30,7 @@ export interface AppContext {
   flows: FlowsService;
   alerts: AlertsService;
   alertsEngine: AlertsEngine;
+  audit: AuditService;
   /** package.json version */
   version: string;
 }

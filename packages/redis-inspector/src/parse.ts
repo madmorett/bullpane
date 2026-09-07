@@ -5,7 +5,7 @@
  * Rule: never throw on malformed JSON. A job with a hand-edited `data` field
  * still has to show up in the dashboard, so bad JSON falls back to the raw string.
  */
-import type { JobDetail, JobParentRef, JobState, JobSummary } from "@bullmq-visualizer/shared";
+import type { JobDetail, JobParentRef, JobScheduler, JobState, JobSummary } from "@bullmq-visualizer/shared";
 import { GROUP_ID_FIELDS, JOB_SUMMARY_FIELDS, queueNameFromQueueKey } from "./keys.js";
 import { isRecord, safeJsonParse, toInt, toIntOrNull } from "./util.js";
 
@@ -129,6 +129,10 @@ export function hashToSummary(
     dataTruncated,
     parent: parseParent(prefix, hash),
     groupId: parseGroupId(hash, opts),
+    // `stc` é o contador de stalls do BullMQ (Job.fromJSON: parseInt(json.stc || '0')).
+    // > 0 significa que o worker perdeu o lock deste job em algum momento e o
+    // StalledCheck o recuperou. Não é um estado, é um histórico no próprio job.
+    stalledCounter: toInt(hash.stc, 0),
     state,
   };
 }
@@ -185,4 +189,42 @@ export function metricPoints(reply: LuaReply): number[] {
   return asStringArray(reply)
     .map((s) => Number(s) || 0)
     .reverse();
+}
+
+// ---------------------------------------------------------------------------
+// Rows from getSchedulers.lua
+// ---------------------------------------------------------------------------
+
+/** Lua returns `false` for a missing hash field; ioredis surfaces that as null. */
+function str(v: LuaReply): string | null {
+  return typeof v === "string" && v !== "" ? v : typeof v === "number" ? String(v) : null;
+}
+
+/**
+ * [id, next, name, pattern, every, tz, offset, limit, ic, startDate, endDate,
+ *  data, opts, truncated] -> JobScheduler.
+ *
+ * `data`/`opts` stay as (possibly truncated) JSON strings: a truncated payload is
+ * not valid JSON, and the UI shows the template raw anyway.
+ */
+export function rowToScheduler(row: LuaReply[]): JobScheduler {
+  const key = String(row[0] ?? "");
+  const name = str(row[2]);
+  const data = str(row[11]);
+  const opts = str(row[12]);
+  return {
+    key,
+    // BullMQ defaults the produced job's name to the scheduler id.
+    name: name ?? key,
+    next: toIntOrNull(str(row[1])),
+    pattern: str(row[3]),
+    every: toIntOrNull(str(row[4])),
+    tz: str(row[5]),
+    offset: toIntOrNull(str(row[6])),
+    limit: toIntOrNull(str(row[7])),
+    iterationCount: toIntOrNull(str(row[8])),
+    startDate: toIntOrNull(str(row[9])),
+    endDate: toIntOrNull(str(row[10])),
+    template: data !== null || opts !== null ? { name: name ?? key, data, opts } : null,
+  };
 }

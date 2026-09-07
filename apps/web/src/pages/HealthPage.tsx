@@ -7,12 +7,13 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 import {
   formatBytes,
-  formatCores,
+  formatCpuPercent,
   formatDateTime,
   formatLatency,
   formatNumber,
   formatRate,
 } from "@/lib/format";
+import { cpuTooltip } from "@/components/health/cpu";
 import { RedisHealthPanel } from "@/components/health/RedisHealthPanel";
 import { useHealthMonitor } from "@/components/health/useHealthMonitor";
 
@@ -114,7 +115,15 @@ function HistoryTable({ health }: { health: ConnectionHealth }) {
                   {p.commandsPerSec == null ? <NoRate /> : formatRate(p.commandsPerSec, "")}
                 </Td>
                 <Td align="right" num muted={p.cpuCores == null}>
-                  {p.cpuCores == null ? <NoRate /> : formatCores(p.cpuCores)}
+                  {p.cpuCores == null ? (
+                    <NoRate />
+                  ) : (
+                    // Percent of one core reads at a glance; the raw cores
+                    // stay one hover away for anyone sizing the box.
+                    <Tooltip content={cpuTooltip(p.cpuCores)}>
+                      <span className="cursor-help">{formatCpuPercent(p.cpuCores)}</span>
+                    </Tooltip>
+                  )}
                 </Td>
                 <Td align="right" num>
                   {formatNumber(p.connectedClients)}

@@ -80,6 +80,8 @@ export interface HealthAggregate {
   commandsPerSec: number | null;
   /** worst memory-used percentage across connections with a maxmemory set */
   memoryPct: number | null;
+  /** busiest CPU across connections, in cores (1.0 = one saturated core); null until a rate exists */
+  cpuCores: number | null;
   critical: number;
   warn: number;
 }
@@ -87,6 +89,7 @@ export interface HealthAggregate {
 export function aggregate(health: ConnectionHealth[]): HealthAggregate {
   let commandsPerSec: number | null = null;
   let memoryPct: number | null = null;
+  let cpuCores: number | null = null;
   let down = 0;
   let critical = 0;
   let warn = 0;
@@ -95,11 +98,13 @@ export function aggregate(health: ConnectionHealth[]): HealthAggregate {
     if (!h.ok) down++;
     if (h.commandsPerSec != null) commandsPerSec = (commandsPerSec ?? 0) + h.commandsPerSec;
     if (h.memoryUsedPct != null) memoryPct = Math.max(memoryPct ?? 0, h.memoryUsedPct);
+    // The busiest single Redis, not a sum: CPU across separate servers does not add up.
+    if (h.cpuCores != null) cpuCores = Math.max(cpuCores ?? 0, h.cpuCores);
     for (const w of h.warnings) {
       if (w.level === "critical") critical++;
       else warn++;
     }
   }
 
-  return { total: health.length, down, commandsPerSec, memoryPct, critical, warn };
+  return { total: health.length, down, commandsPerSec, memoryPct, cpuCores, critical, warn };
 }

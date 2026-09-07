@@ -21,6 +21,7 @@ import { FoldersPage } from "@/pages/FoldersPage";
 import { FolderPage } from "@/pages/folders/FolderPage";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
 import { UsersPage } from "@/pages/UsersPage";
+import { AuditPage } from "@/pages/AuditPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
@@ -78,6 +79,7 @@ export function App() {
                 <Route path="c/:connectionId" element={<ConnectionPage />} />
                 <Route path="c/:connectionId/q/:queue" element={<QueuePage />} />
                 <Route path="c/:connectionId/q/:queue/metrics" element={<QueuePage view="metrics" />} />
+                <Route path="c/:connectionId/q/:queue/schedulers" element={<QueuePage view="schedulers" />} />
                 <Route path="c/:connectionId/q/:queue/groups" element={<GroupsPage />} />
                 <Route path="c/:connectionId/q/:queue/groups/:groupId" element={<GroupJobsPage />} />
                 <Route path="c/:connectionId/q/:queue/j/:jobId" element={<JobPage />} />
@@ -86,6 +88,7 @@ export function App() {
                 <Route path="folders/:folderId" element={<FolderPage />} />
                 <Route path="alerts" element={<AlertsPage />} />
                 <Route path="users" element={<UsersPage />} />
+                <Route path="audit" element={<AuditPage />} />
                 {/* Flows is built and working but hidden for now (lib/featureFlags.ts).
                     While hidden, /flows redirects home instead of 404ing a stale bookmark. */}
                 {SHOW_FLOWS ? (

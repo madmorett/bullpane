@@ -4,8 +4,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { authPlugin } from "../auth/plugin";
+import { registerAuditHook } from "../plugins/audit";
 import { blockWrites } from "../plugins/gates";
 import { alertRoutes } from "./alerts";
+import { auditRoutes } from "./audit";
 import { authRoutes } from "./auth";
 import { connectionRoutes } from "./connections";
 import { flowRoutes } from "./flows";
@@ -25,6 +27,11 @@ export async function apiPlugin(app: FastifyInstance): Promise<void> {
   // choke point beats remembering to gate each mutating handler.
   app.addHook("onRequest", blockWrites);
 
+  // Audit is the mirror image of blockWrites: one hook for the whole /api tree,
+  // so a route added later cannot fall out of the trail by being forgotten.
+  // See plugins/audit.ts for why this is a hook and not a call per handler.
+  registerAuditHook(app);
+
   app.setNotFoundHandler(async (request, reply) => {
     void reply.status(404).send({ error: "not_found", message: `Route ${request.method} ${request.url} not found` });
   });
@@ -41,4 +48,5 @@ export async function apiPlugin(app: FastifyInstance): Promise<void> {
   await app.register(folderRoutes);
   await app.register(alertRoutes);
   await app.register(userRoutes);
+  await app.register(auditRoutes);
 }

@@ -15,8 +15,8 @@ import type { LuaReply } from "./parse.js";
 export type RedisClient = Redis | Cluster;
 
 export const SCRIPTS = {
-  /** 8 state keys + meta + groups + metrics:completed:data + metrics:failed:data */
-  queueStats: { numberOfKeys: 12, readOnly: true },
+  /** 8 state keys + meta + groups + metrics (4) + repeat + stalled */
+  queueStats: { numberOfKeys: 16, readOnly: true },
   /** the state (or group) list/zset */
   getJobs: { numberOfKeys: 1, readOnly: true },
   getJobsSearch: { numberOfKeys: 1, readOnly: true, file: "searchJobs" },
@@ -26,6 +26,8 @@ export const SCRIPTS = {
   sampleParents: { numberOfKeys: undefined, readOnly: true },
   /** groups, groups:active, groups:paused, groups:max, groups:limit */
   getGroups: { numberOfKeys: 5, readOnly: true },
+  /** the `repeat` zset (job schedulers); the per-scheduler hashes are built inside Lua */
+  getSchedulers: { numberOfKeys: 1, readOnly: true },
   /** meta, limiter, groups, groups:active, groups:paused, groups:max, groups:limit, metrics:completed */
   queueSetup: { numberOfKeys: 8, readOnly: true },
 } as const;

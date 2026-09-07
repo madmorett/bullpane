@@ -1,6 +1,10 @@
 node_modules
 dist
 .env
+# qualquer .env real (.env.trial, .env.production, ...), mas mantendo os templates
+.env.*
+!.env.example
+!.env.company.example
 *.local
 .DS_Store
 coverage
@@ -9,3 +13,10 @@ apps/web/dist
 apps/server/public
 keys/
 *.tsbuildinfo
+
+# --- Nada aqui vai para o git ---
+# Configuração de clientes (Monest incluída), chaves de licença assinadas,
+# endpoints e IPs reais. O repositório pode virar open source; esta pasta não.
+private/
+keys/
+*.pem

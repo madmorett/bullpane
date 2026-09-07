@@ -1,13 +1,28 @@
 import { Folder as FolderIcon, FolderOpen, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { QueueSection } from "@/lib/groupQueues";
+import { entryKey, type QueueEntry, type QueueSection } from "@/lib/groupQueues";
 import { QueueCard } from "./QueueCard";
 
 /**
  * bull-board style "squares", grouped in sections (folder / connection / leftovers).
  * `auto-fill` at ~230px puts 5-6 cards per row on a laptop so a dozen queues fit on one screen.
  */
-export function QueueCardGrid({ sections, showConnection, hideSingleHeader, className }: { sections: QueueSection[]; showConnection?: boolean; hideSingleHeader?: boolean; className?: string }) {
+export function QueueCardGrid({
+  sections,
+  showConnection,
+  hideSingleHeader,
+  className,
+  onHide,
+  hidePendingKey,
+}: {
+  sections: QueueSection[];
+  showConnection?: boolean;
+  hideSingleHeader?: boolean;
+  className?: string;
+  /** "Hide from the lists" on each card (operators) */
+  onHide?: (entry: QueueEntry) => void;
+  hidePendingKey?: string | null;
+}) {
   const single = sections.length === 1 && hideSingleHeader;
   return (
     <div className={cn("space-y-4", className)}>
@@ -28,7 +43,13 @@ export function QueueCardGrid({ sections, showConnection, hideSingleHeader, clas
           )}
           <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
             {s.items.map((e) => (
-              <QueueCard key={`${e.connection.id}/${e.queue.name}`} entry={e} showConnection={showConnection} />
+              <QueueCard
+                key={`${e.connection.id}/${e.queue.name}`}
+                entry={e}
+                showConnection={showConnection}
+                onHide={onHide}
+                hidePending={hidePendingKey === entryKey(e)}
+              />
             ))}
           </div>
         </section>

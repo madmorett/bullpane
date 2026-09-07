@@ -4,12 +4,19 @@ import { cn } from "@/lib/cn";
 
 export type ToastKind = "info" | "success" | "error" | "warning";
 
+/** Optional single action inside a toast — "Undo" for a reversible change. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastItem {
   id: number;
   kind: ToastKind;
   message: string;
   description?: string;
   durationMs: number;
+  action?: ToastAction;
 }
 
 let items: ToastItem[] = [];
@@ -25,12 +32,23 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 
-function push(kind: ToastKind, message: string, opts: { description?: string; durationMs?: number } = {}) {
+function push(kind: ToastKind, message: string, opts: { description?: string; durationMs?: number; action?: ToastAction } = {}) {
   // de-dupe identical consecutive toasts
   const dup = items.find((t) => t.message === message && t.kind === kind);
   if (dup) return dup.id;
   const id = ++seq;
-  items = [...items, { id, kind, message, description: opts.description, durationMs: opts.durationMs ?? (kind === "error" ? 6000 : 3500) }];
+  items = [
+    ...items,
+    {
+      id,
+      kind,
+      message,
+      description: opts.description,
+      // A toast carrying an action has to stay long enough to be clicked.
+      durationMs: opts.durationMs ?? (opts.action ? 8000 : kind === "error" ? 6000 : 3500),
+      action: opts.action,
+    },
+  ];
   emit();
   return id;
 }
@@ -41,13 +59,15 @@ export function dismissToast(id: number) {
 }
 
 export const toast = Object.assign(
-  (message: string, opts?: { kind?: ToastKind; description?: string; durationMs?: number }) =>
+  (message: string, opts?: { kind?: ToastKind; description?: string; durationMs?: number; action?: ToastAction }) =>
     push(opts?.kind ?? "info", message, opts),
   {
     info: (m: string, d?: string) => push("info", m, { description: d }),
     success: (m: string, d?: string) => push("success", m, { description: d }),
     error: (m: string, d?: string) => push("error", m, { description: d }),
     warning: (m: string, d?: string) => push("warning", m, { description: d }),
+    /** Reversible change: the toast IS the undo affordance, so no confirm dialog. */
+    undoable: (m: string, action: ToastAction, d?: string) => push("success", m, { description: d, action }),
   },
 );
 
@@ -79,6 +99,18 @@ function ToastView({ item }: { item: ToastItem }) {
       <div className="min-w-0 flex-1">
         <p className="text-fg">{item.message}</p>
         {item.description && <p className="mt-0.5 text-xs break-words text-fg-muted">{item.description}</p>}
+        {item.action && (
+          <button
+            type="button"
+            className="mt-1.5 rounded text-xs font-medium text-accent hover:underline"
+            onClick={() => {
+              item.action?.onClick();
+              dismissToast(item.id);
+            }}
+          >
+            {item.action.label}
+          </button>
+        )}
       </div>
       <button
         type="button"

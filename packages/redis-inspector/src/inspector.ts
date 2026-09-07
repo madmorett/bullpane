@@ -8,8 +8,12 @@ import { Job, Queue, type JobsOptions } from "bullmq";
 import {
   EMPTY_COUNTS,
   STATE_KEY,
+  type BulkJobAction,
+  type BulkJobActionResult,
+  type BulkJobFailure,
   type GroupSummary,
   type JobDetail,
+  type JobScheduler,
   type JobSearchResult,
   type JobState,
   type JobsPage,
@@ -26,6 +30,7 @@ import {
   JOB_KEY,
   JOB_SUMMARY_FIELDS,
   QUEUE_KEY,
+  SCHEDULER_KEY,
   STATE_ORDER,
   allStateKeys,
   metaScanPattern,
@@ -43,6 +48,7 @@ import {
   hashToSummary,
   metricPoints,
   rowToHash,
+  rowToScheduler,
   type LuaReply,
 } from "./parse.js";
 import { callScript, defineScripts, pipelineScript, type RedisClient } from "./scripts.js";
@@ -52,6 +58,7 @@ import type {
   Inspector,
   InspectorConnectionConfig,
   InspectorOptions,
+  MetricsCounters,
   PingResult,
   QueueStats,
   WindowCounts,
@@ -70,6 +77,13 @@ const DEFAULTS: Required<InspectorOptions> = {
 const SCAN_COUNT = 500;
 /** Metric points returned by getQueueStats when withMetrics is set (one per minute). */
 const STATS_METRIC_POINTS = 60;
+/**
+ * Quantas ações em lote correm ao mesmo tempo. Um `Promise.all` de 500
+ * `job.retry()` dispara 500 EVALSHAs simultâneos e enfileira comandos na frente
+ * do workload do cliente — o contrário do contrato de performance. Uma janela
+ * pequena termina em tempo parecido e mantém o Redis respirando.
+ */
+const BULK_CONCURRENCY = 8;
 /** Trailing window for QueueRates (success / failure %). */
 const DEFAULT_RATE_WINDOW_MINUTES = 60;
 /** getQueueSetup cache TTL: CLIENT LIST is O(clients), so never hammer it. */
@@ -307,6 +321,13 @@ export class RedisInspector implements Inspector {
       p + GROUP_KEY.groups,
       p + QUEUE_KEY.metricsCompletedData,
       p + QUEUE_KEY.metricsFailedData,
+      p + QUEUE_KEY.metricsCompleted,
+      p + QUEUE_KEY.metricsFailed,
+      // job schedulers: a ZCARD on `repeat` for the tab badge, O(1).
+      p + QUEUE_KEY.repeat,
+      // stalled: um SCARD O(1). Não é estado (o BullMQ devolve `active` para um
+      // job stallado); é o único jeito de a UI dizer quantos dos `active` travaram.
+      p + QUEUE_KEY.stalled,
     ];
   }
 
@@ -329,13 +350,13 @@ export class RedisInspector implements Inspector {
     if (c instanceof Cluster) {
       replies = await Promise.all(
         queueNames.map((q) =>
-          callScript(c, "queueStats", [...this.statsKeys(q), withMetrics, STATS_METRIC_POINTS, since]).catch(() => null),
+          callScript(c, "queueStats", [...this.statsKeys(q), withMetrics, STATS_METRIC_POINTS, since, queueKeyPrefix(this.config.prefix, q)]).catch(() => null),
         ),
       );
     } else {
       const pipeline = c.pipeline();
       for (const q of queueNames) {
-        pipelineScript(pipeline, "queueStats", [...this.statsKeys(q), withMetrics, STATS_METRIC_POINTS, since]);
+        pipelineScript(pipeline, "queueStats", [...this.statsKeys(q), withMetrics, STATS_METRIC_POINTS, since, queueKeyPrefix(this.config.prefix, q)]);
       }
       const results = (await pipeline.exec()) ?? [];
       replies = results.map(([err, reply]) => (err ? null : (reply as LuaReply)));
@@ -358,6 +379,36 @@ export class RedisInspector implements Inspector {
       c.zcount(stateKey(p, queueName, "failed"), since, "+inf"),
     ]);
     return { completed: Number(completed), failed: Number(failed) };
+  }
+
+  /**
+   * The ONLY honest source for "how many jobs finished": BullMQ's cumulative
+   * counters. `HGET metrics:completed count` + `HGET metrics:failed count`, both
+   * keys of the same queue, in ONE pipeline => one round trip, cluster safe, O(1)
+   * each. No new Lua script: two HGETs are cheaper than an EVALSHA round trip and
+   * this is called once per (queue, tick).
+   *
+   * A missing hash (null) means the Worker was created without
+   * `metrics: { maxDataPoints }`. The caller must treat that as "cannot measure",
+   * never as zero: zero would read as a perfectly healthy queue.
+   */
+  async getMetricsCounters(queueName: string): Promise<MetricsCounters> {
+    const c = await this.ensureConnected();
+    const p = queueKeyPrefix(this.config.prefix, queueName);
+    const collectedAt = Date.now();
+    // Cluster: both keys carry the queue's hash tag, so a pipeline is single-slot.
+    const results =
+      (await c
+        .pipeline()
+        .hget(p + QUEUE_KEY.metricsCompleted, "count")
+        .hget(p + QUEUE_KEY.metricsFailed, "count")
+        .exec()) ?? [];
+    const read = (i: number): number | null => {
+      const entry = results[i];
+      if (!entry || entry[0]) return null; // pipeline error for this key: unknown, not zero
+      return toIntOrNull(typeof entry[1] === "string" ? entry[1] : null);
+    };
+    return { completed: read(0), failed: read(1), collectedAt };
   }
 
   async getJobs(
@@ -622,6 +673,37 @@ export class RedisInspector implements Inspector {
   }
 
   // ---------------------------------------------------------------------------
+  // job schedulers (repeatable jobs)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Schedulers live outside the 8 states, in the `repeat` zset (id -> next run)
+   * plus one `repeat:${id}` hash each. getSchedulers.lua pages the zset and
+   * HMGETs the page's hashes in a single EVALSHA, truncating data/opts in Lua.
+   */
+  async getSchedulers(queueName: string, opts: { start: number; end: number }): Promise<{ schedulers: JobScheduler[]; total: number }> {
+    const c = await this.ensureConnected();
+    const p = queueKeyPrefix(this.config.prefix, queueName);
+    const reply = asArray(
+      await callScript(c, "getSchedulers", [p + SCHEDULER_KEY.repeat, opts.start, opts.end, p, this.opts.previewBytes]),
+    );
+    const schedulers = asArray(reply[1]).map((row) => rowToScheduler(asArray(row)));
+    return { schedulers, total: asNumber(reply[0]) };
+  }
+
+  /**
+   * Official API: it removes the `repeat:${key}` hash, the zset member AND the
+   * delayed job the scheduler had already queued. Reimplementing that here would
+   * leave orphan delayed jobs behind.
+   */
+  async removeScheduler(queueName: string, key: string): Promise<{ removed: boolean }> {
+    const queue = await this.getQueue(queueName);
+    // removeJobScheduler-3.lua returns 0 on success / 1 when the id is unknown, and
+    // queue.removeJobScheduler already negates it, so `true` means "removed".
+    return { removed: (await queue.removeJobScheduler(key)) === true };
+  }
+
+  // ---------------------------------------------------------------------------
   // flows
   // ---------------------------------------------------------------------------
 
@@ -714,6 +796,38 @@ export class RedisInspector implements Inspector {
   }
 
   /**
+   * Ação em lote. Reusa EXATAMENTE as ações unitárias acima (portanto a API
+   * oficial do bullmq e seus scripts atômicos), em janelas de BULK_CONCURRENCY.
+   *
+   * Resultado parcial é a regra: um id podado, em outro estado ou que falhe no
+   * script cai em `failed` com o motivo, e os demais seguem. Abortar no primeiro
+   * erro esconderia os 47 que deram certo — e o operador precisa saber quais 3
+   * dos 50 ficaram para trás. Só um Redis inacessível lança.
+   */
+  async bulkJobAction(queueName: string, action: BulkJobAction, jobIds: string[]): Promise<BulkJobActionResult> {
+    const ok: string[] = [];
+    const failed: BulkJobFailure[] = [];
+    // Ids repetidos custariam uma ida ao Redis para dar "job_not_found" na segunda.
+    const ids = [...new Set(jobIds)];
+
+    const run = async (jobId: string): Promise<void> => {
+      try {
+        if (action === "retry") await this.retryJob(queueName, jobId);
+        else if (action === "remove") await this.removeJob(queueName, jobId);
+        else await this.promoteJob(queueName, jobId);
+        ok.push(jobId);
+      } catch (err) {
+        failed.push({ jobId, reason: errorMessage(err) });
+      }
+    };
+
+    for (let i = 0; i < ids.length; i += BULK_CONCURRENCY) {
+      await Promise.all(ids.slice(i, i + BULK_CONCURRENCY).map(run));
+    }
+    return { action, ok, failed, requested: ids.length };
+  }
+
+  /**
    * Operator "discard": move an active job to failed. `discard()` disables the
    * automatic retry, and the lock token "0" makes bullmq's moveToFinished skip the
    * worker-lock check (see includes/removeLock.lua), which is exactly what an
@@ -779,15 +893,57 @@ function parseStats(reply: LuaReply, withMetrics: boolean, windowMinutes: number
   STATE_ORDER.forEach((state, i) => {
     counts[state] = asNumber(r[i]);
   });
-  const completed = asNumber(r[13]);
-  const failed = asNumber(r[14]);
-  const finished = completed + failed;
-  const rates: QueueRates = {
-    windowMinutes,
-    completed,
-    failed,
-    successPct: finished === 0 ? null : Math.round((completed / finished) * 1000) / 10,
-  };
+  // --- taxa de sucesso -----------------------------------------------------
+  // Duas fontes possíveis. As métricas do BullMQ são contadores por minuto
+  // gravados quando o job termina, então continuam corretas mesmo com
+  // removeOnComplete agressivo. Os zsets só enxergam o que ainda existe:
+  // com `removeOnComplete: { count: 50 }`, 10.000 ok + 100 falhas viram
+  // 50/(50+100) = 33%, quando o real é 99%. Preferimos métricas sempre.
+  const metricsCompleted = metricPoints(r[11] ?? []);
+  const metricsFailed = metricPoints(r[12] ?? []);
+  const prunesCompleted = optsPrunesCompleted(typeof r[16] === "string" ? r[16] : null);
+
+  // Os contadores acumulados existem assim que o Worker liga `metrics`; a lista
+  // :data só ganha o primeiro ponto na virada do minuto. Usar o hash faz a taxa
+  // ficar correta desde o primeiro job.
+  const totalCompleted = toIntOrNull(typeof r[17] === "string" ? r[17] : null);
+  const totalFailed = toIntOrNull(typeof r[18] === "string" ? r[18] : null);
+  const hasMetrics = totalCompleted !== null || totalFailed !== null;
+
+  const sum = (xs: number[], n: number) => xs.slice(-n).reduce((a, b) => a + b, 0);
+
+  let rates: QueueRates;
+  if (hasMetrics) {
+    // Dentro da janela, quando há pontos por minuto suficientes; senão o
+    // acumulado desde que a coleta começou (fila nova, minuto ainda não virou).
+    const points = Math.min(windowMinutes, Math.max(metricsCompleted.length, metricsFailed.length));
+    const useWindow = points > 0;
+    const completed = useWindow ? sum(metricsCompleted, points) : (totalCompleted ?? 0);
+    const failed = useWindow ? sum(metricsFailed, points) : (totalFailed ?? 0);
+    const finished = completed + failed;
+    rates = {
+      windowMinutes: useWindow ? points : 0,
+      completed,
+      failed,
+      successPct: finished === 0 ? null : Math.round((completed / finished) * 1000) / 10,
+      source: "metrics",
+      retentionSkewed: false,
+    };
+  } else {
+    const completed = asNumber(r[13]);
+    const failed = asNumber(r[14]);
+    const finished = completed + failed;
+    rates = {
+      windowMinutes,
+      completed,
+      failed,
+      successPct: finished === 0 ? null : Math.round((completed / finished) * 1000) / 10,
+      source: "zset",
+      // só é enviesado se a fila realmente poda concluídos E há falhas para
+      // desequilibrar a razão; sem falhas, 100% continua sendo 100%.
+      retentionSkewed: prunesCompleted && failed > 0,
+    };
+  }
   const stats: QueueStats = {
     counts,
     isPaused: asNumber(r[8]) === 1,
@@ -795,9 +951,11 @@ function parseStats(reply: LuaReply, withMetrics: boolean, windowMinutes: number
     groupsCount: asNumber(r[10]),
     rates,
     library: typeof r[15] === "string" && r[15] !== "" ? r[15] : null,
+    schedulersCount: asNumber(r[19]),
+    stalledCount: asNumber(r[20]),
   };
   if (withMetrics) {
-    stats.metrics = { completed: metricPoints(r[11] ?? []), failed: metricPoints(r[12] ?? []) };
+    stats.metrics = { completed: metricsCompleted, failed: metricsFailed };
   }
   return stats;
 }
@@ -818,4 +976,30 @@ function stripUndefined<T extends object>(o: T): Partial<T> {
     if (v !== undefined) (out as Record<string, unknown>)[k] = v;
   }
   return out;
+}
+
+/**
+ * `removeOnComplete` vive no opts de cada job. Se a fila poda concluídos, a
+ * razão calculada em cima dos zsets não é confiável: os falhados costumam ser
+ * retidos por mais tempo que os concluídos.
+ *
+ * `true` só quando há poda de fato: `removeOnComplete: true` (apaga na hora),
+ * `{ count: N }` ou `{ age: N }`. `false` (o padrão) guarda tudo e é confiável.
+ */
+export function optsPrunesCompleted(optsJson: string | null): boolean {
+  if (!optsJson) return false;
+  try {
+    const opts = JSON.parse(optsJson) as { removeOnComplete?: unknown };
+    const r = opts.removeOnComplete;
+    if (r === undefined || r === null || r === false) return false;
+    if (r === true) return true;
+    if (typeof r === "number") return true;
+    if (typeof r === "object") {
+      const o = r as { count?: unknown; age?: unknown };
+      return typeof o.count === "number" || typeof o.age === "number";
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }

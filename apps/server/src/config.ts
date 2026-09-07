@@ -15,9 +15,13 @@ export interface Config {
   sessionSecret: string;
   publicUrl: string;
   databaseUrl: string;
-  /** BMV_LICENSE_KEY, null when empty */
+  /** BMV_LICENSE_KEY, null when empty. Offline token or store key, see license.ts */
   licenseKey: string | null;
   checkoutUrl: string;
+  /** BMV_LICENSE_API_URL: where subscription keys are activated and refreshed */
+  licenseApiUrl: string;
+  /** BMV_LICENSE_REFRESH_HOURS: how often an online key is re-checked */
+  licenseRefreshHours: number;
   demoMode: boolean;
   /**
    * BMV_READ_ONLY=true blocks every mutating route (job/queue actions, connection,
@@ -32,6 +36,12 @@ export interface Config {
   queueDiscoveryTtl: number;
   /** seconds */
   alertsInterval: number;
+  /**
+   * BMV_AUDIT_RETENTION_DAYS: how long audit rows are kept. Default 365 because
+   * "one year" is what compliance questionnaires ask for. 0 disables pruning
+   * (keep forever — then you own the growth).
+   */
+  auditRetentionDays: number;
   jobPreviewBytes: number;
   /** absolute path to the built web UI */
   webDist: string;
@@ -41,7 +51,8 @@ export interface Config {
 }
 
 export const DEFAULT_DATABASE_URL = "mysql://bmv:bmv@localhost:3306/bmv";
-export const DEFAULT_CHECKOUT_URL = "https://bullmq-visualizer.dev/pro";
+export const DEFAULT_CHECKOUT_URL = "https://bullpane.com/pricing";
+export const DEFAULT_LICENSE_API_URL = "https://api.bullpane.com";
 
 function str(env: NodeJS.ProcessEnv, key: string, fallback: string): string {
   const v = env[key];
@@ -105,6 +116,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     databaseUrl: str(env, "DATABASE_URL", DEFAULT_DATABASE_URL),
     licenseKey: optional(env, "BMV_LICENSE_KEY"),
     checkoutUrl: str(env, "BMV_CHECKOUT_URL", DEFAULT_CHECKOUT_URL),
+    licenseApiUrl: str(env, "BMV_LICENSE_API_URL", DEFAULT_LICENSE_API_URL).replace(/\/+$/, ""),
+    licenseRefreshHours: int(env, "BMV_LICENSE_REFRESH_HOURS", 24, 1),
     demoMode,
     readOnly: bool(env, "BMV_READ_ONLY", false),
     demoRedisUrl: str(env, "DEMO_REDIS_URL", "redis://localhost:6379"),
@@ -112,6 +125,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     demoAdminPassword: str(env, "DEMO_ADMIN_PASSWORD", "demo1234"),
     queueDiscoveryTtl: int(env, "BMV_QUEUE_DISCOVERY_TTL", 30, 1),
     alertsInterval: int(env, "BMV_ALERTS_INTERVAL", 15, 1),
+    auditRetentionDays: int(env, "BMV_AUDIT_RETENTION_DAYS", 365, 0),
     jobPreviewBytes: int(env, "BMV_JOB_PREVIEW_BYTES", 2048, 64),
     webDist: path.resolve(SERVER_ROOT, str(env, "WEB_DIST", "../web/dist")),
     licensePublicKeyB64: optional(env, "LICENSE_PUBLIC_KEY_B64"),

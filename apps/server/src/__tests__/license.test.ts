@@ -1,8 +1,8 @@
 import { generateKeyPairSync } from "node:crypto";
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import { PRO_PRICING, type LicensePayload } from "@bullmq-visualizer/shared";
 import { describe, expect, it } from "vitest";
-import { signLicense, verifyLicenseKey } from "../license";
-import { buildEdition } from "../services/edition";
+import { isOfflineToken, type LicenseVerification, signLicense, verifyLicenseKey } from "../license";
+import { buildEdition, type OnlineState, type ResolvedLicense } from "../services/edition";
 
 function keypair() {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -77,28 +77,41 @@ describe("license verification", () => {
 
 describe("buildEdition", () => {
   const config = { demoMode: false, checkoutUrl: "https://example.test/pro" };
+  const offline = (verification: LicenseVerification): ResolvedLicense => ({ source: "offline", token: "t", verification });
 
   it("is free without a license", () => {
     const e = buildEdition(config, null);
     expect(e.tier).toBe("free");
     expect(e.demo).toBe(false);
-    expect(e.features).toEqual({ alerts: false, users: false, folders: false, flows: false });
+    expect(e.features).toEqual({ alerts: false, users: false, folders: false, flows: false, audit: false });
     expect(e.license).toBeNull();
-    expect(e.priceUsd).toBe(49);
+    expect(e.pricing).toEqual(PRO_PRICING);
     expect(e.checkoutUrl).toBe("https://example.test/pro");
   });
 
-  it("is pro with a valid license", () => {
-    const e = buildEdition(config, { valid: true, payload: basePayload, reason: null });
+  it("is pro with a valid offline license", () => {
+    const e = buildEdition(config, offline({ valid: true, payload: basePayload, reason: null }));
     expect(e.tier).toBe("pro");
-    expect(e.features).toEqual({ alerts: true, users: true, folders: true, flows: true });
-    expect(e.license).toEqual({ licensee: "Acme Corp", email: "ops@acme.test", issuedAt: basePayload.issuedAt, expiresAt: null, valid: true });
+    expect(e.features).toEqual({ alerts: true, users: true, folders: true, flows: true, audit: true });
+    expect(e.license).toMatchObject({
+      licensee: "Acme Corp",
+      email: "ops@acme.test",
+      issuedAt: basePayload.issuedAt,
+      expiresAt: null,
+      valid: true,
+      source: "offline",
+      billing: "perpetual",
+      status: "active",
+      leaseExpiresAt: null,
+      activationId: null,
+    });
   });
 
-  it("stays free with an invalid license but reports it", () => {
-    const e = buildEdition(config, { valid: false, payload: basePayload, reason: "expired" });
+  it("stays free with an expired offline license but reports it", () => {
+    const e = buildEdition(config, offline({ valid: false, payload: basePayload, reason: "expired on 2025-01-01" }));
     expect(e.tier).toBe("free");
     expect(e.license?.valid).toBe(false);
+    expect(e.license?.status).toBe("expired");
   });
 
   it("is pro + demo badge in DEMO_MODE regardless of license", () => {
@@ -106,5 +119,73 @@ describe("buildEdition", () => {
     expect(e.tier).toBe("pro");
     expect(e.demo).toBe(true);
     expect(e.features.alerts).toBe(true);
+  });
+
+  describe("online (subscription) leases", () => {
+    const lease: LicensePayload = {
+      ...basePayload,
+      expiresAt: NOW + 7 * 86_400_000,
+      subscriptionExpiresAt: NOW + 30 * 86_400_000,
+      activationId: "act_1",
+      billing: "subscription",
+    };
+    const online = (verification: LicenseVerification, state: Partial<OnlineState> = {}): ResolvedLicense => ({
+      source: "online",
+      key: "BULLPANE-TEST",
+      verification,
+      state: { activationId: "act_1", lease: "x.y", lastCheckedAt: NOW, lastCheckError: null, ...state },
+    });
+
+    it("is active with a valid lease and a clean last check", () => {
+      const e = buildEdition(config, online({ valid: true, payload: lease, reason: null }));
+      expect(e.tier).toBe("pro");
+      expect(e.license).toMatchObject({
+        source: "online",
+        billing: "subscription",
+        status: "active",
+        expiresAt: lease.subscriptionExpiresAt,
+        leaseExpiresAt: lease.expiresAt,
+        lastCheckedAt: NOW,
+        lastCheckError: null,
+        activationId: "act_1",
+      });
+    });
+
+    it("is pro in grace when the API was unreachable but the lease still holds", () => {
+      const e = buildEdition(
+        config,
+        online({ valid: true, payload: lease, reason: null }, { lastCheckError: { code: "network", message: "ECONNREFUSED", definitive: false } }),
+      );
+      expect(e.tier).toBe("pro");
+      expect(e.license?.status).toBe("grace");
+      expect(e.license?.lastCheckError).toBe("ECONNREFUSED");
+    });
+
+    it("is free once the lease ran out, even without a definitive answer", () => {
+      const e = buildEdition(config, online({ valid: false, payload: lease, reason: "expired on x" }, { lastCheckError: { code: "network", message: "down", definitive: false } }));
+      expect(e.tier).toBe("free");
+      expect(e.license?.status).toBe("expired");
+    });
+
+    it("is free at once when the store said revoked, lease or not", () => {
+      const e = buildEdition(config, online({ valid: true, payload: lease, reason: null }, { lastCheckError: { code: "license_revoked", message: "cancelled", definitive: true } }));
+      expect(e.tier).toBe("free");
+      expect(e.license?.status).toBe("invalid");
+    });
+
+    it("reports expired when the store said the paid period ended", () => {
+      const e = buildEdition(config, online({ valid: true, payload: lease, reason: null }, { lastCheckError: { code: "license_expired", message: "ended", definitive: true } }));
+      expect(e.license?.status).toBe("expired");
+    });
+  });
+});
+
+describe("isOfflineToken", () => {
+  it("tells signed tokens from store keys", () => {
+    const { privateKey } = keypair();
+    expect(isOfflineToken(signLicense(basePayload, privateKey))).toBe(true);
+    expect(isOfflineToken("BULLPANE-1234-ABCD-5678")).toBe(false);
+    expect(isOfflineToken("a.b.c")).toBe(false);
+    expect(isOfflineToken(".x")).toBe(false);
   });
 });

@@ -105,6 +105,16 @@ describe("HealthService rates", () => {
     expect(serverInfo).toHaveBeenCalledTimes(1);
   });
 
+  it("nunca mostra um aviso em branco quando o erro vem vazio", () => {
+    // ioredis às vezes rejeita sem mensagem (socket fechado no meio do INFO)
+    for (const empty of ["", "   "]) {
+      const w = buildWarnings(null, empty, null);
+      expect(w[0]?.code).toBe("unreachable");
+      expect(w[0]?.message.trim()).not.toBe("");
+    }
+    expect(buildWarnings(null, "ECONNREFUSED", null)[0]?.message).toContain("ECONNREFUSED");
+  });
+
   it("reports a dead Redis instead of throwing", async () => {
     const connections = {
       inspectorFor: () => ({ serverInfo: async () => { throw new Error("ECONNREFUSED"); } }),

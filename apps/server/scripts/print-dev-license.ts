@@ -1,6 +1,7 @@
 /**
- * Signs a sample perpetual Pro license with the DEV private key and prints it,
- * so the maintainer can test the Pro edition locally:
+ * Signs a sample perpetual (offline) Pro license with the vendor private key and
+ * prints it, so the maintainer can test the Pro edition locally without the
+ * license API:
  *
  *   pnpm --filter @bullmq-visualizer/server license:dev
  *   # then: BMV_LICENSE_KEY=<printed key> pnpm dev   (or paste it in Settings → License)
@@ -14,7 +15,7 @@ import type { LicensePayload } from "@bullmq-visualizer/shared";
 import { LICENSE_PUBLIC_KEY_B64, signLicense, verifyLicenseKey } from "../src/license";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const privateKeyPath = process.env.DEV_LICENSE_PRIVATE_KEY ?? path.resolve(here, "../../../keys/dev-license-private.pem");
+const privateKeyPath = process.env.DEV_LICENSE_PRIVATE_KEY ?? path.resolve(here, "../../../keys/license-private.pem");
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -25,7 +26,8 @@ let privateKeyPem: string;
 try {
   privateKeyPem = readFileSync(privateKeyPath, "utf8");
 } catch {
-  console.error(`Dev private key not found at ${privateKeyPath}.`);
+  console.error(`Vendor private key not found at ${privateKeyPath}.`);
+  console.error("Run `pnpm license:keygen` (and put its public key in src/license.ts), or point DEV_LICENSE_PRIVATE_KEY at the key.");
   console.error("Generate one with: node -e \"const c=require('crypto');const k=c.generateKeyPairSync('ed25519');" +
     "require('fs').writeFileSync('keys/dev-license-private.pem',k.privateKey.export({type:'pkcs8',format:'pem'}));" +
     "console.log(k.publicKey.export({type:'spki',format:'der'}).toString('base64'))\"");

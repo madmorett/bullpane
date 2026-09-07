@@ -1,19 +1,36 @@
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { EyeOff, Search } from "lucide-react";
 import type { QueueRates } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { PRIMARY_STATES, SECONDARY_STATES, STATE_COLORS } from "@/lib/stateColors";
+import { queueLandingState } from "@/lib/queueLanding";
 import type { QueueEntry } from "@/lib/groupQueues";
 import { Badge } from "@/components/ui/Badge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { StateChip } from "@/components/StateBadge";
+import { SkewWarning, isSkewed, rateSourceHint } from "./RateSource";
+import { HIDE_TOOLTIP } from "./hideQueue";
 
-export function QueueCard({ entry, showConnection }: { entry: QueueEntry; showConnection?: boolean }) {
+export function QueueCard({
+  entry,
+  showConnection,
+  onHide,
+  hidePending,
+}: {
+  entry: QueueEntry;
+  showConnection?: boolean;
+  /** operators only; omitted for viewers and where hiding makes no sense */
+  onHide?: (entry: QueueEntry) => void;
+  hidePending?: boolean;
+}) {
   const { connection, queue } = entry;
   const c = queue.counts;
-  const href = routes.queue(connection.id, queue.name);
+  // Clicar no card leva ao estado que importa (failed → waiting → completed),
+  // não ao `waiting` padrão. Ver lib/queueLanding.ts: antes, uma fila com 1.000
+  // falhas abria em "No jobs in this state".
+  const href = routes.queue(connection.id, queue.name, queueLandingState(c));
 
   return (
     <article className={cn("queue-card", queue.isPaused && "opacity-90", c.failed > 0 && "border-state-failed/40")} data-testid="queue-card">
@@ -39,15 +56,34 @@ export function QueueCard({ entry, showConnection }: { entry: QueueEntry; showCo
           <Link to={routes.queueSearch(connection.id, queue.name)} className="rounded p-0.5 text-fg-subtle hover:bg-surface-2 hover:text-fg" title="Search jobs in this queue" aria-label={`Search jobs in ${queue.name}`}>
             <Search className="size-3.5" />
           </Link>
+          {onHide && (
+            <button
+              type="button"
+              disabled={hidePending}
+              onClick={() => onHide(entry)}
+              className="rounded p-0.5 text-fg-subtle hover:bg-surface-2 hover:text-fg disabled:opacity-50"
+              title={HIDE_TOOLTIP}
+              aria-label={`Hide ${queue.name} from the lists`}
+            >
+              <EyeOff className="size-3.5" />
+            </button>
+          )}
         </div>
       </header>
 
+      {/*
+        Cada chip é um link para o SEU estado — "failed 22" abre a aba failed.
+        O card tem um link esticado (`after:absolute after:inset-0` no nome da
+        fila) que cobre tudo, então os chips só são clicáveis porque o StateChip
+        com `to` ganha `relative z-10` e sobe acima desse overlay. O clique no
+        resto do card continua caindo no overlay e indo para o landing state.
+      */}
       <div className="flex flex-wrap gap-1">
         {PRIMARY_STATES.map((s) => (
-          <StateChip key={s} state={s} count={c[s]} />
+          <StateChip key={s} state={s} count={c[s]} to={routes.queue(connection.id, queue.name, s)} />
         ))}
         {SECONDARY_STATES.map((s) => (
-          <StateChip key={s} state={s} count={c[s]} hideZero short />
+          <StateChip key={s} state={s} count={c[s]} hideZero short to={routes.queue(connection.id, queue.name, s)} />
         ))}
       </div>
 
@@ -70,15 +106,22 @@ export function windowLabel(minutes: number | undefined): string {
   return `${minutes}m`;
 }
 
-/** Green-vs-red bar for the trailing-window success rate. Honest about "no data". */
+/**
+ * Green-vs-red bar for the trailing-window success rate. Honest about "no data",
+ * and honest about a number it does not trust: when the server says the reading is
+ * skewed by `removeOnComplete` retention, the bar and the percentage are dimmed and
+ * an alert icon carries the explanation. The value is never hidden or recomputed.
+ */
 export function SuccessBar({ rates, className, compact }: { rates: QueueRates | undefined; className?: string; compact?: boolean }) {
   const pct = rates?.successPct ?? null;
   const finished = (rates?.completed ?? 0) + (rates?.failed ?? 0);
   const win = windowLabel(rates?.windowMinutes);
-  const title = rates ? `${formatNumber(rates.completed)} completed · ${formatNumber(rates.failed)} failed in the last ${win}` : "no rate data";
+  const skewed = isSkewed(rates);
+  const counts = rates ? `${formatNumber(rates.completed)} completed · ${formatNumber(rates.failed)} failed in the last ${win}` : "no rate data";
+  const title = rates ? `${counts}\n\n${rateSourceHint(rates)}` : counts;
   return (
     <div className={cn("flex flex-col gap-1", className)} title={title}>
-      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3" role="img" aria-label={pct == null ? `No finished jobs in the last ${win}` : `${formatPercent(pct)} success in the last ${win}`}>
+      <div className={cn("flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3", skewed && "opacity-50")} role="img" aria-label={pct == null ? `No finished jobs in the last ${win}` : `${formatPercent(pct)} success in the last ${win}${skewed ? ", unreliable: this queue prunes completed jobs" : ""}`}>
         {pct != null && (
           <>
             <span className="h-full" style={{ width: `${pct}%`, background: STATE_COLORS.completed.fg }} />
@@ -87,14 +130,17 @@ export function SuccessBar({ rates, className, compact }: { rates: QueueRates | 
         )}
       </div>
       {!compact && (
-        <span className="num truncate text-[11px] text-fg-muted">
+        <span className="num flex min-w-0 items-center gap-1 text-[11px] text-fg-muted">
           {pct == null ? (
-            <span className="text-fg-subtle">no finished jobs · {win}</span>
+            <span className="truncate text-fg-subtle">no finished jobs · {win}</span>
           ) : (
             <>
-              <span className={cn("font-medium", pct < 90 ? "text-state-failed" : "text-fg")}>{formatPercent(pct)} ok</span>
-              <span className="text-fg-subtle"> · {win}</span>
-              {finished > 0 && <span className="text-fg-subtle"> · {formatNumber(finished)} finished</span>}
+              <span className={cn("truncate", skewed && "opacity-60")}>
+                <span className={cn("font-medium", pct < 90 ? "text-state-failed" : "text-fg")}>{formatPercent(pct)} ok</span>
+                <span className="text-fg-subtle"> · {win}</span>
+                {finished > 0 && <span className="text-fg-subtle"> · {formatNumber(finished)} finished</span>}
+              </span>
+              <SkewWarning rates={rates} />
             </>
           )}
         </span>

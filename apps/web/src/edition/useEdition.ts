@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { PRO_FEATURES, PRO_PRICE_USD, type Edition, type ProFeature } from "@bullmq-visualizer/shared";
+import { PRO_FEATURES, PRO_PRICING, type Edition, type ProFeature, type ProPricing } from "@bullmq-visualizer/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { openUpsell } from "./upsellStore";
 
@@ -8,7 +8,9 @@ export const DEFAULT_EDITION: Edition = {
   demo: false,
   features: Object.fromEntries(PRO_FEATURES.map((f) => [f, false])) as Record<ProFeature, boolean>,
   license: null,
-  priceUsd: PRO_PRICE_USD,
+  // Migração de preço: Edition passou de `priceUsd` (one-time) para `pricing`
+  // (assinatura mensal/anual). Ver PRO_PRICING em shared.
+  pricing: PRO_PRICING,
   checkoutUrl: "",
 };
 
@@ -17,7 +19,7 @@ export interface EditionInfo {
   tier: Edition["tier"];
   isPro: boolean;
   demo: boolean;
-  priceUsd: number;
+  pricing: ProPricing;
   checkoutUrl: string;
   /** true when the feature is unlocked */
   has: (feature: ProFeature) => boolean;
@@ -46,7 +48,7 @@ export function useEdition(): EditionInfo {
       tier: e.tier,
       isPro: e.tier === "pro",
       demo: !!e.demo,
-      priceUsd: e.priceUsd ?? PRO_PRICE_USD,
+      pricing: e.pricing ?? PRO_PRICING,
       checkoutUrl: e.checkoutUrl ?? "",
       has,
       gate,

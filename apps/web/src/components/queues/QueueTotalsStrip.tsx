@@ -3,8 +3,30 @@ import { formatCompact, formatNumber } from "@/lib/format";
 import { STATE_COLORS, type ColoredState } from "@/lib/stateColors";
 import type { QueueTotals } from "@/lib/groupQueues";
 
-/** "All queues" summary: totals across everything in view, coloured with the shared state palette. */
-export function QueueTotalsStrip({ totals, title = "All queues", className, children }: { totals: QueueTotals; title?: string; className?: string; children?: React.ReactNode }) {
+/**
+ * "All queues" summary: totals across everything in view, coloured with the
+ * shared state palette.
+ *
+ * `hiddenCount` is stated, never folded in. The totals sum only the visible
+ * queues — a hidden queue must not quietly pad "13 queues · 187 waiting" — so
+ * the count of what was left out is printed next to them, and clicking it
+ * reveals the list.
+ */
+export function QueueTotalsStrip({
+  totals,
+  title = "All queues",
+  className,
+  children,
+  hiddenCount = 0,
+  onRevealHidden,
+}: {
+  totals: QueueTotals;
+  title?: string;
+  className?: string;
+  children?: React.ReactNode;
+  hiddenCount?: number;
+  onRevealHidden?: () => void;
+}) {
   return (
     <div className={cn("card flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5", className)}>
       <div className="flex items-baseline gap-2">
@@ -13,6 +35,21 @@ export function QueueTotalsStrip({ totals, title = "All queues", className, chil
           {formatNumber(totals.queues)} {totals.queues === 1 ? "queue" : "queues"}
           {totals.paused > 0 && <span className="text-state-paused"> · {formatNumber(totals.paused)} paused</span>}
         </span>
+        {hiddenCount > 0 &&
+          (onRevealHidden ? (
+            <button
+              type="button"
+              onClick={onRevealHidden}
+              className="num text-xs text-fg-subtle underline decoration-dotted underline-offset-2 hover:text-fg-muted"
+              title="These queues are hidden and are NOT included in the totals. Click to see them."
+            >
+              {formatNumber(hiddenCount)} hidden
+            </button>
+          ) : (
+            <span className="num text-xs text-fg-subtle" title="These queues are hidden and are NOT included in the totals.">
+              {formatNumber(hiddenCount)} hidden
+            </span>
+          ))}
       </div>
       <div className="flex flex-wrap items-center gap-4">
         <Total state="waiting" value={totals.waiting} />

@@ -17,7 +17,15 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
   const viewer = [requireAuth, gate, requireRole("viewer")];
   const operator = [requireAuth, gate, requireRole("operator")];
 
-  app.get("/alerts", { preHandler: viewer }, async (): Promise<Alert[]> => app.ctx.alerts.list());
+  /**
+   * The measurement state lives in the engine (in memory, a sliding window), not
+   * in MySQL, so it is stitched onto the DTO here. Without it the UI would show
+   * a green "ok" for an alert that cannot measure anything.
+   */
+  app.get("/alerts", { preHandler: viewer }, async (): Promise<Alert[]> => {
+    const alerts = await app.ctx.alerts.list();
+    return alerts.map((a) => ({ ...a, measurement: app.ctx.alertsEngine.measurementOf(a.id) ?? null }));
+  });
 
   // Static segment beats the :id param in Fastify's router, so this is safe to register alongside /alerts/:id.
   app.get("/alerts/events", { preHandler: viewer }, async (request): Promise<AlertEvent[]> => {
@@ -28,17 +36,25 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
   app.post("/alerts", { preHandler: operator }, async (request, reply): Promise<Alert> => {
     const input = createAlertSchema.parse(request.body);
     const alert = await app.ctx.alerts.create(input);
+    request.auditDetail({ alertId: alert.id, name: alert.name, kind: alert.condition.kind, scope: alert.scope });
     reply.status(201);
     return alert;
   });
 
   app.patch<IdParams>("/alerts/:id", { preHandler: operator }, async (request): Promise<Alert> => {
     const input = updateAlertSchema.parse(request.body);
-    return app.ctx.alerts.update(request.params.id, input);
+    const updated = await app.ctx.alerts.update(request.params.id, input);
+    request.auditDetail({ alertId: updated.id, name: updated.name, changed: Object.keys(input) });
+    // A changed scope/condition invalidates the counter history: the window or
+    // the queue is different, so measuring restarts from warming_up.
+    if (input.scope !== undefined || input.condition !== undefined) app.ctx.alertsEngine.forget(updated.id);
+    return { ...updated, measurement: app.ctx.alertsEngine.measurementOf(updated.id) ?? null };
   });
 
   app.delete<IdParams>("/alerts/:id", { preHandler: operator }, async (request) => {
     await app.ctx.alerts.remove(request.params.id);
+    request.auditDetail({ alertId: request.params.id });
+    app.ctx.alertsEngine.forget(request.params.id);
     return { ok: true };
   });
 

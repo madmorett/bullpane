@@ -312,7 +312,9 @@ function RemovableQueueCard({ entry, onRemove, removing }: { entry: QueueEntry; 
           onClick={onRemove}
           aria-label={`Remove ${entry.queue.name} from this folder`}
           title="Remove from folder"
-          className="absolute right-1 bottom-1 z-10 bg-surface/90 opacity-0 backdrop-blur-sm transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-danger"
+          /* Canto superior direito, à esquerda do ícone de busca do card. Antes
+             ficava em bottom-1, cobrindo a barra de taxa de sucesso. */
+          className="absolute top-2 right-8 z-10 bg-surface/90 opacity-0 backdrop-blur-sm transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-danger"
         >
           <X />
         </Button>

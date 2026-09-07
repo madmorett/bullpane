@@ -1,17 +1,21 @@
 import { useMemo, type ReactNode } from "react";
+import type { JobState } from "@bullmq-visualizer/shared";
 import { Link, useNavigate } from "react-router-dom";
-import { Pause, Play, Search } from "lucide-react";
+import { EyeOff, Pause, Play, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { STATE_COLORS } from "@/lib/stateColors";
 import { entryKey, type QueueEntry } from "@/lib/groupQueues";
+import { queueLandingState } from "@/lib/queueLanding";
 import type { SortState } from "@/lib/useTableState";
 import { SortableTable, type SortableColumn } from "@/components/SortableTable";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { SuccessBar, windowLabel } from "./QueueCard";
+import { SkewWarning, isSkewed, rateSourceHint } from "./RateSource";
+import { HIDE_TOOLTIP } from "./hideQueue";
 
 export const QUEUE_TABLE_KEYS = ["queue", "connection", "waiting", "active", "completed", "failed", "delayed", "prioritized", "waiting-children", "success", "paused", "groups", "trend", "actions"] as const;
 export const DEFAULT_QUEUE_SORT: SortState = { key: "failed", dir: "desc" };
@@ -26,9 +30,15 @@ export interface QueuesTableProps {
   /** pause / resume from the row (connection page, operators) */
   onToggle?: (entry: QueueEntry) => void;
   pendingKey?: string | null;
+  /**
+   * "Hide from the lists" from the row (operators). Reversible and non
+   * destructive, so it fires immediately — no confirm dialog, an Undo toast.
+   */
+  onHide?: (entry: QueueEntry) => void;
+  hidePendingKey?: string | null;
 }
 
-export function QueuesTable({ rows, showConnection, sort, onSort, message, messageClassName, onToggle, pendingKey }: QueuesTableProps) {
+export function QueuesTable({ rows, showConnection, sort, onSort, message, messageClassName, onToggle, pendingKey, onHide, hidePendingKey }: QueuesTableProps) {
   const navigate = useNavigate();
 
   const columns = useMemo<SortableColumn<QueueEntry>[]>(() => {
@@ -38,7 +48,7 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
         header: "Queue",
         sortValue: (e) => e.queue.name,
         render: (e) => (
-          <Link to={routes.queue(e.connection.id, e.queue.name)} className="font-mono text-xs font-medium hover:underline" title={`${e.queue.prefix}:${e.queue.name}`}>
+          <Link to={routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts))} className="font-mono text-xs font-medium hover:underline" title={`${e.queue.prefix}:${e.queue.name}`}>
             {e.queue.name}
           </Link>
         ),
@@ -61,11 +71,16 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
         num: true,
         sortValue: (e) => e.queue.rates?.successPct ?? null,
         render: (e) => {
-          const pct = e.queue.rates?.successPct ?? null;
+          const rates = e.queue.rates;
+          const pct = rates?.successPct ?? null;
+          // A skewed reading is dimmed and flagged, never hidden: the operator still
+          // sees the number, plus why it probably lies (removeOnComplete pruning).
+          const skewed = isSkewed(rates);
           return (
-            <span className="inline-flex items-center justify-end gap-2">
-              <SuccessBar rates={e.queue.rates} compact className="w-14" />
-              <span className={cn("num w-14 text-right", pct == null ? "text-fg-subtle" : pct < 90 ? "font-semibold text-state-failed" : "text-fg")}>{pct == null ? "–" : formatPercent(pct)}</span>
+            <span className="inline-flex items-center justify-end gap-1.5" title={rateSourceHint(rates)}>
+              <SuccessBar rates={rates} compact className="w-14" />
+              <span className={cn("num w-14 text-right", skewed && "opacity-50", pct == null ? "text-fg-subtle" : pct < 90 ? "font-semibold text-state-failed" : "text-fg")}>{pct == null ? "–" : formatPercent(pct)}</span>
+              <SkewWarning rates={rates} className="w-3" />
             </span>
           );
         },
@@ -129,27 +144,49 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
                 {e.queue.isPaused ? <Play /> : <Pause />}
               </Button>
             )}
+            {onHide && (
+              <Button size="icon-xs" variant="ghost" loading={hidePendingKey === entryKey(e)} title={HIDE_TOOLTIP} aria-label={`Hide ${e.queue.name} from the lists`} onClick={() => onHide(e)}>
+                <EyeOff />
+              </Button>
+            )}
           </span>
         ),
       },
     );
     return cols;
-  }, [showConnection, onToggle, pendingKey, navigate, rows]);
+  }, [showConnection, onToggle, pendingKey, onHide, hidePendingKey, navigate, rows]);
 
-  return <SortableTable columns={columns} rows={rows} rowKey={entryKey} sort={sort} onSort={onSort} onRowActivate={(e) => navigate(routes.queue(e.connection.id, e.queue.name))} message={message} messageClassName={messageClassName} className="min-w-[1100px]" />;
+  return <SortableTable columns={columns} rows={rows} rowKey={entryKey} sort={sort} onSort={onSort} onRowActivate={(e) => navigate(routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts)))} message={message} messageClassName={messageClassName} className="min-w-[1100px]" />;
 }
 
+/**
+ * A coluna de contagem de um estado. O número é um LINK para aquele estado da
+ * fila: "failed 22" na tabela abre a aba failed, em vez de abrir a fila em
+ * `waiting` e mostrar uma tabela vazia.
+ *
+ * `noRowClick` fica ligado para o clique no número não disputar com a ativação
+ * da linha (que vai para o landing state). Um zero não vira link: não há nada
+ * para ver, e um link para o vazio é a armadilha que estamos corrigindo.
+ */
 function count(key: string, header: string, get: (e: QueueEntry) => number, mutedWhenZero = false): SortableColumn<QueueEntry> {
   const color = (STATE_COLORS as Record<string, { textClass: string } | undefined>)[key]?.textClass;
+  const state = key as JobState;
   return {
     key,
     header,
     align: "right",
     num: true,
     sortValue: get,
+    noRowClick: true,
     render: (e) => {
       const v = get(e);
-      return <span className={cn(v > 0 ? color : "text-fg-subtle", key === "failed" && v > 0 && "font-semibold")}>{formatNumber(v)}</span>;
+      const cls = cn(v > 0 ? color : "text-fg-subtle", key === "failed" && v > 0 && "font-semibold");
+      if (v === 0) return <span className={cls}>{formatNumber(v)}</span>;
+      return (
+        <Link to={routes.queue(e.connection.id, e.queue.name, state)} className={cn(cls, "hover:underline")} title={`Open the ${header.toLowerCase()} jobs of ${e.queue.name}`}>
+          {formatNumber(v)}
+        </Link>
+      );
     },
     muted: mutedWhenZero ? (e) => get(e) === 0 : undefined,
   };

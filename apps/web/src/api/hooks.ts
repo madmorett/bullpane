@@ -11,6 +11,10 @@ import type { z } from "zod";
 import type {
   AddJobInput,
   Alert,
+  BulkJobAction,
+  BulkJobActionResult,
+  AuditAction,
+  AuditPage,
   ConnectionHealth,
   AlertEvent,
   CleanQueueInput,
@@ -23,6 +27,7 @@ import type {
   FlowGraph,
   Folder,
   GroupSummary,
+  HiddenQueue,
   JobDetail,
   JobSearchResult,
   JobState,
@@ -30,6 +35,7 @@ import type {
   MeResponse,
   QueueSetup,
   QueueSummary,
+  SchedulersPage,
   RedisConnection,
   RedisServerInfo,
   SetupStatus,
@@ -43,7 +49,7 @@ import type {
   updateAlertSchema,
   updateFolderSchema,
 } from "@bullmq-visualizer/shared";
-import { api, seg } from "./client";
+import { api, buildUrl, seg } from "./client";
 
 // ---------------------------------------------------------------------------
 // Shapes referenced by API.md that are not (yet) in @bullmq-visualizer/shared.
@@ -65,8 +71,11 @@ export interface PingResult extends Partial<ConnectionStatus> {
 
 export interface ConnectionOverview {
   info: RedisServerInfo;
+  /** visible queues only — hidden ones are filtered out server-side */
   queues: QueueSummary[];
   status: ConnectionStatus;
+  /** how many queues were left out because they are hidden */
+  hiddenCount?: number;
 }
 
 export interface JobLogsResponse {
@@ -153,13 +162,18 @@ export const qk = {
     ["connections", cid, "queue", q, "job", id, "logs", range] as const,
   groups: (cid: string, q: string, p: PageParams) =>
     ["connections", cid, "queue", q, "groups", p] as const,
+  schedulers: (cid: string, q: string, p: PageParams) =>
+    ["connections", cid, "queue", q, "schedulers", p] as const,
   groupJobs: (cid: string, q: string, gid: string, p: PageParams) =>
     ["connections", cid, "queue", q, "groups", gid, "jobs", p] as const,
   flows: (cid: string, sample: number) => ["flows", cid, sample] as const,
+  hiddenQueues: (cid: string) => ["connections", cid, "hidden-queues"] as const,
   folders: ["folders"] as const,
   alerts: ["alerts"] as const,
   alertEvents: (p: { limit?: number; alertId?: string }) => ["alerts", "events", p] as const,
   users: ["users"] as const,
+  audit: (p: AuditFilters & { limit?: number }) => ["audit", p] as const,
+  auditActors: ["audit", "actors"] as const,
 };
 
 const queuePath = (cid: string, q: string) => `/connections/${seg(cid)}/queues/${seg(q)}`;
@@ -414,6 +428,24 @@ export function useJobAction(cid: string, queue: string) {
   });
 }
 
+/**
+ * Ações em lote. Uma chamada, resultado PARCIAL: `{ ok, failed }` com 200 mesmo
+ * quando alguns ids não foram, porque o operador precisa saber quais 3 dos 50
+ * ficaram para trás. O `onSuccess` invalida as mesmas queries da ação unitária.
+ */
+export function useBulkJobAction(cid: string, queue: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, jobIds }: { action: BulkJobAction; jobIds: string[] }) =>
+      api.post<BulkJobActionResult>(`${queuePath(cid, queue)}/jobs/bulk/${action}`, { jobIds }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.queue(cid, queue) });
+      qc.invalidateQueries({ queryKey: qk.queues(cid) });
+      qc.invalidateQueries({ queryKey: qk.overview(cid) });
+    },
+  });
+}
+
 export function useAddJob(cid: string, queue: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -493,6 +525,33 @@ export function useGroupJobs(
 }
 
 // ---------------------------------------------------------------------------
+// Job schedulers (repeatable jobs)
+// ---------------------------------------------------------------------------
+export function useSchedulers(cid: string | undefined, queue: string | undefined, params: PageParams, opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.schedulers(cid ?? "", queue ?? "", params),
+    queryFn: () => api.get<SchedulersPage>(`${queuePath(cid!, queue!)}/schedulers`, { query: { ...params } }),
+    enabled: !!cid && !!queue && opts.enabled !== false,
+    refetchInterval: poll(POLL.queues),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useRemoveScheduler(cid: string, queue: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) =>
+      api.del<{ ok: boolean }>(`${queuePath(cid, queue)}/schedulers/${seg(key)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["connections", cid, "queue", queue, "schedulers"] });
+      // removing a scheduler also drops the delayed job it had queued
+      qc.invalidateQueries({ queryKey: qk.queue(cid, queue) });
+      qc.invalidateQueries({ queryKey: qk.queues(cid) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Connections CRUD (admin)
 // ---------------------------------------------------------------------------
 export function useCreateConnection() {
@@ -558,6 +617,43 @@ export function useConnectionHealth(cid: string | undefined, opts: { enabled?: b
     enabled,
     refetchInterval: enabled ? poll(POLL.health) : false,
     placeholderData: keepPreviousData,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Hidden queues (free)
+//
+// Every queue LIST in the app (`/queues`, `/overview`) is already filtered on
+// the server, so the sidebar, the quick switcher, the folder picker and the
+// alert queue selector all drop hidden queues without knowing this feature
+// exists. These hooks only power the reveal UI and the hide/unhide actions.
+// ---------------------------------------------------------------------------
+export function useHiddenQueues(cid: string | undefined, opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.hiddenQueues(cid ?? ""),
+    queryFn: () => api.get<HiddenQueue[]>(`/connections/${seg(cid!)}/hidden-queues`),
+    enabled: !!cid && (opts.enabled ?? true),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Hide / unhide. Both invalidate every queue list so the queue disappears from
+ * (or comes back to) the sidebar, the cards and the table in one refresh.
+ */
+export function useSetQueueHidden(cid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ queue, hidden }: { queue: string; hidden: boolean }) =>
+      hidden
+        ? api.post<HiddenQueue[]>(`/connections/${seg(cid)}/hidden-queues`, { queueName: queue })
+        : api.del<HiddenQueue[]>(`/connections/${seg(cid)}/hidden-queues/${seg(queue)}`),
+    onSuccess: (data) => {
+      qc.setQueryData(qk.hiddenQueues(cid), data);
+      qc.invalidateQueries({ queryKey: qk.queues(cid) });
+      qc.invalidateQueries({ queryKey: qk.overview(cid) });
+      qc.invalidateQueries({ queryKey: qk.connections });
+    },
   });
 }
 
@@ -699,6 +795,83 @@ export function useDeleteUser() {
 }
 
 // ---------------------------------------------------------------------------
+// Audit log (Pro, admin)
+//
+// Read-only by design: there is no create/update/delete hook because the API
+// exposes none. An audit trail the UI can edit is not a trail.
+// ---------------------------------------------------------------------------
+export interface AuditFilters {
+  actorId?: string;
+  action?: AuditAction;
+  connectionId?: string;
+  queueName?: string;
+  jobId?: string;
+  result?: "ok" | "error";
+  /** ISO datetime, inclusive */
+  from?: string;
+  /** ISO datetime, exclusive */
+  to?: string;
+}
+
+export interface AuditActor {
+  id: string | null;
+  name: string | null;
+  email: string | null;
+}
+
+/**
+ * Keyset-paged (`nextCursor`), so page 40 of a million rows costs what page 1
+ * does. No polling: an audit log read is a deliberate act, not a live feed, and
+ * refetching it every 10 s would just churn.
+ */
+export function useAudit(filters: AuditFilters = {}, limit = 50, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: qk.audit({ ...filters, limit }),
+    queryFn: ({ pageParam }) =>
+      api.get<AuditPage>("/audit", {
+        query: { ...filters, limit, cursor: pageParam ?? undefined },
+        silent: [402, 403],
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+/**
+ * Distinct actors present in the log — including people who have since been
+ * deleted, which is exactly why the server denormalises the actor.
+ */
+export function useAuditActors(enabled = true) {
+  return useQuery({
+    queryKey: qk.auditActors,
+    queryFn: () => api.get<AuditActor[]>("/audit/actors", { silent: [402, 403] }),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * The CSV export URL. A plain link, not a fetch: the browser's own download
+ * handles a 50k-row file without holding it in JS memory, and the session
+ * cookie rides along.
+ */
+export function auditExportUrl(filters: AuditFilters = {}): string {
+  return buildUrl("/audit/export", { ...filters });
+}
+
+/** History of one job, for the job detail page. */
+export function useJobAudit(cid: string | undefined, queue: string | undefined, jobId: string | undefined, enabled = true) {
+  const filters: AuditFilters = { connectionId: cid, queueName: queue, jobId };
+  return useQuery({
+    queryKey: qk.audit({ ...filters, limit: 20 }),
+    queryFn: () => api.get<AuditPage>("/audit", { query: { ...filters, limit: 20 }, silent: [402, 403] }),
+    enabled: enabled && !!cid && !!queue && !!jobId,
+    staleTime: 15_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Flows (Pro)
 // ---------------------------------------------------------------------------
 export function useFlows(cid: string | undefined, sample = 200, enabled = true) {
@@ -735,6 +908,12 @@ export function useDeleteFlowEdge() {
 export function useSetLicense() {
   return useMutation({
     mutationFn: (key: string) => api.put<Edition>("/license", { key }),
+  });
+}
+
+export function useRefreshLicense() {
+  return useMutation({
+    mutationFn: () => api.post<Edition>("/license/refresh"),
   });
 }
 

@@ -166,7 +166,14 @@ export function buildWarnings(
 ): HealthWarning[] {
   const out: HealthWarning[] = [];
   if (error !== null || info === null) {
-    out.push({ level: "critical", code: "unreachable", message: error ?? "Redis is unreachable" });
+    // `??` não cobre string vazia, e alguns erros do ioredis chegam sem mensagem
+    // (socket fechado no meio do INFO). Sem isto o alerta aparece em branco.
+    const detail = error?.trim();
+    out.push({
+      level: "critical",
+      code: "unreachable",
+      message: detail ? `Redis is unreachable: ${detail}` : "Redis is unreachable",
+    });
     return out;
   }
   if (memoryUsedPct !== null && memoryUsedPct >= 90) {

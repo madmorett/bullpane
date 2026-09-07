@@ -11,7 +11,7 @@ import { useEdition } from "./useEdition";
  */
 export function LockedFeature({ feature }: { feature: ProFeature }) {
   const copy = FEATURE_COPY[feature];
-  const { priceUsd, checkoutUrl } = useEdition();
+  const { pricing, checkoutUrl } = useEdition();
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10 lg:flex-row lg:items-center lg:gap-12">
@@ -38,7 +38,7 @@ export function LockedFeature({ feature }: { feature: ProFeature }) {
             aria-disabled={!checkoutUrl}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-[13px] font-medium text-accent-fg hover:bg-accent-hover aria-disabled:pointer-events-none aria-disabled:opacity-50"
           >
-            Unlock Pro · ${priceUsd} one-time
+            Unlock Pro · ${pricing.monthlyUsd}/mo or ${pricing.yearlyUsd}/yr
             <ExternalLink className="size-4" aria-hidden />
           </a>
           <Link
@@ -49,7 +49,8 @@ export function LockedFeature({ feature }: { feature: ProFeature }) {
           </Link>
         </div>
         <p className="mt-3 text-xs text-fg-subtle">
-          One key unlocks Alerts, Users &amp; roles, Folders and Flows. Perpetual, offline, no seat count.
+          One key unlocks Alerts, Users &amp; roles, Folders, Flows and the Audit log for one installation. ${pricing.monthlyUsd}/month or
+          ${pricing.yearlyUsd}/year, unlimited users, cancel any time.
         </p>
       </div>
 

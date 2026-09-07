@@ -5,16 +5,17 @@
 import {
   type ConnectionStatus,
   type CreateConnectionInput,
+  type HiddenQueue,
   type QueueSummary,
   type RedisConnection,
   redactRedisUrl,
   type UpdateConnectionInput,
 } from "@bullmq-visualizer/shared";
 import type { Inspector, InspectorPool, PingResult } from "@bullmq-visualizer/redis-inspector";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Db } from "../db";
-import { alerts, connections, type ConnectionRow, flowEdges, folderQueues } from "../db/schema";
+import { alerts, connections, type ConnectionRow, flowEdges, folderQueues, hiddenQueues, users } from "../db/schema";
 import { notFound } from "../plugins/errors";
 import { withRedis } from "./inspector-errors";
 
@@ -134,6 +135,7 @@ export class ConnectionsService {
     this.notifyEvict(id);
     this.statusCache.delete(id);
     await this.db.delete(folderQueues).where(eq(folderQueues.connectionId, id));
+    await this.db.delete(hiddenQueues).where(eq(hiddenQueues.connectionId, id));
     await this.db.delete(alerts).where(eq(alerts.connectionId, id));
     await this.db.delete(flowEdges).where(eq(flowEdges.connectionId, id));
     await this.db.delete(connections).where(eq(connections.id, id));
@@ -180,14 +182,109 @@ export class ConnectionsService {
     return inflight;
   }
 
-  /** Discovery + one pipelined stats call. The sidebar polls this. */
-  async listQueues(row: ConnectionRow, opts: { refresh?: boolean; withMetrics?: boolean } = {}): Promise<QueueSummary[]> {
+  // -------------------------------------------------------------------------
+  // Hidden queues
+  //
+  // Hiding is filtered HERE, in the service, and never in the inspector's
+  // discovery. Three reasons:
+  //   (a) the inspector is stateless and knows nothing about MySQL — teaching
+  //       it about hidden rows would couple the Redis layer to the database;
+  //   (b) a hidden queue must stay measurable: the alerts engine calls the
+  //       inspector directly, so hiding must not silence an alert;
+  //   (c) a hidden queue must stay reachable by direct URL
+  //       (GET /connections/:id/queues/:queue is untouched).
+  // Hiding is about the LIST, not about switching the queue off.
+  //
+  // Scope is the instance, not the user — see migrations/0003_hidden_queues.sql.
+  // -------------------------------------------------------------------------
+
+  /** Names hidden on this connection, as a Set for O(1) filtering. */
+  async hiddenQueueNames(connectionId: string): Promise<Set<string>> {
+    const rows = await this.db
+      .select({ queueName: hiddenQueues.queueName })
+      .from(hiddenQueues)
+      .where(eq(hiddenQueues.connectionId, connectionId));
+    return new Set(rows.map((r) => r.queueName));
+  }
+
+  /** The hidden list for the UI, newest first, with the display name of who hid it. */
+  async listHiddenQueues(connectionId: string): Promise<HiddenQueue[]> {
+    const rows = await this.db
+      .select()
+      .from(hiddenQueues)
+      .where(eq(hiddenQueues.connectionId, connectionId))
+      .orderBy(hiddenQueues.hiddenAt);
+
+    const ids = [...new Set(rows.map((r) => r.hiddenBy).filter((v): v is string => !!v))];
+    const names = new Map<string, string>();
+    if (ids.length > 0) {
+      const found = await this.db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids));
+      for (const u of found) names.set(u.id, u.name);
+    }
+
+    return rows
+      .map((r) => ({
+        connectionId: r.connectionId,
+        queueName: r.queueName,
+        hiddenAt: r.hiddenAt.toISOString(),
+        hiddenBy: r.hiddenBy ?? null,
+        // A deleted user leaves the row intact; the name just becomes unknown.
+        hiddenByName: r.hiddenBy ? (names.get(r.hiddenBy) ?? null) : null,
+      }))
+      .sort((a, b) => b.hiddenAt.localeCompare(a.hiddenAt));
+  }
+
+  /** Idempotent: hiding an already hidden queue is a no-op, not a 409. */
+  async hideQueue(connectionId: string, queueName: string, userId: string | null): Promise<HiddenQueue[]> {
+    await this.getRow(connectionId);
+    const existing = await this.db
+      .select({ queueName: hiddenQueues.queueName })
+      .from(hiddenQueues)
+      .where(and(eq(hiddenQueues.connectionId, connectionId), eq(hiddenQueues.queueName, queueName)))
+      .limit(1);
+    if (existing.length === 0) {
+      await this.db.insert(hiddenQueues).values({ connectionId, queueName, hiddenAt: new Date(), hiddenBy: userId });
+    }
+    return this.listHiddenQueues(connectionId);
+  }
+
+  /** Idempotent too: unhiding something that is not hidden succeeds. */
+  async unhideQueue(connectionId: string, queueName: string): Promise<HiddenQueue[]> {
+    await this.getRow(connectionId);
+    await this.db
+      .delete(hiddenQueues)
+      .where(and(eq(hiddenQueues.connectionId, connectionId), eq(hiddenQueues.queueName, queueName)));
+    return this.listHiddenQueues(connectionId);
+  }
+
+  async isQueueHidden(connectionId: string, queueName: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ queueName: hiddenQueues.queueName })
+      .from(hiddenQueues)
+      .where(and(eq(hiddenQueues.connectionId, connectionId), eq(hiddenQueues.queueName, queueName)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /**
+   * Discovery + one pipelined stats call. The sidebar polls this.
+   *
+   * Hidden queues are dropped between discovery and stats, so a hidden queue
+   * costs no Redis work at all here. `includeHidden: true` skips the MySQL read
+   * entirely and behaves exactly as before this feature existed.
+   */
+  async listQueues(
+    row: ConnectionRow,
+    opts: { refresh?: boolean; withMetrics?: boolean; includeHidden?: boolean } = {},
+  ): Promise<QueueSummary[]> {
     const inspector = this.inspectorFor(row);
+    const hidden = opts.includeHidden ? new Set<string>() : await this.hiddenQueueNames(row.id);
     return withRedis(async () => {
-      const names = await inspector.discoverQueues({ force: opts.refresh === true });
+      const all = await inspector.discoverQueues({ force: opts.refresh === true });
+      const names = hidden.size === 0 ? all : all.filter((n) => !hidden.has(n));
       if (names.length === 0) return [];
       const stats = await inspector.getQueueStats(names, opts.withMetrics ? { withMetrics: true } : undefined);
-      return names.map((name) => {
+      return names.map((name): QueueSummary => {
         const s = stats[name];
         return {
           name,
@@ -196,7 +293,13 @@ export class ConnectionsService {
           isPaused: s?.isPaused ?? false,
           isPro: s?.isPro ?? false,
           groupsCount: s?.groupsCount ?? 0,
-          rates: s?.rates ?? { windowMinutes: 60, completed: 0, failed: 0, successPct: null },
+          schedulersCount: s?.schedulersCount ?? 0,
+          // Não é um estado, então fica fora de `counts`: um job stallado
+          // continua `active` para o BullMQ. Ver QueueSummary.stalledCount.
+          stalledCount: s?.stalledCount ?? 0,
+          // Fila cujo stats falhou: os zeros vêm dos zsets (fonte "zset") e não há
+          // nada podado para distorcer a razão, então retentionSkewed é false.
+          rates: s?.rates ?? { windowMinutes: 60, completed: 0, failed: 0, successPct: null, source: "zset", retentionSkewed: false },
           ...(s?.metrics ? { metrics: s.metrics } : {}),
         };
       });

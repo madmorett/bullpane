@@ -9,7 +9,7 @@ import { useEdition } from "./useEdition";
 
 export function UpsellDialog() {
   const { open, feature } = useUpsellState();
-  const { priceUsd, checkoutUrl, demo } = useEdition();
+  const { pricing, checkoutUrl, demo } = useEdition();
   const copy = FEATURE_COPY[feature];
 
   return (
@@ -43,7 +43,7 @@ export function UpsellDialog() {
             aria-disabled={!checkoutUrl}
             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-accent-fg hover:bg-accent-hover aria-disabled:pointer-events-none aria-disabled:opacity-50"
           >
-            Unlock Pro · ${priceUsd} one-time
+            Unlock Pro · ${pricing.monthlyUsd}/mo or ${pricing.yearlyUsd}/yr
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         </>
@@ -59,8 +59,9 @@ export function UpsellDialog() {
       </ul>
       <div className="mt-4 rounded-md border border-border bg-surface-2/60 p-3 text-xs text-fg-muted">
         <p>
-          One license unlocks every Pro feature — {PRO_FEATURES.map((f) => FEATURE_COPY[f].title).join(", ")} —
-          for this installation, forever. No subscription, no phone-home, no seat count.
+          One subscription unlocks every Pro feature — {PRO_FEATURES.map((f) => FEATURE_COPY[f].title).join(", ")} — for
+          this installation. ${pricing.monthlyUsd}/month or ${pricing.yearlyUsd}/year, unlimited users. Your data stays on your
+          servers; only the key is verified with bullpane.com.
         </p>
         {demo && <p className="mt-2 text-warning">You are in demo mode: Pro is already unlocked here.</p>}
       </div>

@@ -30,10 +30,15 @@ async function main(): Promise<void> {
 
   await app.listen({ port: config.port, host: config.host });
   app.ctx.alertsEngine.start();
+  // Subscription keys: activate a pending BMV_LICENSE_KEY and renew the lease daily.
+  app.ctx.edition.start();
+  // Audit retention runs on its own timer, not on the alerts tick: that tick
+  // returns early unless alerts are unlocked, and rows must be pruned either way.
+  app.ctx.audit.startRetention(config.auditRetentionDays);
 
   const banner = [
     "",
-    "  BullMQ Visualizer " + app.ctx.version,
+    "  Bullpane " + app.ctx.version,
     `  edition : ${edition.tier}${edition.demo ? " (demo)" : ""}${edition.license ? ` — licensed to ${edition.license.licensee}` : ""}`,
     `  url     : ${config.publicUrl}  (listening on ${config.host}:${config.port})`,
     `  web ui  : ${config.webDist}`,
@@ -48,6 +53,8 @@ async function main(): Promise<void> {
     shuttingDown = true;
     log.info({ signal }, "shutting down");
     app.ctx.alertsEngine.stop();
+    app.ctx.edition.stop();
+    app.ctx.audit.stopRetention();
     try {
       await app.close();
       await pool.closeAll();

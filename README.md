@@ -1,4 +1,6 @@
-# BullMQ Visualizer
+# Bullpane
+
+*Formerly BullMQ Visualizer. Website: [bullpane.com](https://bullpane.com).*
 
 A fast, self-hosted dashboard for [BullMQ](https://bullmq.io) and BullMQ Pro.
 
@@ -7,7 +9,7 @@ progress, logs, flows and Pro groups in a UI that is pleasant to look at, behind
 real login. bull-board has no auth and a UI from 2016; Taskforce.sh is hosted, so
 your job payloads leave your network, and the pricing page needs a translator. This
 one runs in a single container next to your stack, is free for the core, and a
-one-time USD 49 unlocks the team features. Same model as Metabase: nothing to rent.
+USD 19/month or 149/year unlocks the team features for one installation, unlimited users.
 
 Designed for production Redis: no `KEYS`, one round trip per screen, payloads
 truncated *inside* Redis before they travel. A dashboard that slows down the
@@ -15,7 +17,7 @@ workload it watches is worse than no dashboard.
 
 ## Free vs Pro
 
-| Capability | Free | Pro (USD 49, one-time) |
+| Capability | Free | Pro (USD 19/mo or 149/yr) |
 |---|---|---|
 | Unlimited connections & queues | yes | yes |
 | Job list / detail / progress / logs / search in data | yes | yes |
@@ -27,10 +29,34 @@ workload it watches is worse than no dashboard.
 | Users & roles (admin / operator / viewer) | – | yes |
 | Folders to organise queues across connections | – | yes |
 | Flow graph (detected from BullMQ flows + manual edges) | – | yes |
+| **Audit log**: who paused / cleaned / drained what, when, from which IP — persisted, filterable, CSV export | – | yes |
 
 Pro features are visible in the free edition with a lock icon, not hidden. The
-license is an offline Ed25519 token; there is no phone-home. See
+license is a key from bullpane.com verified once a day against api.bullpane.com (7-day offline grace), or a hand-signed offline token for air-gapped installs. See
 [docs/PRO.md](docs/PRO.md).
+
+### The audit log, specifically
+
+bull-board has no users at all, so it cannot tell you who did anything. Taskforce
+is hosted, so the answer lives in someone else's account. If you run queues for a
+regulated customer, "who drained the payments queue on the 14th, and from which
+IP?" is a question you have to answer from your own database.
+
+Every mutating call is recorded — jobs, queues, connections, users, license,
+logins — with the actor, the target, the parameters, the result and the IP. Three
+choices make it worth trusting:
+
+* **Refused attempts are recorded too.** "Tried to obliterate and got a 403" is a
+  finding. A success-only log shows silence in exactly the case you care about.
+* **The job payload is never stored.** The log keeps the parameters of an action
+  (`{ state: "completed", removed: 3412 }`) and, where useful, the payload size in
+  bytes. Customer PII does not belong in a table you export as CSV.
+* **Nothing can edit or delete a row.** There is no such endpoint. Rows leave only
+  by age (`BMV_AUDIT_RETENTION_DAYS`, default one year).
+
+Recording happens in every edition; reading and exporting are Pro, because on a
+single-admin install the log only ever says "it was me". Nothing is lost by
+upgrading later — the history is already there.
 
 ## Try the live demo
 
@@ -109,6 +135,12 @@ The simulator honours `REDIS_URL`, `BULL_PREFIX`, `SIM_INTENSITY` (0.2-3) and
 Vendor tooling (`scripts/gen-license.ts`: keygen, sign, verify) is in the
 repo so the format is auditable. See [docs/PRO.md](docs/PRO.md).
 
+## Deploy
+
+See [deploy/README.md](deploy/README.md) for EC2, ECS Fargate and Docker Compose,
+and [docs/PRODUCTION-TRIAL.md](docs/PRODUCTION-TRIAL.md) before pointing it at a
+busy production Redis.
+
 ## Project layout
 
 ```
@@ -129,6 +161,7 @@ docs/                   ARCHITECTURE.md · API.md · DEMO.md · PRO.md
 - WebSocket live updates (v1 polls; one `EVALSHA` per queue per refresh)
 - Prometheus exporter for queue counts and failure rates
 - Job data redaction rules (mask fields by path before they reach the browser)
+- Audit log: per-action retention and a signed export for external auditors
 - SSO (OIDC) for the Pro edition
 - Queue-level retention policies (auto-clean completed/failed older than N)
 

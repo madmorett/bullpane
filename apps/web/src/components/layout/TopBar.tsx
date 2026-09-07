@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ChevronRight, KeyRound, LogOut, Menu, Search, Shield } from "lucide-react";
+import { ChevronRight, KeyRound, LogOut, Menu, Search, ScrollText, Shield } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { modKeyLabel } from "@/lib/useHotkey";
@@ -34,6 +34,7 @@ function useCrumbs(): Crumb[] {
   if (pathname.startsWith("/health")) return [...crumbs, { label: "Redis health" }];
   if (pathname.startsWith("/alerts")) return [...crumbs, { label: "Alerts" }];
   if (pathname.startsWith("/users")) return [...crumbs, { label: "Users" }];
+  if (pathname.startsWith("/audit")) return [...crumbs, { label: "Audit log" }];
   if (pathname.startsWith("/folders")) return [...crumbs, { label: "Folders" }];
   if (pathname.startsWith("/flows")) {
     crumbs.push({ label: "Flows", to: routes.flows() });
@@ -112,8 +113,8 @@ export function TopBar({ onOpenSwitcher, onToggleSidebar }: { onOpenSwitcher: ()
 }
 
 function UserMenu() {
-  const { user, logout } = useAuth();
-  const { demo } = useEdition();
+  const { user, logout, isAdmin } = useAuth();
+  const { demo, has } = useEdition();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -165,6 +166,14 @@ function UserMenu() {
             </p>
           </div>
           <div className="my-1 border-t border-border" />
+          {/* The audit log lives next to Settings/Users in the nav. It is added
+              here rather than in the sidebar because the sidebar file is owned
+              by another change in flight; move it there when that lands. */}
+          {isAdmin && has("audit") && (
+            <Link role="menuitem" to={routes.audit()} onClick={() => setOpen(false)} className="nav-item">
+              <ScrollText className="size-3.5" aria-hidden /> Audit log
+            </Link>
+          )}
           <Link role="menuitem" to={routes.settings("license")} onClick={() => setOpen(false)} className="nav-item">
             <KeyRound className="size-3.5" aria-hidden /> License
           </Link>

@@ -6,6 +6,7 @@ import {
   formatBytes,
   formatCompact,
   formatCores,
+  formatCpuPercent,
   formatLatency,
   formatNumber,
   formatPercent,
@@ -16,6 +17,7 @@ import {
 import { useNow } from "@/lib/useNow";
 import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { cpuMeterTone, cpuTooltip } from "./cpu";
 import { DetailRow, StatTile, Unknown, WarningBanner } from "./parts";
 
 /** Rates the server could not derive yet. Same wording everywhere. */
@@ -153,18 +155,38 @@ export function HealthConnectionCard({
           dimmed={dim}
           isUnknown={health.cpuCores == null}
           unknownReason={NO_RATE_YET}
-          value={formatCores(health.cpuCores)}
+          // Percent of ONE core is the number that means something for a
+          // single-threaded Redis. Cores stay on screen, just smaller.
+          value={formatCpuPercent(health.cpuCores)}
+          secondary={
+            health.cpuCores == null ? (
+              "measuring…"
+            ) : (
+              <Tooltip content={cpuTooltip(health.cpuCores)}>
+                <span className="num cursor-help border-b border-dotted border-border-strong">
+                  {formatCores(health.cpuCores)}
+                </span>
+              </Tooltip>
+            )
+          }
           hint={
             <span className="flex items-center gap-1">
-              <Cpu className="size-3" aria-hidden /> used_cpu_sys + used_cpu_user, per second. 1.00 = one saturated core.
+              <Cpu className="size-3" aria-hidden /> used_cpu_sys + used_cpu_user, per second, as a share of one
+              core. 100% = one saturated core.
             </span>
           }
           meterPct={health.cpuCores == null ? null : health.cpuCores * 100}
-          meterLabel={health.cpuCores == null ? "measuring…" : "against 1 core"}
-          meterTone={health.cpuCores == null ? "ok" : health.cpuCores >= 0.9 ? "danger" : health.cpuCores >= 0.7 ? "warn" : "ok"}
+          meterLabel={
+            health.cpuCores == null
+              ? "measuring…"
+              : health.cpuCores > 1
+                ? "over 1 core"
+                : "of 1 core"
+          }
+          meterTone={health.cpuCores == null ? "ok" : cpuMeterTone(health.cpuCores)}
           spark={series(history, "cpuCores")}
           sparkColor="var(--teal)"
-          sparkTitle="CPU cores"
+          sparkTitle="CPU (share of one core)"
         />
 
         <StatTile

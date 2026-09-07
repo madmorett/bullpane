@@ -41,6 +41,11 @@ export const demoLocked = (message = "This action is disabled in the public demo
 export const readOnlyLocked = (): HttpError =>
   new HttpError(423, "read_only", "This instance runs in read-only mode (BMV_READ_ONLY=true). Writes are disabled.");
 export const invalidLicense = (reason: string) => new HttpError(400, "invalid_license", `Invalid license: ${reason}`);
+/** The store says the key is already active on another installation. */
+export const licenseAlreadyActivated = (message: string) => new HttpError(409, "license_already_activated", message);
+/** api.bullpane.com (or the store behind it) could not be reached. Nothing about the key is known. */
+export const licenseServerUnavailable = (reason: string) =>
+  new HttpError(502, "license_server_unavailable", `Could not reach the license server: ${reason}`);
 export const redisUnavailable = (err: unknown) =>
   new HttpError(502, "redis_unavailable", `Redis connection failed: ${errorMessage(err)}`);
 
@@ -93,6 +98,12 @@ export function mapError(err: unknown): MappedError {
 export function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((err: unknown, request: FastifyRequest, reply: FastifyReply) => {
     const mapped = mapError(err);
+    // The audit hook runs at onResponse, when the thrown error is gone. Stash the
+    // mapped message so the row says "forbidden: This action requires the admin
+    // role" instead of a bare "HTTP 403".
+    if ("auditError" in request) {
+      request.auditError = `${mapped.body.error}: ${mapped.body.message}`.slice(0, 500);
+    }
     if (mapped.unexpected) {
       request.log.error({ err }, "unhandled error");
     } else if (mapped.status >= 500) {

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowDownUp, BarChart3, Bell, ChevronDown, Eraser, Flame, Layers, Pause, Play, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
-import { JOB_STATES, type JobState } from "@bullmq-visualizer/shared";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowDownUp, BarChart3, Bell, CalendarClock, ChevronDown, Eraser, Flame, Layers, Pause, Play, Plus, RotateCcw, ScrollText, Search, Trash2, Unplug, X } from "lucide-react";
+import { BULK_JOB_LIMIT, JOB_STATES, type BulkJobAction, type BulkJobActionResult, type JobState } from "@bullmq-visualizer/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";
 import { useHotkey } from "@/lib/useHotkey";
 import { STATE_COLORS } from "@/lib/stateColors";
-import { useJobAction, useJobSearch, useJobs, useQueue, useQueueAction, type JobActionKind } from "@/api/hooks";
+import { useBulkJobAction, useJobAction, useJobSearch, useJobs, useQueue, useQueueAction, type JobActionKind } from "@/api/hooks";
+import { useJobSelection } from "@/lib/useJobSelection";
+import { BulkActionBar, BulkResultPanel, bulkActionsFor } from "@/components/BulkActionBar";
 import { errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "@/components/Toast";
@@ -28,10 +30,12 @@ import { QueueMetricsPanel } from "./QueueMetricsPanel";
 import { AddJobDialog } from "./AddJobDialog";
 import { CleanDialog } from "./CleanDialog";
 import { QueueSetupPanel } from "./QueueSetupPanel";
+import { SchedulersPanel } from "./SchedulersPanel";
 import { QueueAlerts, QueueAlertsPill, useQueueAlerts } from "./QueueAlerts";
+import { HIDE_HINT, HideIcon, useHideQueue } from "@/components/queues/hideQueue";
 import { GroupCombobox } from "./GroupCombobox";
 
-type StateTab = JobState | "groups" | "metrics";
+type StateTab = JobState | "groups" | "metrics" | "schedulers";
 
 /**
  * Local route builder. `lib/routes.ts` is being edited concurrently by the
@@ -49,7 +53,7 @@ function isJobState(s: string | null): s is JobState {
  * FIRST in the tab bar but is not the default, so every existing deep link and
  * bookmark still lands on the jobs table it always did.
  */
-export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {}) {
+export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "schedulers" } = {}) {
   const { connectionId = "", queue = "" } = useParams();
   const [sp, setSp] = useSearchParams();
   const navigate = useNavigate();
@@ -84,14 +88,38 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
   // Alerts covering this queue, directly or through a folder. Uses the already
   // cached /alerts and /folders queries, so it costs no extra request.
   const queueAlerts = useQueueAlerts(connectionId, queue);
+  const hideQueue = useHideQueue(connectionId);
   const isPro = !!summary.data && (summary.data.isPro || summary.data.groupsCount > 0);
   const searching = q.trim().length > 0;
   const filteringByGroup = !searching && !!groupId;
   const showingMetrics = view === "metrics";
-  const jobs = useJobs(connectionId, queue, { state, page, pageSize, order, groupId: filteringByGroup ? groupId : undefined }, { enabled: !searching && !showingMetrics });
-  const search = useJobSearch(connectionId, queue, { state, q: q.trim(), limit: 50 }, { enabled: searching && !showingMetrics });
+  const showingSchedulers = view === "schedulers";
+  /** any non-jobs tab: the search box, group filter and job tables are hidden */
+  const showingPanel = showingMetrics || showingSchedulers;
+  const jobs = useJobs(connectionId, queue, { state, page, pageSize, order, groupId: filteringByGroup ? groupId : undefined }, { enabled: !searching && !showingPanel });
+  const search = useJobSearch(connectionId, queue, { state, q: q.trim(), limit: 50 }, { enabled: searching && !showingPanel });
   const jobAction = useJobAction(connectionId, queue);
   const queueAction = useQueueAction(connectionId, queue);
+  const bulkAction = useBulkJobAction(connectionId, queue);
+
+  // Resultados da busca. Calculados aqui (antes eram no fim do componente)
+  // porque a seleção precisa saber quais ids estão VISÍVEIS agora — e com uma
+  // busca na tela os visíveis são os resultados carregados, não a página do estado.
+  const searchPages = search.data?.pages ?? [];
+  const searchJobs = searchPages.flatMap((p) => p.jobs);
+  const scanned = searchPages.reduce((sum, p) => sum + (p.scanned ?? 0), 0);
+  const searchTotal = searchPages.length ? searchPages[searchPages.length - 1].total : (summary.data?.counts?.[state] ?? 0);
+
+  /** os jobs que estão de fato na tela — é sobre eles que "select all" age */
+  const visibleJobs = searching ? searchJobs : (jobs.data?.jobs ?? []);
+  const visibleIds = useMemo(() => visibleJobs.map((j) => j.id), [visibleJobs]);
+  // Seleção por jobId, não por índice: a tabela repolla a cada 3 s e as linhas
+  // trocam de lugar. Ver lib/useJobSelection.ts.
+  const selection = useJobSelection(visibleIds);
+  const [bulkResult, setBulkResult] = useState<BulkJobActionResult | null>(null);
+  const [pendingBulk, setPendingBulk] = useState<BulkJobAction | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState<BulkJobAction | null>(null);
+  const [confirmRemoveJob, setConfirmRemoveJob] = useState<string | null>(null);
 
   const [dialog, setDialog] = useState<null | "add" | "clean" | "drain" | "obliterate" | "retryAll">(null);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -122,6 +150,9 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
   const tabs = useMemo<TabItem<StateTab>[]>(() => {
     const items: TabItem<StateTab>[] = [
       { value: "metrics", label: "Metrics", icon: <BarChart3 className="size-3.5" /> },
+      // Schedulers live outside the 8 states, so they get their own tab. Shown
+      // always (with 0) so people learn the feature exists.
+      { value: "schedulers", label: "Schedulers", count: summary.data?.schedulersCount ?? null, icon: <CalendarClock className="size-3.5" /> },
       ...JOB_STATES.map((s) => ({
         value: s as StateTab,
         label: STATE_COLORS[s].label,
@@ -131,9 +162,9 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
     ];
     if (summary.data?.isPro) items.push({ value: "groups", label: "Groups", count: summary.data.groupsCount, icon: <Layers className="size-3.5 text-pro" /> });
     return items;
-  }, [counts, summary.data?.isPro, summary.data?.groupsCount]);
+  }, [counts, summary.data?.isPro, summary.data?.groupsCount, summary.data?.schedulersCount]);
 
-  const onAction = (jobId: string, action: JobActionKind) => {
+  const runSingle = (jobId: string, action: JobActionKind) => {
     jobAction.mutate(
       { jobId, action },
       {
@@ -141,6 +172,58 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
         onError: (e) => toast.error(errorMessage(e)),
       },
     );
+  };
+
+  /**
+   * Remove unitário passa por confirmação. Antes não passava, e um clique
+   * errado numa tabela que se reordena a cada 3 s apagava o job errado sem
+   * volta. `retry` e `promote` seguem imediatos: são reversíveis.
+   */
+  const onAction = (jobId: string, action: JobActionKind) => {
+    if (action === "remove") {
+      setConfirmRemoveJob(jobId);
+      return;
+    }
+    runSingle(jobId, action);
+  };
+
+  /** Ações que fazem sentido para o que está na tela. Na busca os estados se misturam. */
+  const availableBulkActions = useMemo(() => bulkActionsFor(searching ? "mixed" : state), [searching, state]);
+
+  const runBulk = (action: BulkJobAction) => {
+    const jobIds = selection.selectedIds;
+    if (jobIds.length === 0) return;
+    if (jobIds.length > BULK_JOB_LIMIT) {
+      // O servidor recusaria com 400; dizer aqui evita a viagem e explica o teto.
+      toast.error(`Select at most ${formatNumber(BULK_JOB_LIMIT)} jobs per action (${formatNumber(jobIds.length)} selected).`);
+      return;
+    }
+    setPendingBulk(action);
+    bulkAction.mutate(
+      { action, jobIds },
+      {
+        onSuccess: (result) => {
+          setBulkResult(result);
+          // Só os que DERAM CERTO saem da seleção. Os que falharam ficam
+          // marcados para o operador poder tentar de novo ou olhar cada um.
+          selection.deselect(result.ok);
+          const verb = action === "retry" ? "retried" : action === "promote" ? "promoted" : "removed";
+          if (result.failed.length === 0) toast.success(`${formatNumber(result.ok.length)} ${verb}`);
+          else toast.error(`${formatNumber(result.ok.length)} ${verb} · ${formatNumber(result.failed.length)} failed`);
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+        onSettled: () => {
+          setPendingBulk(null);
+          setConfirmBulk(null);
+        },
+      },
+    );
+  };
+
+  /** Remove em lote SEMPRE confirma, com o número e o nome da fila. */
+  const onBulk = (action: BulkJobAction) => {
+    if (action === "remove") setConfirmBulk("remove");
+    else runBulk(action);
   };
 
   const runQueueAction = (input: Parameters<typeof queueAction.mutate>[0], success: string) =>
@@ -158,11 +241,6 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
     setDraft("");
     update({ q: null, page: null });
   };
-
-  const searchPages = search.data?.pages ?? [];
-  const searchJobs = searchPages.flatMap((p) => p.jobs);
-  const scanned = searchPages.reduce((s, p) => s + (p.scanned ?? 0), 0);
-  const searchTotal = searchPages.length ? searchPages[searchPages.length - 1].total : counts?.[state] ?? 0;
 
   return (
     <Page wide>
@@ -229,8 +307,35 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
                   <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(false)} aria-hidden />
                   <div role="menu" className="absolute right-0 z-40 mt-1 w-56 rounded-lg border border-border bg-surface p-1 shadow-[var(--shadow)]">
                     <MenuItem icon={<Eraser />} label="Clean…" hint="remove by state and age" onClick={() => (setActionsOpen(false), setDialog("clean"))} />
+                    {/* Deep link into the audit log already narrowed to this queue —
+                        the one place where "who touched this queue?" is the question. */}
+                    {isAdmin && (
+                      <Link
+                        role="menuitem"
+                        to={routes.audit({ connectionId, queueName: queue })}
+                        onClick={() => setActionsOpen(false)}
+                        className="nav-item w-full text-left"
+                      >
+                        <ScrollText className="size-3.5 shrink-0" aria-hidden />
+                        <span className="flex-1">
+                          Audit this queue
+                          <span className="block text-[10px] text-fg-subtle">who paused, cleaned or drained it</span>
+                        </span>
+                      </Link>
+                    )}
+                    {isOperator && (
+                      <MenuItem
+                        icon={<HideIcon />}
+                        label="Hide from the lists"
+                        hint={HIDE_HINT}
+                        onClick={() => (setActionsOpen(false), hideQueue.hide(queue))}
+                      />
+                    )}
                     {isAdmin && <MenuItem icon={<Trash2 />} label="Drain" hint="remove all waiting jobs" onClick={() => (setActionsOpen(false), setDialog("drain"))} />}
-                    {isAdmin && <MenuItem icon={<Flame />} label="Obliterate…" hint="delete the entire queue" danger onClick={() => (setActionsOpen(false), setDialog("obliterate"))} />}
+                    {/* Obliterate fica ao lado de Hide de propósito, e as dicas
+                        dizem a diferença: esconder some da lista e é reversível,
+                        obliterate APAGA a fila e os jobs, e não é. */}
+                    {isAdmin && <MenuItem icon={<Flame />} label="Obliterate…" hint="deletes the queue and every job · permanent" danger onClick={() => (setActionsOpen(false), setDialog("obliterate"))} />}
                   </div>
                 </>
               )}
@@ -253,7 +358,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
       </div>
 
       {/* Search — first thing in the toolbar (jobs view only) */}
-      {!showingMetrics && (
+      {!showingPanel && (
       <form
         className="mb-3 flex flex-wrap items-center gap-2"
         role="search"
@@ -301,22 +406,23 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
 
       {/* State tabs + group filter */}
       <div className="mb-3 flex flex-wrap items-end gap-3 border-b border-border">
-        <div className={cn("min-w-0 flex-1 transition-opacity", !showingMetrics && (filteringByGroup || searching) && "opacity-50")} title={filteringByGroup && !showingMetrics ? "Clear the group filter to browse by state" : undefined}>
+        <div className={cn("min-w-0 flex-1 transition-opacity", !showingPanel && (filteringByGroup || searching) && "opacity-50")} title={filteringByGroup && !showingPanel ? "Clear the group filter to browse by state" : undefined}>
           <Tabs<StateTab>
             aria-label="Job state"
             items={tabs}
-            value={showingMetrics ? "metrics" : state}
+            value={showingMetrics ? "metrics" : showingSchedulers ? "schedulers" : state}
             onChange={(v) => {
               if (v === "groups") navigate(routes.groups(connectionId, queue));
               else if (v === "metrics") navigate(routes.queueMetrics(connectionId, queue));
-              else if (showingMetrics) navigate(routes.queue(connectionId, queue, v));
+              else if (v === "schedulers") navigate(`/c/${encodeURIComponent(connectionId)}/q/${encodeURIComponent(queue)}/schedulers`);
+              else if (showingPanel) navigate(routes.queue(connectionId, queue, v));
               else update({ state: v, page: null, group: null });
             }}
             className="!border-b-0"
             size="sm"
           />
         </div>
-        {isPro && !searching && !showingMetrics && (
+        {isPro && !searching && !showingPanel && (
           <div className="flex items-center gap-2 pb-1.5">
             {filteringByGroup && (
               <span className="text-[11px] text-fg-muted">
@@ -326,15 +432,17 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
             <GroupCombobox connectionId={connectionId} queue={queue} value={groupId} onChange={(gid) => update({ group: gid || null, page: null })} />
           </div>
         )}
-        {!searching && !showingMetrics && (
+        {!searching && !showingPanel && (
           <Button size="sm" variant="ghost" className="mb-1" leftIcon={<ArrowDownUp />} onClick={() => update({ order: order === "desc" ? "asc" : "desc" })} title="Toggle order">
             {order === "desc" ? "Newest first" : "Oldest first"}
           </Button>
         )}
       </div>
 
-      {/* Metrics or the job tables */}
-      {showingMetrics ? (
+      {/* Metrics, schedulers, or the job tables */}
+      {showingSchedulers ? (
+        <SchedulersPanel connectionId={connectionId} queue={queue} />
+      ) : showingMetrics ? (
         <QueueMetricsPanel
           connectionId={connectionId}
           queue={queue}
@@ -369,6 +477,14 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
                 </Button>
               </span>
             </div>
+            {bulkResult && <BulkResultPanel result={bulkResult} onDismiss={() => setBulkResult(null)} />}
+            {/*
+              Com uma busca na tela, a seleção é dos RESULTADOS carregados —
+              exatamente o caso de uso: "reprocessa os 50 do tenant-globex".
+              A barra diz isso com `searching` para ninguém pensar que pegou a
+              fila inteira.
+            */}
+            {isOperator && <BulkActionBar selection={selection} state="mixed" queue={queue} actions={availableBulkActions} onRun={onBulk} pending={pendingBulk} searching />}
             <JobsTable
               connectionId={connectionId}
               queue={queue}
@@ -386,6 +502,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
                 update({ group: gid, page: null });
               }}
               highlight={q}
+              selection={isOperator ? selection : undefined}
             />
             <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-fg-subtle">
               <span>Each scan reads a bounded slice of the state to keep Redis happy.</span>
@@ -398,6 +515,24 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
           </>
         ) : (
           <>
+            {/*
+              `stalled` NÃO é um estado do BullMQ: é um SET auxiliar, e um job
+              stallado responde `active` em getState(). Por isso não existe aba
+              "stalled" — mentiria sobre o modelo. O que existe é este aviso na
+              aba `active`, porque "active 8" sem dizer que 3 travaram é um
+              ponto cego real.
+            */}
+            {state === "active" && (summary.data?.stalledCount ?? 0) > 0 && (
+              <div className="flex items-start gap-2 border-b border-border bg-warning/10 px-3 py-2 text-xs" role="status">
+                <Unplug className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+                <span>
+                  <span className="num font-semibold text-fg">{formatNumber(summary.data?.stalledCount ?? 0)}</span> of these are stalled (worker lost the lock).
+                  <span className="text-fg-muted"> BullMQ still reports them as active; the next stalled check moves them back to waiting and bumps their stall counter.</span>
+                </span>
+              </div>
+            )}
+            {bulkResult && <BulkResultPanel result={bulkResult} onDismiss={() => setBulkResult(null)} />}
+            {isOperator && <BulkActionBar selection={selection} state={state} queue={queue} actions={availableBulkActions} onRun={onBulk} pending={pendingBulk} />}
             <JobsTable
               connectionId={connectionId}
               queue={queue}
@@ -411,6 +546,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
               showState={false}
               showGroup={isPro}
               onGroupClick={(gid) => update({ group: gid, page: null })}
+              selection={isOperator ? selection : undefined}
             />
             <div className={cn("border-t border-border px-3 py-2", jobs.isFetching && "opacity-80")}>
               <Pagination
@@ -441,6 +577,35 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" } = {})
           defaultState={state === "waiting" ? "wait" : state === "waiting-children" ? "completed" : state}
         />
       )}
+      {/*
+        Remove em lote: confirmação com o NÚMERO e o nome da fila. É irreversível
+        e o número é o que impede o "achei que eram 3".
+      */}
+      <ConfirmDialog
+        open={confirmBulk === "remove"}
+        onClose={() => setConfirmBulk(null)}
+        title="Remove selected jobs"
+        description={`Remove ${formatNumber(selection.selectedIds.length)} ${selection.selectedIds.length === 1 ? "job" : "jobs"} from ${queue}? This cannot be undone.`}
+        confirmText={`Remove ${formatNumber(selection.selectedIds.length)}`}
+        danger
+        loading={pendingBulk === "remove"}
+        onConfirm={() => runBulk("remove")}
+      />
+      {/* Remove unitário também confirma — antes não confirmava, e a tabela se
+          reordena a cada 3 s. */}
+      <ConfirmDialog
+        open={confirmRemoveJob !== null}
+        onClose={() => setConfirmRemoveJob(null)}
+        title="Remove job"
+        description={`Remove job ${confirmRemoveJob ?? ""} from ${queue}? This cannot be undone.`}
+        confirmText="Remove"
+        danger
+        loading={jobAction.isPending}
+        onConfirm={() => {
+          if (confirmRemoveJob) runSingle(confirmRemoveJob, "remove");
+          setConfirmRemoveJob(null);
+        }}
+      />
       <ConfirmDialog
         open={dialog === "retryAll"}
         onClose={() => setDialog(null)}

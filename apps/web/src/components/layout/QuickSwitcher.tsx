@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { JobState } from "@bullmq-visualizer/shared";
 import { useNavigate } from "react-router-dom";
 import { CornerDownLeft, Database, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
+import { queueLandingState } from "@/lib/queueLanding";
 import { formatCompact } from "@/lib/format";
 import { useAllQueues } from "@/api/hooks";
 import { Kbd } from "@/components/ui/Kbd";
@@ -15,6 +17,8 @@ interface Item {
   waiting: number;
   failed: number;
   paused: boolean;
+  /** estado em que abrir a fila (failed → waiting → completed), ver lib/queueLanding.ts */
+  landing: JobState;
 }
 
 /** Cmd/Ctrl+K: client-side filter over the cached queue lists. */
@@ -38,6 +42,7 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
           waiting: qu.counts.waiting + qu.counts.prioritized,
           failed: qu.counts.failed,
           paused: qu.isPaused,
+          landing: queueLandingState(qu.counts),
         })),
       ),
     [byConnection],
@@ -75,7 +80,7 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
   const go = (it: Item | undefined) => {
     if (!it) return;
     onClose();
-    navigate(routes.queue(it.connectionId, it.queue));
+    navigate(routes.queue(it.connectionId, it.queue, it.landing));
   };
 
   return (

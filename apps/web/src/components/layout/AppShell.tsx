@@ -1,16 +1,28 @@
 import { useCallback, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useMatch } from "react-router-dom";
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { useHotkey } from "@/lib/useHotkey";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { QuickSwitcher } from "./QuickSwitcher";
+import { HiddenQueueBanner } from "@/components/queues/HiddenQueueBanner";
 
 export function AppShell() {
   const [switcher, setSwitcher] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const location = useLocation();
+
+  /**
+   * A hidden queue stays reachable by direct URL, so the notice explaining WHY
+   * it is missing from the sidebar is rendered here, once, above whatever queue
+   * sub-route is open (jobs, metrics, schedulers, groups, a single job).
+   * Doing it in the shell also keeps pages/queue/** untouched.
+   */
+  // Both hooks always run (no conditional hook calls); the deeper route wins.
+  const queueSubRoute = useMatch("/c/:connectionId/q/:queue/*");
+  const queueRoute = useMatch("/c/:connectionId/q/:queue");
+  const queueMatch = queueSubRoute ?? queueRoute;
 
   const openSwitcher = useCallback(() => setSwitcher(true), []);
   useHotkey("k", (e) => {
@@ -34,6 +46,9 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onOpenSwitcher={openSwitcher} onToggleSidebar={() => setMobileSidebar((s) => !s)} />
         <main className={cn("min-h-0 flex-1 overflow-y-auto")}>
+          {queueMatch?.params.connectionId && queueMatch.params.queue && (
+            <HiddenQueueBanner connectionId={queueMatch.params.connectionId} queueName={queueMatch.params.queue} />
+          )}
           <Outlet />
         </main>
       </div>

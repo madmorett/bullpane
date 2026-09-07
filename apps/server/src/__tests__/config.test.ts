@@ -24,7 +24,9 @@ describe("loadConfig", () => {
     expect(cfg.publicUrl).toBe("http://localhost:3000");
     expect(cfg.databaseUrl).toBe(DEFAULT_DATABASE_URL);
     expect(cfg.licenseKey).toBeNull();
-    expect(cfg.checkoutUrl).toBe("https://bullmq-visualizer.dev/pro");
+    expect(cfg.checkoutUrl).toBe("https://bullpane.com/pricing");
+    expect(cfg.licenseApiUrl).toBe("https://api.bullpane.com");
+    expect(cfg.licenseRefreshHours).toBe(24);
     expect(cfg.demoRedisUrl).toBe("redis://localhost:6379");
     expect(cfg.demoAdminEmail).toBe("demo@bullmq-visualizer.dev");
     expect(cfg.queueDiscoveryTtl).toBe(30);

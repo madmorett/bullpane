@@ -48,7 +48,47 @@ export const QUEUE_KEY = {
   metricsCompletedData: "metrics:completed:data",
   metricsFailed: "metrics:failed",
   metricsFailedData: "metrics:failed:data",
+  /**
+   * zset: job scheduler id -> next run (unix ms). Same key BullMQ calls `repeat`
+   * (see bullmq/dist/esm/classes/queue-keys.js). Legacy repeatable jobs share it.
+   */
+  repeat: "repeat",
 } as const;
+
+/**
+ * Job scheduler ("repeatable job") keys, relative to `${prefix}:${queue}:`.
+ *
+ * Layout verified against bullmq 5.81.4 on a live Redis:
+ *   `repeat`            zset  schedulerId -> next run unix ms
+ *   `repeat:${id}`      hash  name, pattern | every, tz, offset, limit, ic
+ *                             (iteration count), startDate, endDate, data, opts
+ *   `repeat:${id}:${millis}`  hash  the produced delayed job (a normal job hash,
+ *                             also reachable as `delayed` member `repeat:${id}:${millis}`)
+ * Everything hangs off the queue's own prefix, so it is cluster safe.
+ */
+export const SCHEDULER_KEY = {
+  repeat: QUEUE_KEY.repeat,
+  scheduler: (id: string) => `${QUEUE_KEY.repeat}:${id}`,
+} as const;
+
+/**
+ * Fields of a `repeat:${id}` hash we read, in the order getSchedulers.lua HMGETs
+ * them. `ic` is bullmq's iteration counter and doubles as the marker that tells a
+ * real job scheduler apart from a legacy repeatable key (see JobScheduler.isJobScheduler).
+ */
+export const SCHEDULER_FIELDS = [
+  "name",
+  "pattern",
+  "every",
+  "tz",
+  "offset",
+  "limit",
+  "ic",
+  "startDate",
+  "endDate",
+  "data",
+  "opts",
+] as const;
 
 /** Per-job suffixes (relative to `${prefix}:${queue}:`). */
 export const JOB_KEY = {
@@ -110,6 +150,10 @@ export const JOB_SUMMARY_FIELDS = [
   "priority",
   "parentKey",
   "parent",
+  // `stc` = stalledCounter (Job.fromJSON: `parseInt(json.stc || '0')`). Quantas
+  // vezes o job foi recuperado por stall. É o único rastro no job de que ele
+  // travou; `stalled` em si é um SET auxiliar, não um estado.
+  "stc",
   ...GROUP_ID_FIELDS,
 ] as const;
 

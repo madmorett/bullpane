@@ -11,6 +11,7 @@ export type {
   InspectorConnectionConfig,
   InspectorOptions,
   InspectorPool,
+  MetricsCounters,
   PingResult,
   QueueStats,
   WindowCounts,

@@ -12,17 +12,33 @@ describe("measure", () => {
     expect(measure(c, { kind: "waiting_above", waiting: 101 })).toMatchObject({ breached: true, value: 101, threshold: 100 });
   });
 
-  it("failed_above uses the window count", () => {
+  it("failed_above uses the window delta", () => {
     const c = { kind: "failed_above", threshold: 5, windowMinutes: 5 } as const;
-    expect(measure(c, { kind: "failed_above", failed: 6 }).breached).toBe(true);
-    expect(measure(c, { kind: "failed_above", failed: 5 }).breached).toBe(false);
+    expect(measure(c, { kind: "failed_above", failed: 6, state: "ok" }).breached).toBe(true);
+    expect(measure(c, { kind: "failed_above", failed: 5, state: "ok" }).breached).toBe(false);
+  });
+
+  it("failed_above refuses to judge without a delta", () => {
+    const c = { kind: "failed_above", threshold: 5, windowMinutes: 5 } as const;
+    // no metrics on the queue: NOT zero failures, unknown
+    expect(measure(c, { kind: "failed_above", failed: null, state: "no_metrics" })).toMatchObject({ breached: null, value: null, state: "no_metrics" });
+    // history too short: never extrapolate a partial window
+    expect(measure(c, { kind: "failed_above", failed: 99, state: "warming_up" })).toMatchObject({ breached: null, value: null, state: "warming_up" });
   });
 
   it("failed_rate_above is inconclusive below minSample", () => {
     const c = { kind: "failed_rate_above", percent: 10, windowMinutes: 5, minSample: 20 } as const;
-    expect(measure(c, { kind: "failed_rate_above", failed: 5, completed: 5 }).breached).toBeNull();
-    expect(measure(c, { kind: "failed_rate_above", failed: 3, completed: 17 })).toMatchObject({ breached: true, value: 15 });
-    expect(measure(c, { kind: "failed_rate_above", failed: 2, completed: 18 })).toMatchObject({ breached: false, value: 10 });
+    expect(measure(c, { kind: "failed_rate_above", failed: 5, completed: 5, state: "ok" }).breached).toBeNull();
+    expect(measure(c, { kind: "failed_rate_above", failed: 3, completed: 17, state: "ok" })).toMatchObject({ breached: true, value: 15 });
+    expect(measure(c, { kind: "failed_rate_above", failed: 2, completed: 18, state: "ok" })).toMatchObject({ breached: false, value: 10 });
+  });
+
+  it("failed_rate_above is inconclusive without metrics, even with a big failed count", () => {
+    const c = { kind: "failed_rate_above", percent: 10, windowMinutes: 5, minSample: 20 } as const;
+    expect(measure(c, { kind: "failed_rate_above", failed: null, completed: null, state: "no_metrics" })).toMatchObject({
+      breached: null,
+      state: "no_metrics",
+    });
   });
 
   it("refuses a measurement of a different kind", () => {
@@ -99,8 +115,8 @@ describe("pickWorst (folder alerts)", () => {
       c,
       t("a", "b"),
       [
-        { breached: false, value: 999, threshold: 10, unit: "jobs" },
-        { breached: true, value: 11, threshold: 10, unit: "jobs" },
+        { breached: false, value: 999, threshold: 10, unit: "jobs", state: "ok" },
+        { breached: true, value: 11, threshold: 10, unit: "jobs", state: "ok" },
       ],
     );
     expect(r.target?.queueName).toBe("b");
@@ -112,9 +128,9 @@ describe("pickWorst (folder alerts)", () => {
       c,
       t("a", "b", "c"),
       [
-        { breached: true, value: 11, threshold: 10, unit: "jobs" },
-        { breached: true, value: 50, threshold: 10, unit: "jobs" },
-        { breached: false, value: 1, threshold: 10, unit: "jobs" },
+        { breached: true, value: 11, threshold: 10, unit: "jobs", state: "ok" },
+        { breached: true, value: 50, threshold: 10, unit: "jobs", state: "ok" },
+        { breached: false, value: 1, threshold: 10, unit: "jobs", state: "ok" },
       ],
     );
     expect(r.target?.queueName).toBe("b");
@@ -123,7 +139,7 @@ describe("pickWorst (folder alerts)", () => {
 
   it("is inconclusive when every queue is inconclusive", () => {
     const rate = { kind: "failed_rate_above", percent: 5, windowMinutes: 5, minSample: 20 } as const;
-    const r = pickWorst(rate, t("a"), [{ breached: null, value: null, threshold: 5, unit: "%" }]);
+    const r = pickWorst(rate, t("a"), [{ breached: null, value: null, threshold: 5, unit: "%", state: "ok" }]);
     expect(r.sample.breached).toBeNull();
     expect(r.target).toBeNull();
   });
@@ -132,7 +148,7 @@ describe("pickWorst (folder alerts)", () => {
 describe("formatMessage", () => {
   it("describes fired and resolved states", () => {
     const condition = { kind: "waiting_above", threshold: 100 } as const;
-    const sample = { breached: true, value: 150, threshold: 100, unit: "jobs" } as const;
+    const sample = { breached: true, value: 150, threshold: 100, unit: "jobs", state: "ok" } as const;
     const fired = formatMessage({ kind: "waiting_above", condition, status: "fired", queueName: "payments.charge", connectionName: "Prod", sample });
     expect(fired).toContain('queue "payments.charge"');
     expect(fired).toContain("150");

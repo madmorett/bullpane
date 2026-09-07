@@ -16,7 +16,10 @@
  *    touches keys of exactly one queue.
  */
 import type {
+  BulkJobAction,
+  BulkJobActionResult,
   GroupSummary,
+  JobScheduler,
   QueueRates,
   QueueSetup,
   JobDetail,
@@ -62,6 +65,17 @@ export interface QueueStats {
   rates: QueueRates;
   /** meta.version, e.g. "bullmq:5.81.4" */
   library: string | null;
+  /** ZCARD of the `repeat` zset: how many job schedulers this queue has */
+  schedulersCount: number;
+  /**
+   * SCARD de `${prefix}:${queue}:stalled`. Um SCARD é O(1), então cabe no
+   * orçamento do queueStats (um comando a mais no MESMO EVALSHA, zero ida extra).
+   *
+   * `stalled` NÃO é um estado do BullMQ: é um SET auxiliar que só existe quando
+   * algo stalla, e `getState()` de um job stallado devolve `active`. Por isso
+   * este número vive fora de `counts`.
+   */
+  stalledCount: number;
   metrics?: QueueMetrics;
 }
 
@@ -70,6 +84,27 @@ export interface WindowCounts {
   completed: number;
   /** failed jobs whose score >= since */
   failed: number;
+}
+
+/**
+ * BullMQ's own cumulative counters, the only prune-proof source of "how many
+ * jobs finished".
+ *
+ * When a Worker is created with `metrics: { maxDataPoints }` BullMQ keeps a hash
+ * `${prefix}:${queue}:metrics:completed` (and `:failed`) whose `count` field is
+ * incremented as each job finishes and is NEVER decremented — `removeOnComplete`
+ * cannot touch it. The sibling list `metrics:*:data` only gains a point when the
+ * minute rolls over, so for the first 60 s the list is empty while `count` is
+ * already right; that is why alerting reads the hash, not the list.
+ *
+ * `null` means the hash does not exist: this queue collects no metrics, and
+ * therefore its failure rate cannot be measured honestly at all.
+ */
+export interface MetricsCounters {
+  completed: number | null;
+  failed: number | null;
+  /** unix ms when the read was taken (the clock the delta is computed against) */
+  collectedAt: number;
 }
 
 export interface FlowEdgeSample {
@@ -118,8 +153,19 @@ export interface Inspector {
   ): Promise<Record<string, QueueStats>>;
   /** meta hash + limiter TTL + Pro group settings (one script) + workers via CLIENT LIST. Cached 10 s. */
   getQueueSetup(queueName: string): Promise<QueueSetup>;
-  /** ZCOUNT on completed/failed for alerting. `since` is unix ms. */
+  /**
+   * ZCOUNT on completed/failed inside a trailing window. Honest only for queues
+   * that keep their finished jobs — with `removeOnComplete` the ratio lies, so
+   * alerting uses `getMetricsCounters` instead. Kept for panel-side reads.
+   */
   getWindowCounts(queueName: string, since: number): Promise<WindowCounts>;
+  /**
+   * The cumulative `count` of `metrics:completed` / `metrics:failed` in ONE
+   * round trip (two HGETs in a pipeline, both keys of the same queue so it is
+   * cluster safe). `null` per side when the hash is absent. Diffing this between
+   * two reads is what error alerts measure.
+   */
+  getMetricsCounters(queueName: string): Promise<MetricsCounters>;
   getJobs(
     queueName: string,
     state: JobState,
@@ -139,6 +185,16 @@ export interface Inspector {
   getGroups(queueName: string, opts: { start: number; end: number }): Promise<{ groups: GroupSummary[]; total: number }>;
   getGroupJobs(queueName: string, groupId: string, opts: { start: number; end: number }): Promise<JobsPage>;
 
+  // --- job schedulers (repeatable jobs) -----------------------------------
+  /**
+   * Page the `repeat` zset (ordered by next run) plus one HMGET per row, all in
+   * ONE script. Schedulers are invisible in the 8 job states, so this is the only
+   * read that shows them.
+   */
+  getSchedulers(queueName: string, opts: { start: number; end: number }): Promise<{ schedulers: JobScheduler[]; total: number }>;
+  /** Remove a job scheduler and the delayed job it has queued (official bullmq API). */
+  removeScheduler(queueName: string, key: string): Promise<{ removed: boolean }>;
+
   // --- flows --------------------------------------------------------------
   /** Sample the newest N jobs of several states and aggregate their parent queue keys. */
   sampleFlowEdges(queueName: string, opts?: { sample?: number }): Promise<{ edges: FlowEdgeSample[]; sampled: number }>;
@@ -148,6 +204,20 @@ export interface Inspector {
   retryJob(queueName: string, jobId: string): Promise<void>;
   removeJob(queueName: string, jobId: string): Promise<void>;
   promoteJob(queueName: string, jobId: string): Promise<void>;
+  /**
+   * Mesma ação unitária (retry / remove / promote) aplicada a vários ids, SEMPRE
+   * pela API oficial do bullmq (`job.retry()` / `job.remove()` / `job.promote()`),
+   * nunca por DEL na mão: os scripts atômicos do BullMQ cuidam de índices,
+   * dependências de flow e locks.
+   *
+   * Duas garantias que o chamador pode assumir:
+   *  - RESULTADO PARCIAL: um id inexistente ou em estado incompatível vira uma
+   *    entrada em `failed` com o motivo; os outros seguem. Nunca lança por
+   *    causa de um id ruim (só por Redis inacessível).
+   *  - CONCORRÊNCIA LIMITADA (`BULK_CONCURRENCY`): as ações vão em janelas
+   *    pequenas, não num `Promise.all` de 500, para não pipocar o Redis.
+   */
+  bulkJobAction(queueName: string, action: BulkJobAction, jobIds: string[]): Promise<BulkJobActionResult>;
   /** Move an active/stalled job back to failed with a reason (operator "discard") */
   discardJob(queueName: string, jobId: string): Promise<void>;
   pauseQueue(queueName: string): Promise<void>;

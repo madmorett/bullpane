@@ -152,6 +152,20 @@ export function formatCores(cores: number | null | undefined): string {
   return `${cores.toFixed(2)} ${cores === 1 ? "core" : "cores"}`;
 }
 
+/**
+ * CPU as a percentage of ONE core, which is the number that means something for
+ * a mostly single-threaded Redis: 100% = one saturated core. Above 100% is real
+ * and legitimate (background threads), so it is never clamped.
+ * Null stays an em dash — a rate needs two samples, and "no reading" is not 0%.
+ */
+export function formatCpuPercent(cores: number | null | undefined): string {
+  if (cores == null || !Number.isFinite(cores)) return "–";
+  const pct = cores * 100;
+  if (pct >= 10) return `${Math.round(pct)}%`;
+  if (pct >= 1) return `${pct.toFixed(0)}%`;
+  return `${pct.toFixed(pct >= 0.1 ? 1 : 2)}%`;
+}
+
 /** A per-second rate, e.g. "12.4k/s". Null renders as an em dash, never 0. */
 export function formatRate(n: number | null | undefined, unit = "/s"): string {
   if (n == null || !Number.isFinite(n)) return "–";

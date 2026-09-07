@@ -2,7 +2,7 @@
  * Drizzle schema. Mirrors migrations/*.sql — the SQL files are the source of
  * truth for the database; this file is the typed view the server codes against.
  */
-import type { AlertChannel, AlertCondition, AlertKind } from "@bullmq-visualizer/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role } from "@bullmq-visualizer/shared";
 import {
   boolean,
   datetime,
@@ -82,6 +82,23 @@ export const folderQueues = mysqlTable(
   (t) => [primaryKey({ columns: [t.folderId, t.connectionId, t.queueName] })],
 );
 
+/**
+ * Hidden queues — see migrations/0003_hidden_queues.sql.
+ * Scope is the INSTANCE, not the user: presence of the row hides the queue for
+ * everyone. Row shape mirrors folder_queues (connection id + discovered queue
+ * name, no FK to a queue table because queues are not rows).
+ */
+export const hiddenQueues = mysqlTable(
+  "hidden_queues",
+  {
+    connectionId: varchar("connection_id", { length: 36 }).notNull(),
+    queueName: varchar("queue_name", { length: 255 }).notNull(),
+    hiddenAt: datetime("hidden_at", { mode: "date", fsp: 3 }).notNull(),
+    hiddenBy: varchar("hidden_by", { length: 36 }),
+  },
+  (t) => [primaryKey({ columns: [t.connectionId, t.queueName] })],
+);
+
 export const alerts = mysqlTable(
   "alerts",
   {
@@ -111,12 +128,49 @@ export const alertEvents = mysqlTable(
     connectionId: varchar("connection_id", { length: 36 }),
     queueName: varchar("queue_name", { length: 255 }),
     kind: varchar("kind", { length: 40 }).$type<AlertKind>().notNull(),
-    status: varchar("status", { length: 20 }).$type<"fired" | "resolved" | "delivery_failed">().notNull(),
+    status: varchar("status", { length: 20 }).$type<AlertEventStatus>().notNull(),
     message: text("message").notNull(),
     value: double("value"),
     createdAt: createdAt(),
   },
   (t) => [index("alert_events_created_at_idx").on(t.createdAt), index("alert_events_alert_id_idx").on(t.alertId)],
+);
+
+/**
+ * Audit log — see migrations/0004_audit_log.sql.
+ *
+ * Append-only. The actor and the connection are DENORMALISED on purpose (no FK
+ * to `users`, none to `connections`): a trail that points at a deleted row is
+ * worthless exactly when it matters, and "the person who did it is gone" is the
+ * normal case in an audit. `detail` holds action parameters only — never a job
+ * payload (CLAUDE.md: never log job data).
+ */
+export const auditLog = mysqlTable(
+  "audit_log",
+  {
+    id: id(),
+    createdAt: createdAt(),
+    actorId: varchar("actor_id", { length: 36 }),
+    actorEmail: varchar("actor_email", { length: 255 }),
+    actorName: varchar("actor_name", { length: 80 }),
+    actorRole: varchar("actor_role", { length: 20 }).$type<Role>(),
+    action: varchar("action", { length: 40 }).$type<AuditAction>().notNull(),
+    connectionId: varchar("connection_id", { length: 36 }),
+    connectionName: varchar("connection_name", { length: 80 }),
+    queueName: varchar("queue_name", { length: 255 }),
+    jobId: varchar("job_id", { length: 255 }),
+    result: varchar("result", { length: 10 }).$type<AuditResult>().notNull().default("ok"),
+    errorMessage: varchar("error_message", { length: 500 }),
+    detail: json("detail").$type<Record<string, unknown>>(),
+    ip: varchar("ip", { length: 45 }),
+    userAgent: varchar("user_agent", { length: 255 }),
+  },
+  (t) => [
+    // Keyset paging + ordering in one index.
+    index("audit_log_created_at_idx").on(t.createdAt, t.id),
+    index("audit_log_actor_id_idx").on(t.actorId),
+    index("audit_log_queue_idx").on(t.connectionId, t.queueName),
+  ],
 );
 
 export const flowEdges = mysqlTable(
@@ -142,6 +196,8 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type ConnectionRow = typeof connections.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type FolderQueueRow = typeof folderQueues.$inferSelect;
+export type HiddenQueueRow = typeof hiddenQueues.$inferSelect;
 export type AlertRow = typeof alerts.$inferSelect;
 export type AlertEventRow = typeof alertEvents.$inferSelect;
 export type FlowEdgeRow = typeof flowEdges.$inferSelect;
+export type AuditLogRow = typeof auditLog.$inferSelect;

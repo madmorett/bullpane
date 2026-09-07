@@ -7,6 +7,8 @@ import { sumSeries } from "@/lib/queueMetrics";
 import type { QueueEntry } from "@/lib/groupQueues";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { SKEW_TOOLTIP } from "@/components/queues/RateSource";
+import { TriangleAlert } from "lucide-react";
 
 const BOXES: JobState[] = ["waiting", "active", "completed", "failed", "delayed"];
 
@@ -22,6 +24,12 @@ export interface FolderAggregate {
   /** how many queues actually contribute metrics */
   withMetrics: number;
   windowMinutes: number | null;
+  /**
+   * Queues whose rates the server flagged as skewed by `removeOnComplete` pruning.
+   * One of them is enough to make the aggregate percentage untrustworthy, since it
+   * is a weighted sum of the raw counts.
+   */
+  skewedQueues: string[];
 }
 
 export function aggregate(entries: QueueEntry[]): FolderAggregate {
@@ -40,6 +48,7 @@ export function aggregate(entries: QueueEntry[]): FolderAggregate {
   let failed = 0;
   let withMetrics = 0;
   let windowMinutes: number | null = null;
+  const skewedQueues: string[] = [];
 
   for (const { queue } of entries) {
     for (const s of Object.keys(counts) as JobState[]) counts[s] += queue.counts[s] ?? 0;
@@ -48,6 +57,7 @@ export function aggregate(entries: QueueEntry[]): FolderAggregate {
     failed += queue.rates?.failed ?? 0;
     if (queue.rates?.windowMinutes) windowMinutes = queue.rates.windowMinutes;
     if (queue.metrics && queue.metrics.completed.length > 0) withMetrics += 1;
+    if (queue.rates?.retentionSkewed) skewedQueues.push(queue.name);
   }
 
   const finished = completed + failed;
@@ -61,6 +71,7 @@ export function aggregate(entries: QueueEntry[]): FolderAggregate {
     failedSeries: sumSeries(entries.map((e) => e.queue.metrics?.failed)),
     withMetrics,
     windowMinutes,
+    skewedQueues,
   };
 }
 
@@ -68,6 +79,10 @@ export function FolderMetrics({ entries, className }: { entries: QueueEntry[]; c
   const agg = useMemo(() => aggregate(entries), [entries]);
   const win = agg.windowMinutes ? (agg.windowMinutes % 60 === 0 ? `${agg.windowMinutes / 60}h` : `${agg.windowMinutes}m`) : "1h";
   const hasSeries = agg.completedSeries.length > 1;
+  const skewed = agg.skewedQueues.length > 0;
+  const skewNote = skewed
+    ? `${agg.skewedQueues.length === 1 ? `Queue "${agg.skewedQueues[0]}"` : `${agg.skewedQueues.length} queues (${agg.skewedQueues.slice(0, 3).join(", ")}${agg.skewedQueues.length > 3 ? ", …" : ""})`} feed this total. ${SKEW_TOOLTIP}`
+    : "";
 
   return (
     <div className={cn("grid gap-2 sm:grid-cols-3 xl:grid-cols-7", className)}>
@@ -88,18 +103,24 @@ export function FolderMetrics({ entries, className }: { entries: QueueEntry[]; c
       <div className="card px-3 py-2.5">
         <div className="flex items-center gap-1 text-[10px] font-medium tracking-wider text-fg-subtle uppercase">
           Success · {win}
+          {skewed && (
+            <Tooltip content={skewNote} className="ml-auto">
+              <TriangleAlert className="size-3 text-warning" aria-label="This total is unreliable: some queues prune completed jobs" />
+            </Tooltip>
+          )}
         </div>
-        <Tooltip content={`${formatNumber(agg.completed)} completed · ${formatNumber(agg.failed)} failed across ${entries.length} ${entries.length === 1 ? "queue" : "queues"}`}>
+        <Tooltip content={`${formatNumber(agg.completed)} completed · ${formatNumber(agg.failed)} failed across ${entries.length} ${entries.length === 1 ? "queue" : "queues"}${skewed ? `\n\n${skewNote}` : ""}`}>
           <div
             className={cn(
               "num text-2xl leading-tight font-semibold",
+              skewed && "opacity-50",
               agg.successPct == null ? "text-fg-subtle" : agg.successPct < 90 ? "text-state-failed" : "text-state-completed",
             )}
           >
             {agg.successPct == null ? "—" : formatPercent(agg.successPct)}
           </div>
         </Tooltip>
-        <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3" role="img" aria-label={agg.successPct == null ? "No finished jobs" : `${formatPercent(agg.successPct)} success`}>
+        <div className={cn("mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3", skewed && "opacity-50")} role="img" aria-label={agg.successPct == null ? "No finished jobs" : `${formatPercent(agg.successPct)} success${skewed ? ", unreliable: some queues prune completed jobs" : ""}`}>
           {agg.successPct != null && (
             <>
               <span className="h-full" style={{ width: `${agg.successPct}%`, background: STATE_COLORS.completed.fg }} />

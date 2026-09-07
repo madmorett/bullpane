@@ -23,6 +23,7 @@ import { CodeBlock } from "@/components/ui/CodeBlock";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ChartLegend, TimeSeriesChart, type Series } from "@/components/charts/TimeSeriesChart";
 import { SuccessBar } from "@/components/queues/QueueCard";
+import { rateSourceHint } from "@/components/queues/RateSource";
 
 /** one page of completed jobs is enough for a latency sample without hammering Redis */
 const LATENCY_SAMPLE_SIZE = 50;
@@ -213,7 +214,14 @@ function ThroughputRow({
         </div>
       </div>
       <div className="card px-3 py-2.5">
-        <div className="mb-1.5 text-[10px] font-medium tracking-wider text-fg-subtle uppercase">Success · trailing window</div>
+        <div className="mb-1.5 flex items-center gap-1 text-[10px] font-medium tracking-wider text-fg-subtle uppercase">
+          Success · trailing window
+          {/* Says outright whether this comes from BullMQ metrics or from the zsets;
+              SuccessBar itself dims the value and flags it when retention skews it. */}
+          <Tooltip content={rateSourceHint(rates)} className="ml-auto normal-case">
+            <span className="text-[10px] text-fg-subtle">{rates?.source === "metrics" ? "metrics" : "zsets"}</span>
+          </Tooltip>
+        </div>
         <SuccessBar rates={rates} />
       </div>
     </div>

@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowUpToLine, ExternalLink, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowUpToLine, ExternalLink, RotateCcw, Trash2, Unplug } from "lucide-react";
 import type { JobSummary } from "@bullmq-visualizer/shared";
+import type { JobSelection } from "@/lib/useJobSelection";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatDateTime, formatDuration, tryPrettyJson } from "@/lib/format";
@@ -32,6 +33,13 @@ export interface JobsTableProps {
   /** substring to <mark> inside the data preview / error (search results) */
   highlight?: string;
   compact?: boolean;
+  /**
+   * Seleção múltipla. Quando presente a tabela ganha a coluna de checkbox e o
+   * cabeçalho de selecionar-a-página. A seleção é por jobId (ver
+   * lib/useJobSelection.ts): a tabela repolla a cada 3 s e as linhas mudam de
+   * posição, então um índice guardado apontaria para outro job.
+   */
+  selection?: JobSelection;
 }
 
 export function JobsTable({
@@ -49,16 +57,46 @@ export function JobsTable({
   onGroupClick,
   highlight,
   compact,
+  selection,
 }: JobsTableProps) {
   const navigate = useNavigate();
-  const cols = 8 + (showState ? 1 : 0) + (showGroup ? 1 : 0);
+  const cols = 8 + (showState ? 1 : 0) + (showGroup ? 1 : 0) + (selection ? 1 : 0);
+  const visibleCount = jobs?.length ?? 0;
 
   return (
     <Table dense={compact} className="min-w-[960px]">
       <thead>
         <tr>
+          {selection && (
+            <Th className="w-8">
+              <input
+                type="checkbox"
+                className="size-3.5 cursor-pointer align-middle accent-[var(--accent)]"
+                aria-label={selection.allVisibleSelected ? "Clear selection on this page" : "Select every job on this page"}
+                title={selection.allVisibleSelected ? "Clear this page" : "Select this page"}
+                checked={selection.allVisibleSelected}
+                // Indeterminado quando parte da página está marcada: o operador
+                // vê a diferença entre "nenhum", "alguns" e "todos".
+                ref={(el) => {
+                  if (el) el.indeterminate = !selection.allVisibleSelected && selection.visibleSelectedCount > 0;
+                }}
+                disabled={visibleCount === 0}
+                onChange={selection.toggleAllVisible}
+              />
+            </Th>
+          )}
           <Th className="w-28">ID</Th>
-          <Th>Name</Th>
+          {/*
+            NAME é o primeiro argumento de `queue.add()` — o nome do JOB (o
+            tipo/handler), não o da fila. Verificado contra Redis real: 
+            `q.add("enviar-email", {...})` grava `name: "enviar-email"` no hash.
+            Ninguém adivinha isso sozinho, então a coluna explica.
+          */}
+          <Th>
+            <span className="cursor-help border-b border-dotted border-border-strong" title={'The job name — the first argument of queue.add("name", data). It is the job type / handler, not the queue name.'}>
+              Name
+            </span>
+          </Th>
           {showState && <Th>State</Th>}
           {showGroup && <Th>Group</Th>}
           <Th className="w-24">Attempts</Th>
@@ -98,6 +136,7 @@ export function JobsTable({
             showGroup={!!showGroup}
             onGroupClick={onGroupClick}
             highlight={highlight}
+            selection={selection}
             onOpen={() => navigate(routes.job(connectionId, queue, job.id))}
           />
         ))}
@@ -117,6 +156,7 @@ function JobRow({
   showGroup,
   onGroupClick,
   highlight,
+  selection,
   onOpen,
 }: {
   job: JobSummary;
@@ -129,15 +169,35 @@ function JobRow({
   showGroup: boolean;
   onGroupClick?: (groupId: string) => void;
   highlight?: string;
+  selection?: JobSelection;
   onOpen: () => void;
 }) {
   const duration = job.processedOn && job.finishedOn ? job.finishedOn - job.processedOn : null;
   const wait = job.processedOn ? job.processedOn - job.timestamp : null;
   const canRetry = job.state === "failed" || job.state === "completed";
   const canPromote = job.state === "delayed";
+  const selected = selection?.has(job.id) ?? false;
 
   return (
-    <Tr onActivate={onOpen} className={cn(pending && "opacity-50")}>
+    <Tr onActivate={onOpen} selected={selected} className={cn(pending && "opacity-50")}>
+      {selection && (
+        <Td data-no-row-click>
+          <input
+            type="checkbox"
+            className="size-3.5 cursor-pointer align-middle accent-[var(--accent)]"
+            aria-label={`Select job ${job.id}`}
+            checked={selected}
+            onChange={() => undefined}
+            // Shift+clique seleciona o intervalo. O evento de clique carrega o
+            // shiftKey; o onChange não, por isso a lógica vive aqui.
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.shiftKey) selection.toggleRange(job.id);
+              else selection.toggle(job.id);
+            }}
+          />
+        </Td>
+      )}
       <Td mono>
         <Link to={routes.job(connectionId, queue, job.id)} className="text-accent hover:underline" title={job.id}>
           {job.id.length > 14 ? `${job.id.slice(0, 12)}…` : job.id}
@@ -175,6 +235,19 @@ function JobRow({
           {job.attemptsMade}
           {job.attempts != null && <span className="text-fg-subtle"> / {job.attempts}</span>}
         </span>
+        {/*
+          `stc` > 0: este job já stallou. NÃO é um estado — o job está `active`
+          ou voltou para `wait`; o que aconteceu é que o worker perdeu o lock
+          (morreu, travou, ou o event loop bloqueou) e o StalledCheck do BullMQ
+          o recuperou. É a informação que faltava para explicar por que um job
+          "rodou duas vezes".
+        */}
+        {job.stalledCounter > 0 && (
+          <Badge variant="warning" size="xs" className="ml-1.5 gap-0.5" title={`Stalled ${job.stalledCounter} time${job.stalledCounter === 1 ? "" : "s"}: the worker lost the lock (it died or blocked) and BullMQ recovered the job. Not a state — the job went back to waiting.`}>
+            <Unplug className="size-2.5" aria-hidden />
+            {job.stalledCounter}
+          </Badge>
+        )}
         {job.priority > 0 && (
           <Badge variant="violet" size="xs" className="ml-1.5" title="priority">
             p{job.priority}

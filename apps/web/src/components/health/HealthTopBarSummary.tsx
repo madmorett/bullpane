@@ -2,8 +2,9 @@ import { Link } from "react-router-dom";
 import { Activity } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
-import { formatPercent, formatRate } from "@/lib/format";
+import { formatCpuPercent, formatPercent, formatRate } from "@/lib/format";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { cpuTooltip } from "./cpu";
 import { aggregate, useHealthMonitor } from "./useHealthMonitor";
 
 /**
@@ -25,6 +26,7 @@ export function HealthTopBarSummary({ className }: { className?: string }) {
         agg.down > 0 ? `${agg.down} unreachable` : null,
         agg.commandsPerSec == null ? "commands/sec: measuring…" : `${formatRate(agg.commandsPerSec)} across all connections`,
         agg.memoryPct == null ? "no maxmemory set" : `peak memory use ${formatPercent(agg.memoryPct)} of maxmemory`,
+        agg.cpuCores == null ? null : `busiest CPU ${formatCpuPercent(agg.cpuCores)} of one core — ${cpuTooltip(agg.cpuCores)}`,
         agg.critical > 0 ? `${agg.critical} critical warning${agg.critical === 1 ? "" : "s"}` : null,
         agg.warn > 0 ? `${agg.warn} warning${agg.warn === 1 ? "" : "s"}` : null,
       ]
@@ -49,6 +51,12 @@ export function HealthTopBarSummary({ className }: { className?: string }) {
           {agg.total} conn
           <span className="mx-1 text-fg-subtle">·</span>
           {paused ? "paused" : agg.commandsPerSec == null ? "—" : `${formatRate(agg.commandsPerSec, "")} cmd/s`}
+          {agg.cpuCores != null && !paused && (
+            <>
+              <span className="mx-1 text-fg-subtle">·</span>
+              {formatCpuPercent(agg.cpuCores)} cpu
+            </>
+          )}
           {agg.memoryPct != null && (
             <>
               <span className="mx-1 text-fg-subtle">·</span>

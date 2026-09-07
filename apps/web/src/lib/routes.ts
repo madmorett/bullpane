@@ -23,6 +23,17 @@ export const routes = {
   folder: (folderId: string) => `/folders/${e(folderId)}`,
   alerts: "/alerts",
   users: "/users",
+  /**
+   * Audit log (Pro, admin). `filters` deep-links the page pre-narrowed, which is
+   * how the queue page and the job page hand off ("audit for THIS queue").
+   */
+  audit: (filters?: { connectionId?: string; queueName?: string; jobId?: string; actorId?: string }) => {
+    if (!filters) return "/audit";
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) if (v) sp.set(k, v);
+    const qs = sp.toString();
+    return qs ? `/audit?${qs}` : "/audit";
+  },
   flows: (cid?: string) => (cid ? `/flows/${e(cid)}` : "/flows"),
   settings: (tab: "connections" | "license" | "about" = "connections") => `/settings/${tab}`,
 };
