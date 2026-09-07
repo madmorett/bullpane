@@ -1,4 +1,4 @@
-import { type Alert, type AlertEvent, createAlertSchema, updateAlertSchema } from "@bullmq-visualizer/shared";
+import { type Alert, type AlertEvent, createAlertSchema, updateAlertSchema } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { DeliveryResult } from "../alerts/deliver";

@@ -1,4 +1,4 @@
--- BullMQ Visualizer — initial schema. Applied by src/db/migrate.ts (statements split on ";\n").
+-- Bullpane — initial schema. Applied by src/db/migrate.ts (statements split on ";\n").
 
 CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(36) NOT NULL,

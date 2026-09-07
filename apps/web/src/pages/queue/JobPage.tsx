@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowUpToLine, Ban, ChevronLeft, GitBranch, RotateCcw, ScrollText, Trash2 } from "lucide-react";
-import { AUDIT_ACTION_LABEL, type JobDetail } from "@bullmq-visualizer/shared";
+import { AUDIT_ACTION_LABEL, type JobDetail } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { queueNameFromKey, routes } from "@/lib/routes";
 import { formatDateTimeMs, formatDuration, formatNumber, safeJsonStringify } from "@/lib/format";

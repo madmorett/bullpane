@@ -1,4 +1,4 @@
-import { createFolderSchema, type Folder, setFolderQueuesSchema, updateFolderSchema } from "@bullmq-visualizer/shared";
+import { createFolderSchema, type Folder, setFolderQueuesSchema, updateFolderSchema } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { requireAuth, requireRole } from "../auth/guards";
 import { requireFeature } from "../plugins/gates";

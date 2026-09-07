@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Clock } from "lucide-react";
-import type { AlertMeasurement, Folder, FolderQueueRef, QueueSetup } from "@bullmq-visualizer/shared";
+import type { AlertMeasurement, Folder, FolderQueueRef, QueueSetup } from "@bullpane/shared";
 import { useQueueSetup } from "@/api/hooks";
 import { Badge } from "@/components/ui/Badge";
 import { CodeBlock } from "@/components/ui/CodeBlock";

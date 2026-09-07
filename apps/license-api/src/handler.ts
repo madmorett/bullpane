@@ -17,7 +17,7 @@ import {
   type LicensePayload,
   licenseActivateRequestSchema,
   licenseRefreshRequestSchema,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { ZodError } from "zod";
 import { ApiFail, type PolarLicenseKey, PolarClient, statusFor } from "./polar";
 import { signLease } from "./sign";

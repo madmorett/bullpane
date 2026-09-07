@@ -2,7 +2,7 @@
  * Notification delivery: Slack incoming webhooks (Block Kit) and generic
  * webhooks (JSON POST + custom headers). 5 s timeout per attempt.
  */
-import type { Alert, AlertChannel } from "@bullmq-visualizer/shared";
+import type { Alert, AlertChannel } from "@bullpane/shared";
 
 export const DELIVERY_TIMEOUT_MS = 5_000;
 
@@ -62,7 +62,7 @@ export function slackPayload(n: AlertNotification): Record<string, unknown> {
       { type: "section", fields },
       {
         type: "actions",
-        elements: [{ type: "button", text: { type: "plain_text", text: "Open in BullMQ Visualizer" }, url: n.url }],
+        elements: [{ type: "button", text: { type: "plain_text", text: "Open in Bullpane" }, url: n.url }],
       },
     ],
   };
@@ -94,7 +94,7 @@ export async function deliverToChannel(
   const body = channel.type === "slack" ? slackPayload(notification) : webhookPayload(notification);
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": "bullmq-visualizer-alerts",
+    "user-agent": "bullpane-alerts",
     ...(channel.type === "webhook" ? channel.headers ?? {} : {}),
   };
   try {

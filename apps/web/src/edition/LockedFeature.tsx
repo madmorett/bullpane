@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Check, ExternalLink, KeyRound, Lock } from "lucide-react";
-import type { ProFeature } from "@bullmq-visualizer/shared";
+import type { ProFeature } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { FEATURE_COPY } from "./featureCopy";
 import { useEdition } from "./useEdition";

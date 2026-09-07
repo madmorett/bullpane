@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Instala o BullMQ Visualizer Pro numa EC2 (Amazon Linux 2023 / Ubuntu).
+# Instala o Bullpane Pro numa EC2 (Amazon Linux 2023 / Ubuntu).
 # Roda DENTRO da instância, via Session Manager ou SSH.
 #
 #   sudo bash instalar-ec2.sh
@@ -9,8 +9,8 @@
 # Sobe o app (porta 3000) + MySQL, ambos em Docker, com restart automático.
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/matheusmorett2/bullmq-visualizer:0.1.0}"
-APP_DIR="${APP_DIR:-/opt/bullmq-visualizer}"
+IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.1.0}"
+APP_DIR="${APP_DIR:-/opt/bullpane}"
 LICENSE_KEY="${LICENSE_KEY:-}"
 READ_ONLY="${READ_ONLY:-false}"
 
@@ -39,9 +39,9 @@ if [ ! -f .env ]; then
 IMAGE=${IMAGE}
 SESSION_SECRET=$(openssl rand -hex 32)
 MYSQL_PASSWORD=${MYSQL_PASS}
-DATABASE_URL=mysql://bmv:${MYSQL_PASS}@mysql:3306/bmv
-BMV_LICENSE_KEY=${LICENSE_KEY}
-BMV_READ_ONLY=${READ_ONLY}
+DATABASE_URL=mysql://bullpane:${MYSQL_PASS}@mysql:3306/bullpane
+BULLPANE_LICENSE_KEY=${LICENSE_KEY}
+BULLPANE_READ_ONLY=${READ_ONLY}
 PUBLIC_URL=http://$(hostname -I | awk '{print $1}'):3000
 LOG_LEVEL=info
 ENVEOF
@@ -63,8 +63,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
       PUBLIC_URL: ${PUBLIC_URL}
-      BMV_LICENSE_KEY: ${BMV_LICENSE_KEY}
-      BMV_READ_ONLY: ${BMV_READ_ONLY}
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY}
+      BULLPANE_READ_ONLY: ${BULLPANE_READ_ONLY}
       LOG_LEVEL: ${LOG_LEVEL}
     depends_on:
       mysql:
@@ -74,8 +74,8 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: bmv
-      MYSQL_USER: bmv
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
@@ -109,7 +109,7 @@ if curl -sf http://localhost:3000/api/health >/dev/null 2>&1; then
   echo " health : $(curl -s http://localhost:3000/api/health)"
   echo " edição : $(curl -s http://localhost:3000/api/edition | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["tier"], "| licenciado para:", (d.get("license") or {}).get("licensee","-"))' 2>/dev/null || echo '?')"
   echo
-  echo " Se disser 'free', o BMV_LICENSE_KEY não chegou: edite $APP_DIR/.env"
+  echo " Se disser 'free', o BULLPANE_LICENSE_KEY não chegou: edite $APP_DIR/.env"
   echo " e rode: docker compose --env-file .env up -d"
 else
   echo " NÃO SUBIU. Logs:"

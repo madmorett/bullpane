@@ -3,8 +3,8 @@
  * call), detected edges from sampleFlowEdges (concurrency 5, cached 30 s per
  * connection) + manual edges from the flow_edges table.
  */
-import { EMPTY_COUNTS, type FlowEdge, type FlowGraph, type FlowNode } from "@bullmq-visualizer/shared";
-import type { Inspector } from "@bullmq-visualizer/redis-inspector";
+import { EMPTY_COUNTS, type FlowEdge, type FlowGraph, type FlowNode } from "@bullpane/shared";
+import type { Inspector } from "@bullpane/redis-inspector";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Db } from "../db";

@@ -29,7 +29,7 @@ import type {
   QueueCounts,
   QueueMetrics,
   RedisServerInfo,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 
 export interface InspectorConnectionConfig {
   /** stable id (the connection row id) used to key the pool */

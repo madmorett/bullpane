@@ -1,5 +1,5 @@
 {
-  "name": "@bullmq-visualizer/web",
+  "name": "@bullpane/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bullmq-visualizer/shared": "workspace:*",
+    "@bullpane/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
     "@xyflow/react": "^12.3.6",
     "clsx": "^2.1.1",

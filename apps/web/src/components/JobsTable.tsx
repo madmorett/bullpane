@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpToLine, ExternalLink, RotateCcw, Trash2, Unplug } from "lucide-react";
-import type { JobSummary } from "@bullmq-visualizer/shared";
+import type { JobSummary } from "@bullpane/shared";
 import type { JobSelection } from "@/lib/useJobSelection";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";

@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 #
-# BullMQ Visualizer — one image, two targets.
+# Bullpane — one image, two targets.
 #
-#   docker build -t bullmq-visualizer .                       # dashboard (default target: runner)
-#   docker build -t bullmq-visualizer-sim --target simulator . # demo traffic generator
+#   docker build -t bullpane .                       # dashboard (default target: runner)
+#   docker build -t bullpane-sim --target simulator . # demo traffic generator
 #
 # Workspace packages (shared, redis-inspector) are consumed as TypeScript source
 # and the inspector loads its .lua files from disk, so the server runs through
@@ -44,7 +44,7 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/web ./apps/web
-RUN pnpm --filter @bullmq-visualizer/web build
+RUN pnpm --filter @bullpane/web build
 
 # ---------------------------------------------------------------------------
 # runner: server + built UI. Web's build-time deps (vite, react, tailwind) are
@@ -62,16 +62,16 @@ COPY apps/simulator/package.json apps/simulator/
 COPY packages/shared/package.json          packages/shared/
 COPY packages/redis-inspector/package.json packages/redis-inspector/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter '!@bullmq-visualizer/web' --filter '!@bullmq-visualizer/simulator'
+    pnpm install --frozen-lockfile --filter '!@bullpane/web' --filter '!@bullpane/simulator'
 COPY packages ./packages
 COPY apps/server ./apps/server
 COPY --from=build /app/apps/web/dist ./apps/web/dist
-RUN addgroup -S bmv && adduser -S bmv -G bmv && chown -R bmv:bmv /app
-USER bmv
+RUN addgroup -S bullpane && adduser -S bullpane -G bullpane && chown -R bullpane:bullpane /app
+USER bullpane
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
   CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" >/dev/null || exit 1
-CMD ["pnpm", "--filter", "@bullmq-visualizer/server", "start"]
+CMD ["pnpm", "--filter", "@bullpane/server", "start"]
 
 # ---------------------------------------------------------------------------
 # simulator: demo traffic generator (no MySQL, no UI — just bullmq + ioredis)
@@ -85,8 +85,8 @@ COPY apps/simulator/package.json apps/simulator/
 COPY packages/shared/package.json          packages/shared/
 COPY packages/redis-inspector/package.json packages/redis-inspector/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter @bullmq-visualizer/simulator...
+    pnpm install --frozen-lockfile --filter @bullpane/simulator...
 COPY apps/simulator ./apps/simulator
-RUN addgroup -S bmv && adduser -S bmv -G bmv && chown -R bmv:bmv /app
-USER bmv
-CMD ["pnpm", "--filter", "@bullmq-visualizer/simulator", "start"]
+RUN addgroup -S bullpane && adduser -S bullpane -G bullpane && chown -R bullpane:bullpane /app
+USER bullpane
+CMD ["pnpm", "--filter", "@bullpane/simulator", "start"]

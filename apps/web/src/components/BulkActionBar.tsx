@@ -1,6 +1,6 @@
 import { ArrowUpToLine, ChevronDown, ChevronRight, RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
-import type { BulkJobAction, BulkJobActionResult, JobState } from "@bullmq-visualizer/shared";
+import type { BulkJobAction, BulkJobActionResult, JobState } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/Button";

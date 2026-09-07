@@ -1,4 +1,4 @@
-import { hasRole, type Role } from "@bullmq-visualizer/shared";
+import { hasRole, type Role } from "@bullpane/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { forbidden, unauthenticated } from "../plugins/errors";
 

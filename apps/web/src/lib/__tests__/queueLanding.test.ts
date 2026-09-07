@@ -4,7 +4,7 @@
  * para ser verificada.
  */
 import { describe, expect, it } from "vitest";
-import type { QueueCounts } from "@bullmq-visualizer/shared";
+import type { QueueCounts } from "@bullpane/shared";
 import { queueLandingState } from "../queueLanding";
 
 const counts = (patch: Partial<QueueCounts>): QueueCounts => ({

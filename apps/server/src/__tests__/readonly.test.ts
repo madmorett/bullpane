@@ -1,5 +1,5 @@
 /**
- * BMV_READ_ONLY=true must refuse every write, with no route left behind.
+ * BULLPANE_READ_ONLY=true must refuse every write, with no route left behind.
  * The hook is what production trials rely on, so it is tested directly.
  */
 import { describe, expect, it } from "vitest";

@@ -13,7 +13,7 @@
 import { useMemo, useState } from "react";
 import { Bell, BellRing, Pencil, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { Alert } from "@bullmq-visualizer/shared";
+import type { Alert } from "@bullpane/shared";
 import { useAlerts, useFolders } from "@/api/hooks";
 import { useEdition } from "@/edition/useEdition";
 import { useAuth } from "@/auth/AuthProvider";

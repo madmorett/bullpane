@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { addJobSchema } from "@bullmq-visualizer/shared";
+import { addJobSchema } from "@bullpane/shared";
 import { useAddJob } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { toast } from "@/components/Toast";

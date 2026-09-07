@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Database, Pencil, Plug, Plus, Trash2, XCircle } from "lucide-react";
-import { createConnectionSchema, type CreateConnectionInput, type RedisConnection } from "@bullmq-visualizer/shared";
+import { createConnectionSchema, type CreateConnectionInput, type RedisConnection } from "@bullpane/shared";
 import { routes } from "@/lib/routes";
 import { useConnections, useCreateConnection, useDeleteConnection, useTestConnection, useUpdateConnection, type PingResult } from "@/api/hooks";
 import { errorMessage } from "@/api/client";

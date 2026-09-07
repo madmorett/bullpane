@@ -10,8 +10,8 @@ import {
   type RedisConnection,
   redactRedisUrl,
   type UpdateConnectionInput,
-} from "@bullmq-visualizer/shared";
-import type { Inspector, InspectorPool, PingResult } from "@bullmq-visualizer/redis-inspector";
+} from "@bullpane/shared";
+import type { Inspector, InspectorPool, PingResult } from "@bullpane/redis-inspector";
 import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Db } from "../db";

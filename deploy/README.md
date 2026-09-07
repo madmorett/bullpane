@@ -1,6 +1,6 @@
 # Deploy
 
-Formas de rodar o BullMQ Visualizer em produção. Escolha uma.
+Formas de rodar o Bullpane em produção. Escolha uma.
 
 | Caminho | Quando faz sentido | Custo aproximado |
 |---|---|---|
@@ -15,11 +15,11 @@ Em todos os casos o dashboard precisa de:
 2. **Rota de rede até o seu Redis.** É o passo que mais trava deploys.
 3. **`SESSION_SECRET`**, 32+ caracteres aleatórios. Trocar desloga todo mundo.
 
-E, opcionalmente, `BMV_LICENSE_KEY` para habilitar a edição Pro.
+E, opcionalmente, `BULLPANE_LICENSE_KEY` para habilitar a edição Pro.
 
 ## Comece em modo leitura
 
-`BMV_READ_ONLY=true` recusa toda escrita com HTTP 423, mantendo a leitura intacta.
+`BULLPANE_READ_ONLY=true` recusa toda escrita com HTTP 423, mantendo a leitura intacta.
 Ao apontar para uma produção movimentada pela primeira vez, use isso por alguns
 dias. Ver `ecs/RISCO-PRODUCAO.md`.
 

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { JobState } from "@bullmq-visualizer/shared";
+import type { JobState } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatNumber, formatPercent } from "@/lib/format";
 import { STATE_COLORS } from "@/lib/stateColors";

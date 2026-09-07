@@ -3,7 +3,7 @@
  * @fastify/cookie); the row holds who it belongs to and when it expires.
  */
 import { randomBytes } from "node:crypto";
-import type { User } from "@bullmq-visualizer/shared";
+import type { User } from "@bullpane/shared";
 import { and, eq, gt, lt } from "drizzle-orm";
 import type { CookieSerializeOptions } from "@fastify/cookie";
 import type { Config } from "../config";

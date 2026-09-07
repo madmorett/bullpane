@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { PRO_PRICING, type LicensePayload } from "@bullmq-visualizer/shared";
+import { PRO_PRICING, type LicensePayload } from "@bullpane/shared";
 import { describe, expect, it } from "vitest";
 import { isOfflineToken, type LicenseVerification, signLicense, verifyLicenseKey } from "../license";
 import { buildEdition, type OnlineState, type ResolvedLicense } from "../services/edition";

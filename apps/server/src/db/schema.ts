@@ -2,7 +2,7 @@
  * Drizzle schema. Mirrors migrations/*.sql — the SQL files are the source of
  * truth for the database; this file is the typed view the server codes against.
  */
-import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role } from "@bullmq-visualizer/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role } from "@bullpane/shared";
 import {
   boolean,
   datetime,

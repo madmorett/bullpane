@@ -1,36 +1,36 @@
 # Internal production trial: read-only dashboard + its own MySQL.
-# Bring your own Redis (or a read-only replica) via BMV_TRIAL_REDIS_URL — you add
+# Bring your own Redis (or a read-only replica) via BULLPANE_TRIAL_REDIS_URL — you add
 # the connection through the UI, so nothing here needs your Redis credentials.
 #
 #   docker compose -f docker-compose.trial.yml up -d --build
 #
 # Then open http://localhost:3000, create the first admin, and add your Redis
-# connection. Every write is refused while BMV_READ_ONLY=true.
+# connection. Every write is refused while BULLPANE_READ_ONLY=true.
 services:
   app:
     build:
       context: .
       target: runner
-    image: bullmq-visualizer:local
+    image: bullpane:local
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     environment:
       # --- the point of this file ---
-      BMV_READ_ONLY: "true"
+      BULLPANE_READ_ONLY: "true"
       # --- storage ---
-      DATABASE_URL: mysql://bmv:bmv@mysql:3306/bmv
+      DATABASE_URL: mysql://bullpane:bullpane@mysql:3306/bullpane
       # --- required: set a long random value in your .env or shell ---
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET to 32+ random characters}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # --- performance knobs; raise the TTLs to make it quieter on a busy Redis ---
-      BMV_QUEUE_DISCOVERY_TTL: ${BMV_QUEUE_DISCOVERY_TTL:-30}
-      BMV_JOB_PREVIEW_BYTES: ${BMV_JOB_PREVIEW_BYTES:-2048}
-      BMV_ALERTS_INTERVAL: ${BMV_ALERTS_INTERVAL:-15}
-      BMV_AUDIT_RETENTION_DAYS: ${BMV_AUDIT_RETENTION_DAYS:-365}
+      BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
+      BULLPANE_JOB_PREVIEW_BYTES: ${BULLPANE_JOB_PREVIEW_BYTES:-2048}
+      BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
+      BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}
       # --- paste a Pro key here to unlock alerts/users/folders/flows ---
-      BMV_LICENSE_KEY: ${BMV_LICENSE_KEY:-}
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -40,9 +40,9 @@ services:
     restart: unless-stopped
     command: --default-authentication-plugin=caching_sha2_password
     environment:
-      MYSQL_DATABASE: bmv
-      MYSQL_USER: bmv
-      MYSQL_PASSWORD: bmv
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
+      MYSQL_PASSWORD: bullpane
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     volumes:
       - mysql-trial-data:/var/lib/mysql

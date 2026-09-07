@@ -1,4 +1,4 @@
-import type { JobState } from "@bullmq-visualizer/shared";
+import type { JobState } from "@bullpane/shared";
 
 const e = encodeURIComponent;
 

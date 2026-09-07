@@ -1,4 +1,4 @@
-import type { ConnectionHealth } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../auth/guards";
 

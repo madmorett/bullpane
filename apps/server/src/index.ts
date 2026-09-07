@@ -2,7 +2,7 @@
  * Process entry point: config → MySQL (wait + migrate) → app → seed (demo) →
  * listen → alerts engine. Graceful shutdown on SIGINT/SIGTERM.
  */
-import { createInspectorPool } from "@bullmq-visualizer/redis-inspector";
+import { createInspectorPool } from "@bullpane/redis-inspector";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createDatabase, waitForDatabase } from "./db";
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
 
   await app.listen({ port: config.port, host: config.host });
   app.ctx.alertsEngine.start();
-  // Subscription keys: activate a pending BMV_LICENSE_KEY and renew the lease daily.
+  // Subscription keys: activate a pending BULLPANE_LICENSE_KEY and renew the lease daily.
   app.ctx.edition.start();
   // Audit retention runs on its own timer, not on the alerts tick: that tick
   // returns early unless alerts are unlocked, and rows must be pruned either way.

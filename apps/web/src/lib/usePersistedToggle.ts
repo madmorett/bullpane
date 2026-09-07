@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { readStorage, writeStorage } from "./storage";
 
 /**
- * A boolean that remembers itself in localStorage under `bmv.<key>`.
+ * A boolean that remembers itself in localStorage under `bullpane.<key>`.
  *
  * `defaultOpen` is only consulted the FIRST time a key is seen: once the user
  * has expanded or collapsed something we honour that choice even if the

@@ -1,4 +1,4 @@
-import type { Folder, QueueSummary, RedisConnection } from "@bullmq-visualizer/shared";
+import type { Folder, QueueSummary, RedisConnection } from "@bullpane/shared";
 
 export interface QueueEntry {
   connection: RedisConnection;

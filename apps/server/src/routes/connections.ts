@@ -8,8 +8,8 @@ import {
   type RedisServerInfo,
   testConnectionSchema,
   updateConnectionSchema,
-} from "@bullmq-visualizer/shared";
-import type { PingResult } from "@bullmq-visualizer/redis-inspector";
+} from "@bullpane/shared";
+import type { PingResult } from "@bullpane/redis-inspector";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";

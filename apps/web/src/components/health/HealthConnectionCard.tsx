@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ConnectionHealth, HealthPoint } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth, HealthPoint } from "@bullpane/shared";
 import { ChevronRight, Cpu, Gauge, HardDrive, Key, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {

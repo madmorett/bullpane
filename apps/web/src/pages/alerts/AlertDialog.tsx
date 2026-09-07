@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { ALERT_KINDS, createAlertSchema, isErrorAlertKind, type Alert, type AlertChannel, type AlertCondition, type AlertKind, type AlertScope, type CreateAlertInput } from "@bullmq-visualizer/shared";
+import { ALERT_KINDS, createAlertSchema, isErrorAlertKind, type Alert, type AlertChannel, type AlertCondition, type AlertKind, type AlertScope, type CreateAlertInput } from "@bullpane/shared";
 import { useConnections, useCreateAlert, useFolders, useQueues, useUpdateAlert } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { toast } from "@/components/Toast";
@@ -287,7 +287,7 @@ export function AlertDialog({
                 <Trash2 />
               </Button>
               {c.type === "webhook" && (
-                <Textarea aria-label="Headers" mono rows={2} placeholder={"Authorization: Bearer …\nX-Source: bullmq-visualizer"} value={c.headersText} onChange={(e) => setChannel(i, { headersText: e.target.value })} wrapperClassName="sm:col-span-3" hint="One header per line, Name: value" />
+                <Textarea aria-label="Headers" mono rows={2} placeholder={"Authorization: Bearer …\nX-Source: bullpane"} value={c.headersText} onChange={(e) => setChannel(i, { headersText: e.target.value })} wrapperClassName="sm:col-span-3" hint="One header per line, Name: value" />
               )}
             </div>
           ))}

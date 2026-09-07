@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
-import type { QueueRates } from "@bullmq-visualizer/shared";
+import type { QueueRates } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 

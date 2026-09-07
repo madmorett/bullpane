@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { ConnectionHealth, HealthWarning } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth, HealthWarning } from "@bullpane/shared";
 import { Activity, ChevronDown, ChevronRight, OctagonAlert, Pause } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";

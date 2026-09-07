@@ -3,7 +3,7 @@
  * Per docs/API.md the pro gate runs BEFORE the role check, so a viewer on the
  * free edition gets a 402 upsell rather than a 403.
  */
-import type { Edition, ProFeature } from "@bullmq-visualizer/shared";
+import type { Edition, ProFeature } from "@bullpane/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { demoLocked, proRequired, readOnlyLocked } from "./errors";
 

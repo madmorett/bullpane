@@ -4,14 +4,14 @@
  * There is no POST, no PATCH and no DELETE here. A log an admin can edit or
  * clear from the UI answers "what happened?" with "whatever the last admin
  * wanted you to believe", which is worth less than no log at all. Rows leave
- * only by age, through the retention job (BMV_AUDIT_RETENTION_DAYS).
+ * only by age, through the retention job (BULLPANE_AUDIT_RETENTION_DAYS).
  *
  * Role is **admin**, not viewer or operator: the log shows what everyone did,
  * including admin-only actions (connections, users, license). An operator who
  * could read it would learn about access changes that are none of their
  * business. Reading who paused a queue is not the same right as pausing it.
  */
-import { type AuditEntry, type AuditPage, listAuditQuerySchema } from "@bullmq-visualizer/shared";
+import { type AuditEntry, type AuditPage, listAuditQuerySchema } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { requireAuth, requireRole } from "../auth/guards";
 import { requireFeature } from "../plugins/gates";

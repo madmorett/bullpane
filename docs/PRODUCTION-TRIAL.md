@@ -7,7 +7,7 @@ chance of touching a job.
 ## 1. Start read-only
 
 ```bash
-BMV_READ_ONLY=true
+BULLPANE_READ_ONLY=true
 ```
 
 Every non-GET request under `/api` is refused with `423 read_only` before it reaches a handler
@@ -23,12 +23,12 @@ The dashboard's reads are all `SCAN`, `LLEN`, `ZCARD`, `ZCOUNT`, `ZRANGE`, `LRAN
 On Redis 6+ create a user that can do exactly that:
 
 ```
-ACL SETUSER bmv on >a-long-password ~* &* +@read +@scripting +info +client|list -@write -@dangerous
+ACL SETUSER bullpane on >a-long-password ~* &* +@read +@scripting +info +client|list -@write -@dangerous
 ```
 
 `+@scripting` is required for `EVALSHA`; the scripts are declared `readOnly` so a
 `no-writes` ACL still runs them. If your Redis is older than 6, use read-only replicas instead
-(point `BMV` at a replica and the dashboard works unchanged, minus writes).
+(point Bullpane at a replica and the dashboard works unchanged, minus writes).
 
 ## 3. Watch what it costs — from inside the dashboard
 
@@ -84,11 +84,11 @@ redis-cli info clients
 What to expect per refresh cycle, per connection:
 - sidebar/queues poll (every 5 s): one pipeline, one `EVALSHA` per queue
 - queue page (every 3 s): one `EVALSHA` for counts, one for the visible job page
-- discovery: one bounded `SCAN` pass at most every 30 s (`BMV_QUEUE_DISCOVERY_TTL`)
+- discovery: one bounded `SCAN` pass at most every 30 s (`BULLPANE_QUEUE_DISCOVERY_TTL`)
 - setup panel: one `EVALSHA` + one `CLIENT LIST` per queue, cached 10 s
 
-Knobs if you want it quieter: raise `BMV_QUEUE_DISCOVERY_TTL`, lower `BMV_JOB_PREVIEW_BYTES`,
-raise `BMV_ALERTS_INTERVAL`, and use a `queueFilter` on the connection so it only discovers
+Knobs if you want it quieter: raise `BULLPANE_QUEUE_DISCOVERY_TTL`, lower `BULLPANE_JOB_PREVIEW_BYTES`,
+raise `BULLPANE_ALERTS_INTERVAL`, and use a `queueFilter` on the connection so it only discovers
 the queues you care about.
 
 `CLIENT LIST` is O(number of clients). If you run thousands of clients, that call is the one to
@@ -112,7 +112,7 @@ Tick these off before you sell it:
 ## 6. Then loosen up
 
 Order to relax, one step at a time:
-1. `BMV_READ_ONLY=false` but only give people `viewer` roles.
+1. `BULLPANE_READ_ONLY=false` but only give people `viewer` roles.
 2. Give one person `operator` (retry/remove/pause) on a non-critical queue.
 3. Keep `admin` (drain/obliterate/connections/users) to yourself.
 
@@ -127,10 +127,10 @@ Run it next to your infra, not exposed to the internet:
 # docker-compose.trial.yml
 services:
   app:
-    image: bullmq-visualizer:local
+    image: bullpane:local
     environment:
-      BMV_READ_ONLY: "true"
-      DATABASE_URL: mysql://bmv:bmv@mysql:3306/bmv
+      BULLPANE_READ_ONLY: "true"
+      DATABASE_URL: mysql://bullpane:bullpane@mysql:3306/bullpane
       SESSION_SECRET: <32+ random chars>
       PUBLIC_URL: https://queues.internal.example.com
       LOG_LEVEL: info

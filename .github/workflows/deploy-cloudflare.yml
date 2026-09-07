@@ -25,12 +25,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @bullmq-visualizer/license-api test
-      - run: pnpm --filter @bullmq-visualizer/license-api exec wrangler deploy
+      - run: pnpm --filter @bullpane/license-api test
+      - run: pnpm --filter @bullpane/license-api exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - run: pnpm --filter @bullmq-visualizer/website exec wrangler deploy
+      - run: pnpm --filter @bullpane/website exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

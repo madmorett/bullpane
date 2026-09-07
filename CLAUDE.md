@@ -1,4 +1,4 @@
-# BullMQ Visualizer — project instructions
+# Bullpane — project instructions
 
 This directory is NOT part of the book repo in the parent folder. Ignore the book
 instructions (voice, chapters, YODA) when working here.
@@ -24,7 +24,7 @@ contract lives in `packages/shared/src/index.ts`; the Redis contract in
 - Pro features are gated in exactly two places: `requireFeature()` on the server
   (HTTP 402 `pro_required`) and `useEdition()` on the web. Never hide a Pro feature;
   show it locked with the upsell.
-- DTOs and zod schemas live in `@bullmq-visualizer/shared`. Do not redefine them.
+- DTOs and zod schemas live in `@bullpane/shared`. Do not redefine them.
 - Never log job data or Redis URLs with passwords.
 - Must keep working with BullMQ Pro (groups/batches). Pro key names live in
   `packages/redis-inspector/src/keys.ts` only.
@@ -44,4 +44,4 @@ Chave privada de licença (backup): `private/bullpane/license-private.pem` — n
 - `pnpm install` · `pnpm dev` (server :3000 + web :5173) · `pnpm dev:simulator`
 - `pnpm typecheck` · `pnpm test` · `pnpm build`
 - `pnpm demo` → docker compose demo (app + mysql + redis + simulator)
-- Dev Pro key: `pnpm --filter @bullmq-visualizer/server exec tsx scripts/print-dev-license.ts`
+- Dev Pro key: `pnpm --filter @bullpane/server exec tsx scripts/print-dev-license.ts`

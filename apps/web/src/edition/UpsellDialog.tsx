@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Check, ExternalLink, KeyRound, Sparkles } from "lucide-react";
-import { PRO_FEATURES } from "@bullmq-visualizer/shared";
+import { PRO_FEATURES } from "@bullpane/shared";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { FEATURE_COPY } from "./featureCopy";

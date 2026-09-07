@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import type { Role } from "@bullmq-visualizer/shared";
+import type { Role } from "@bullpane/shared";
 import { ShieldAlert } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import { PageSpinner } from "@/components/ui/Spinner";

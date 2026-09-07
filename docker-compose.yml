@@ -1,4 +1,4 @@
-# BullMQ Visualizer — production-ish. Bring your own Redis: you add connections
+# Bullpane — production-ish. Bring your own Redis: you add connections
 # to your BullMQ Redis instances from the dashboard after first-run setup.
 #
 #   cp .env.example .env   # set SESSION_SECRET at least
@@ -13,24 +13,24 @@ services:
     build:
       context: .
       target: runner
-    image: bullmq-visualizer:local
+    image: bullpane:local
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     environment:
       HOST: 0.0.0.0
       PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:-mysql://bmv:bmv@mysql:3306/bmv}
+      DATABASE_URL: ${DATABASE_URL:-mysql://bullpane:bullpane@mysql:3306/bullpane}
       # Random 32+ char string; signs the session cookie. Do not ship the placeholder.
       SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
       # Empty = free edition. Paste your Pro key here or in Settings → License.
-      BMV_LICENSE_KEY: ${BMV_LICENSE_KEY:-}
-      BMV_CHECKOUT_URL: ${BMV_CHECKOUT_URL:-https://bullmq-visualizer.dev/pro}
-      BMV_QUEUE_DISCOVERY_TTL: ${BMV_QUEUE_DISCOVERY_TTL:-30}
-      BMV_ALERTS_INTERVAL: ${BMV_ALERTS_INTERVAL:-15}
-      BMV_AUDIT_RETENTION_DAYS: ${BMV_AUDIT_RETENTION_DAYS:-365}
-      BMV_JOB_PREVIEW_BYTES: ${BMV_JOB_PREVIEW_BYTES:-2048}
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
+      BULLPANE_CHECKOUT_URL: ${BULLPANE_CHECKOUT_URL:-https://bullpane.com/pro}
+      BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
+      BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
+      BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}
+      BULLPANE_JOB_PREVIEW_BYTES: ${BULLPANE_JOB_PREVIEW_BYTES:-2048}
     depends_on:
       mysql:
         condition: service_healthy
@@ -40,9 +40,9 @@ services:
     restart: unless-stopped
     command: --mysql-native-password=ON --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
-      MYSQL_DATABASE: bmv
-      MYSQL_USER: bmv
-      MYSQL_PASSWORD: bmv
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
+      MYSQL_PASSWORD: bullpane
       MYSQL_ROOT_PASSWORD: root
     ports:
       # Exposed so `pnpm dev` on the host can reach it; drop in production.

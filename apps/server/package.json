@@ -1,5 +1,5 @@
 {
-  "name": "@bullmq-visualizer/server",
+  "name": "@bullpane/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "license:dev": "tsx scripts/print-dev-license.ts"
   },
   "dependencies": {
-    "@bullmq-visualizer/redis-inspector": "workspace:*",
-    "@bullmq-visualizer/shared": "workspace:*",
+    "@bullpane/redis-inspector": "workspace:*",
+    "@bullpane/shared": "workspace:*",
     "@fastify/cookie": "^11.0.1",
     "@fastify/static": "^8.0.3",
     "bcryptjs": "^2.4.3",

@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-import type { ConnectionHealth } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth } from "@bullpane/shared";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useConnectionsHealth } from "@/api/hooks";
 

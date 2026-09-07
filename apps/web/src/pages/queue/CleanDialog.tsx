@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanQueueSchema, type CleanQueueInput } from "@bullmq-visualizer/shared";
+import { cleanQueueSchema, type CleanQueueInput } from "@bullpane/shared";
 import { useQueueAction } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { formatNumber } from "@/lib/format";

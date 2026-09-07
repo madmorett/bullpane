@@ -1,11 +1,11 @@
 # Architecture
 
-BullMQ Visualizer is a self-hosted dashboard for BullMQ and BullMQ Pro. It follows the
+Bullpane is a self-hosted dashboard for BullMQ and BullMQ Pro. It follows the
 Metabase model: a free edition that does everything the open-source dashboards do, and a
 Pro subscription (USD 19/month or 149/year, one installation) that unlocks team features.
 
 ```
-bullmq-visualizer/
+bullpane/
 ├── apps/
 │   ├── server/          Fastify API + serves the built web UI. Owns MySQL, auth, alerts, licensing.
 │   ├── web/             React + Vite dashboard.
@@ -212,7 +212,7 @@ signed with the vendor Ed25519 key whose public half is compiled into the server
   makes the server call the license API (`apps/license-api`, api.bullpane.com), which
   activates the key at the store — activation limit 1, so a key works on exactly one
   installation — and answers with a **7-day signed lease**. The server refreshes the
-  lease every `BMV_LICENSE_REFRESH_HOURS` (24). No answer keeps the lease and shows
+  lease every `BULLPANE_LICENSE_REFRESH_HOURS` (24). No answer keeps the lease and shows
   "grace"; a definitive answer (cancelled, expired, used elsewhere) locks Pro at once.
   Removing the key releases the activation so it can be used on another server.
 * **Offline key**, hand-signed with `scripts/gen-license.ts` for customers who cannot
@@ -317,7 +317,7 @@ gated, so upgrading later reveals history that was already captured instead of s
 from zero. Second, the page is shown locked with the upsell rather than hidden, so the
 capability is discoverable exactly when someone needs it.
 
-Retention is `BMV_AUDIT_RETENTION_DAYS` (default 365, `0` = forever), pruned once a day on
+Retention is `BULLPANE_AUDIT_RETENTION_DAYS` (default 365, `0` = forever), pruned once a day on
 its own timer rather than on the alerts tick — that tick returns early unless alerts are
 unlocked, which would let rows grow forever after a licence lapsed. Roughly 350-600 bytes
 per row including indexes; a dashboard humans click writes a few hundred rows a day

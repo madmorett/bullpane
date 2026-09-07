@@ -1,4 +1,4 @@
-import { createFlowEdgeSchema, type FlowEdge, type FlowGraph } from "@bullmq-visualizer/shared";
+import { createFlowEdgeSchema, type FlowEdge, type FlowGraph } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/guards";

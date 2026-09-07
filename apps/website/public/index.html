@@ -102,7 +102,7 @@ docker run -d --name bullpane -p 3000:3000 \
       <div class="card"><h3>Queue operations, with guard rails</h3><p>Pause, resume, clean, retry-all, drain and obliterate. The destructive ones need the admin role and are recorded.</p></div>
       <div class="card"><h3>BullMQ Pro aware</h3><p>Groups, batches and group-level concurrency are first-class. Job schedulers are listed and removable.</p></div>
       <div class="card"><h3>Built for production Redis</h3><p>No <code>KEYS</code>. Discovery via <code>SCAN</code>, cached. One Lua round trip per queue, payloads truncated inside Redis. Cluster-safe.</p></div>
-      <div class="card"><h3>Real login, read-only mode</h3><p>Admin account with sessions. <code>BMV_READ_ONLY=true</code> refuses every write while you point it at production for the first time.</p></div>
+      <div class="card"><h3>Real login, read-only mode</h3><p>Admin account with sessions. <code>BULLPANE_READ_ONLY=true</code> refuses every write while you point it at production for the first time.</p></div>
     </div>
   </div>
 </section>
@@ -177,7 +177,7 @@ docker run -d --name bullpane -p 3000:3000 \
     <details><summary>What if my server cannot reach the internet?</summary><p>After a successful check the installation keeps Pro for seven days without any contact, and shows a "grace period" badge so you know. Air-gapped for real? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> for an offline key that never phones home.</p></details>
     <details><summary>Does anything about my queues leave my network?</summary><p>No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all.</p></details>
     <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups, batches and group concurrency are shown in both editions. Bullpane reads the same Redis keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>
-    <details><summary>Can it hurt my production Redis?</summary><p>That was the design constraint. No <code>KEYS</code>, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with <code>BMV_READ_ONLY=true</code> if you want to watch before you trust it.</p></details>
+    <details><summary>Can it hurt my production Redis?</summary><p>That was the design constraint. No <code>KEYS</code>, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with <code>BULLPANE_READ_ONLY=true</code> if you want to watch before you trust it.</p></details>
     <details><summary>What happens when I cancel?</summary><p>The installation goes back to the free edition. Alerts, folders, users and the audit log stay in your database and become accessible again the moment a key is activated.</p></details>
     <details><summary>Which database does it need?</summary><p>MySQL 8 (or MariaDB) for users, sessions, alerts and the audit log. Redis is only ever read, and written through the official BullMQ API for job actions.</p></details>
   </div>

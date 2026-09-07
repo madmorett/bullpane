@@ -3,7 +3,7 @@
  * verifies: base64url(payloadJson) + "." + base64url(signature), where the
  * signature covers the ASCII bytes of the base64url payload string.
  */
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import type { LicensePayload } from "@bullpane/shared";
 
 function b64url(bytes: ArrayBuffer | Uint8Array): string {
   const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

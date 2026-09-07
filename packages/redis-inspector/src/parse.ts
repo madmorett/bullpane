@@ -5,7 +5,7 @@
  * Rule: never throw on malformed JSON. A job with a hand-edited `data` field
  * still has to show up in the dashboard, so bad JSON falls back to the raw string.
  */
-import type { JobDetail, JobParentRef, JobScheduler, JobState, JobSummary } from "@bullmq-visualizer/shared";
+import type { JobDetail, JobParentRef, JobScheduler, JobState, JobSummary } from "@bullpane/shared";
 import { GROUP_ID_FIELDS, JOB_SUMMARY_FIELDS, queueNameFromQueueKey } from "./keys.js";
 import { isRecord, safeJsonParse, toInt, toIntOrNull } from "./util.js";
 

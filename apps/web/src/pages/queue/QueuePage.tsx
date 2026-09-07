@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowDownUp, BarChart3, Bell, CalendarClock, ChevronDown, Eraser, Flame, Layers, Pause, Play, Plus, RotateCcw, ScrollText, Search, Trash2, Unplug, X } from "lucide-react";
-import { BULK_JOB_LIMIT, JOB_STATES, type BulkJobAction, type BulkJobActionResult, type JobState } from "@bullmq-visualizer/shared";
+import { BULK_JOB_LIMIT, JOB_STATES, type BulkJobAction, type BulkJobActionResult, type JobState } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";

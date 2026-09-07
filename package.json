@@ -1,5 +1,5 @@
 {
-  "name": "bullmq-visualizer",
+  "name": "bullpane",
   "version": "0.1.0",
   "private": true,
   "description": "A fast, self-hosted dashboard for BullMQ and BullMQ Pro. Free core, one-time Pro upgrade.",
@@ -10,12 +10,12 @@
   },
   "scripts": {
     "dev": "pnpm -r --parallel --filter ./apps/server --filter ./apps/web dev",
-    "dev:simulator": "pnpm --filter @bullmq-visualizer/simulator dev",
+    "dev:simulator": "pnpm --filter @bullpane/simulator dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "start": "pnpm --filter @bullmq-visualizer/server start",
+    "start": "pnpm --filter @bullpane/server start",
     "license:keygen": "tsx scripts/gen-license.ts keygen",
     "license:sign": "tsx scripts/gen-license.ts sign",
     "demo": "docker compose -f docker-compose.demo.yml up --build"

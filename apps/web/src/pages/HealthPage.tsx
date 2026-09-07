@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ConnectionHealth } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth } from "@bullpane/shared";
 import { Page, PageHeader } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/Badge";
 import { Table, Td, Th, TableMessage } from "@/components/ui/Table";

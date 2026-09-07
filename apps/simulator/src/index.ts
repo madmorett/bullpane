@@ -1,5 +1,5 @@
 /**
- * BullMQ Visualizer demo simulator.
+ * Bullpane demo simulator.
  *
  * Keeps a Redis looking like a busy mid-sized company so the dashboard has
  * something to show: payments, notifications, an ETL flow, reports, media,

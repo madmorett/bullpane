@@ -4,7 +4,7 @@
  * a scripted license client, with a controllable clock.
  */
 import { generateKeyPairSync } from "node:crypto";
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import type { LicensePayload } from "@bullpane/shared";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../config";
 import { signLicense } from "../license";
@@ -247,9 +247,9 @@ describe("EditionService with a subscription key", () => {
     expect(logs.some((m) => /could not release/.test(m))).toBe(true);
   });
 
-  it("activates BMV_LICENSE_KEY on the first refresh after boot, then reloads from settings", async () => {
+  it("activates BULLPANE_LICENSE_KEY on the first refresh after boot, then reloads from settings", async () => {
     const store = new MemorySettingsStore();
-    const first = harness({ activate: async () => lease(T0, "act_env") }, { env: { BMV_LICENSE_KEY: KEY }, store });
+    const first = harness({ activate: async () => lease(T0, "act_env") }, { env: { BULLPANE_LICENSE_KEY: KEY }, store });
     let e = await first.service.load();
     expect(e.tier).toBe("free");
     expect(first.service.needsRefresh(true)).toBe(true);
@@ -258,7 +258,7 @@ describe("EditionService with a subscription key", () => {
     expect(first.calls).toEqual(["activate"]);
 
     // Restart: the stored activation is used, no second activation.
-    const second = harness({}, { env: { BMV_LICENSE_KEY: KEY }, store });
+    const second = harness({}, { env: { BULLPANE_LICENSE_KEY: KEY }, store });
     e = await second.service.load();
     expect(e.tier).toBe("pro");
     expect(second.calls).toEqual([]);
@@ -268,14 +268,14 @@ describe("EditionService with a subscription key", () => {
     expect(second.service.needsRefresh(true)).toBe(true);
   });
 
-  it("keeps running the free edition when BMV_LICENSE_KEY is rejected, and retries later", async () => {
+  it("keeps running the free edition when BULLPANE_LICENSE_KEY is rejected, and retries later", async () => {
     const { service, logs, calls } = harness(
       {
         activate: async () => {
           throw new LicenseApiFailure("license_not_found", "no such key", 404);
         },
       },
-      { env: { BMV_LICENSE_KEY: KEY } },
+      { env: { BULLPANE_LICENSE_KEY: KEY } },
     );
     await service.load();
     const e = await service.refresh();

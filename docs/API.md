@@ -245,7 +245,7 @@ rows, appending a `# truncated at ...` comment line rather than silently losing 
 half of the year. Cells are RFC-4180 quoted and any leading `=`/`+`/`-`/`@` is prefixed
 with `'`, so a crafted user-agent string cannot become a spreadsheet formula.
 
-**Retention** is `BMV_AUDIT_RETENTION_DAYS` (default 365, `0` = forever), pruned once a
+**Retention** is `BULLPANE_AUDIT_RETENTION_DAYS` (default 365, `0` = forever), pruned once a
 day on its own timer — not on the alerts tick, which returns early unless alerts are
 unlocked and would let rows grow forever after a license lapsed. Size is roughly 350-600
 bytes per row including indexes: a few hundred rows a day for a dashboard humans click

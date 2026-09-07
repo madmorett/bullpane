@@ -27,14 +27,14 @@ is a subscription key.
 
 ### Subscription key lifecycle
 
-1. Admin pastes the key in Settings → License (or sets `BMV_LICENSE_KEY`).
+1. Admin pastes the key in Settings → License (or sets `BULLPANE_LICENSE_KEY`).
 2. Server `POST api.bullpane.com/v1/license/activate { key, instance: { label, version } }`.
    The API activates the key at Polar (`label` = hostname + PUBLIC_URL, shown in the
    customer portal) and answers `{ lease }`. Polar refusing because the key is already
    active elsewhere becomes **409 `license_already_activated`** in the dashboard.
 3. Server verifies the lease with the compiled-in public key, stores key + activation id
    + lease in `settings`, and is Pro.
-4. Every `BMV_LICENSE_REFRESH_HOURS` (24) it calls `/v1/license/refresh { key, activationId }`
+4. Every `BULLPANE_LICENSE_REFRESH_HOURS` (24) it calls `/v1/license/refresh { key, activationId }`
    and gets a new 7-day lease. On boot it only re-checks if the last check is older than
    an hour or failed, so restart storms don't hammer the API.
 5. Outcomes, visible as `Edition.license.status`:
@@ -113,9 +113,9 @@ key like a production secret (offline, backed up, never in CI).
 
 ## Activating
 
-1. Buy at the checkout URL (`BMV_CHECKOUT_URL`, shown on the "Unlock Pro" button).
+1. Buy at the checkout URL (`BULLPANE_CHECKOUT_URL`, shown on the "Unlock Pro" button).
    The key is on the receipt and in the Polar customer portal.
-2. Paste the key in **Settings → License**, or set `BMV_LICENSE_KEY` in the
+2. Paste the key in **Settings → License**, or set `BULLPANE_LICENSE_KEY` in the
    environment. A key stored through the UI wins over the env var on boot; an env
    key with no stored activation is activated a few seconds after boot.
 3. The `Edition` returned by `/api/edition` flips to `tier: "pro"` and every
@@ -129,7 +129,7 @@ pnpm test                                   # scripted Polar, real Ed25519
 wrangler secret put LICENSE_PRIVATE_KEY_PEM  # paste keys/license-private.pem
 wrangler secret put POLAR_ORGANIZATION_ID
 pnpm dev                                    # http://localhost:8787
-# then run the server with BMV_LICENSE_API_URL=http://localhost:8787
+# then run the server with BULLPANE_LICENSE_API_URL=http://localhost:8787
 ```
 
 To test the whole loop without paying, the Polar discount code in

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { PRO_FEATURES, PRO_PRICING, type Edition, type ProFeature, type ProPricing } from "@bullmq-visualizer/shared";
+import { PRO_FEATURES, PRO_PRICING, type Edition, type ProFeature, type ProPricing } from "@bullpane/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { openUpsell } from "./upsellStore";
 

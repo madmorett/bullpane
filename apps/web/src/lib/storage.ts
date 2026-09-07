@@ -1,8 +1,8 @@
 /**
  * localStorage that never throws (private windows, disabled storage, quota).
- * Keys are namespaced with `bmv.` to match the sidebar's existing entries.
+ * Keys are namespaced with `bullpane.` to match the sidebar's existing entries.
  */
-const PREFIX = "bmv.";
+const PREFIX = "bullpane.";
 
 export function readStorage<T>(key: string, fallback: T, parse: (raw: string) => T | undefined = defaultParse): T {
   try {

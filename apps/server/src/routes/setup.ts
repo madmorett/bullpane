@@ -1,4 +1,4 @@
-import { type MeResponse, type SetupStatus, setupSchema } from "@bullmq-visualizer/shared";
+import { type MeResponse, type SetupStatus, setupSchema } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { SESSION_COOKIE, sessionCookieOptions } from "../auth/sessions";
 import { conflict } from "../plugins/errors";

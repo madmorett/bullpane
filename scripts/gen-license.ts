@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Vendor-side licensing tool for BullMQ Visualizer Pro.
+ * Vendor-side licensing tool for Bullpane Pro.
  *
  *   tsx scripts/gen-license.ts keygen [--out keys]
  *   tsx scripts/gen-license.ts sign --licensee "Acme" --email a@b.c [--expires 2027-01-01] [--notes "1.x"] [--key keys/license-private.pem]

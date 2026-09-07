@@ -10,7 +10,7 @@
  * BullMQ Pro adds group keys under the same qualified name (`groups*`). Their
  * exact layout is not published, so they live here so a change is a one-file fix.
  */
-import { STATE_KEY, type JobState } from "@bullmq-visualizer/shared";
+import { STATE_KEY, type JobState } from "@bullpane/shared";
 
 /** `${prefix}:${queue}` — what BullMQ calls the "queue qualified name". */
 export function queueKey(prefix: string, queue: string): string {

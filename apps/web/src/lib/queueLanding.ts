@@ -1,4 +1,4 @@
-import type { JobState, QueueCounts } from "@bullmq-visualizer/shared";
+import type { JobState, QueueCounts } from "@bullpane/shared";
 
 /**
  * Para qual estado um clique numa fila deve levar.

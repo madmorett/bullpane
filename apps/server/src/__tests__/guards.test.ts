@@ -1,4 +1,4 @@
-import type { Edition, User } from "@bullmq-visualizer/shared";
+import type { Edition, User } from "@bullpane/shared";
 import type { FastifyRequest } from "fastify";
 import { describe, expect, it } from "vitest";
 import { requireAuth, requireRole } from "../auth/guards";

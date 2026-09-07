@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from "@bullmq-visualizer/shared";
+import type { ConnectionStatus } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatRelative } from "@/lib/format";

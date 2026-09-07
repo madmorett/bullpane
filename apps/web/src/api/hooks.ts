@@ -48,11 +48,11 @@ import type {
   testConnectionSchema,
   updateAlertSchema,
   updateFolderSchema,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { api, buildUrl, seg } from "./client";
 
 // ---------------------------------------------------------------------------
-// Shapes referenced by API.md that are not (yet) in @bullmq-visualizer/shared.
+// Shapes referenced by API.md that are not (yet) in @bullpane/shared.
 // Kept deliberately loose and rendered defensively.
 // ---------------------------------------------------------------------------
 

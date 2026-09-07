@@ -7,7 +7,7 @@ import {
   AUDIT_HIGH_RISK_ACTIONS,
   type AuditAction,
   type AuditEntry,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatDateTime } from "@/lib/format";
@@ -261,7 +261,7 @@ function AuditLog() {
       </div>
 
       <p className="mt-4 text-xs text-fg-subtle">
-        Retention is <code className="font-mono">BMV_AUDIT_RETENTION_DAYS</code> (default 365). Rows leave only by age —
+        Retention is <code className="font-mono">BULLPANE_AUDIT_RETENTION_DAYS</code> (default 365). Rows leave only by age —
         there is no delete endpoint, on purpose. The job payload is never recorded: <code className="font-mono">detail</code>{" "}
         holds the parameters of an action and, where it helps, the payload size in bytes.
       </p>

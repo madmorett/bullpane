@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
-import type { FolderQueueRef } from "@bullmq-visualizer/shared";
+import type { FolderQueueRef } from "@bullpane/shared";
 import { useAllQueues } from "@/api/hooks";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";

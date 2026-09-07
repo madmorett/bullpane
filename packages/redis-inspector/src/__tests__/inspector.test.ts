@@ -7,7 +7,7 @@ import { execSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { FlowProducer, Queue, Worker, type Job } from "bullmq";
-import { JOB_STATES } from "@bullmq-visualizer/shared";
+import { JOB_STATES } from "@bullpane/shared";
 import {
   RedisInspector,
   RedisInspectorPool,
@@ -434,7 +434,7 @@ describe("writes (official bullmq API)", () => {
     await inspector.discardJob("stuck", job.id!);
     const detail = await inspector.getJob("stuck", job.id!);
     expect(detail!.state).toBe("failed");
-    expect(detail!.failedReason).toBe("Discarded from BullMQ Visualizer");
+    expect(detail!.failedReason).toBe("Discarded from Bullpane");
     await expect(inspector.discardJob("stuck", job.id!)).rejects.toThrow(/cannot_discard_job_in_state_failed/);
     release();
     await worker.close(true);

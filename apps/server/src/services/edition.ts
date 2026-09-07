@@ -5,7 +5,7 @@
  *   offline token (payload.signature)  → verified locally, perpetual or dated
  *   store key (BULLPANE-…)             → activated once through the license API,
  *                                        which answers with a 7-day signed lease;
- *                                        refreshed every BMV_LICENSE_REFRESH_HOURS
+ *                                        refreshed every BULLPANE_LICENSE_REFRESH_HOURS
  *   nothing                            → free
  *
  * The lease is the whole trick: the server verifies it with the same Ed25519
@@ -15,7 +15,7 @@
  * a refresh that gets no answer keeps the lease and shows "grace".
  *
  * Persistence: `settings.license_key` holds what the admin pasted (or
- * BMV_LICENSE_KEY on first boot), `settings.license_online` the activation
+ * BULLPANE_LICENSE_KEY on first boot), `settings.license_online` the activation
  * id, the current lease and the last check. Both are removed together.
  */
 import os from "node:os";
@@ -27,7 +27,7 @@ import {
   PRO_FEATURES,
   PRO_PRICING,
   type ProFeature,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import type { Config } from "../config";
 import { errorMessage, HttpError, invalidLicense, licenseAlreadyActivated, licenseServerUnavailable } from "../plugins/errors";
 import { isOfflineToken, type LicenseVerification, verifyLicenseKey } from "../license";
@@ -355,13 +355,13 @@ export class EditionService {
       const activationId = this.acceptLease(lease, null);
       await this.settings.set(LICENSE_SETTING_KEY, key);
       await this.writeOnlineState({ activationId, lease, lastCheckedAt: this.now(), lastCheckError: null });
-      this.log.info({ activationId }, "subscription license activated from BMV_LICENSE_KEY");
+      this.log.info({ activationId }, "subscription license activated from BULLPANE_LICENSE_KEY");
       await this.load();
     } catch (err) {
       const failure = toCheckError(err);
       this.log.warn(
         { code: failure.code, message: failure.message },
-        failure.definitive ? "BMV_LICENSE_KEY rejected by the store; running the free edition" : "could not activate BMV_LICENSE_KEY yet; will retry",
+        failure.definitive ? "BULLPANE_LICENSE_KEY rejected by the store; running the free edition" : "could not activate BULLPANE_LICENSE_KEY yet; will retry",
       );
     }
   }

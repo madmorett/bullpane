@@ -1,5 +1,5 @@
 {
-  "name": "@bullmq-visualizer/license-api",
+  "name": "@bullpane/license-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bullmq-visualizer/shared": "workspace:*",
+    "@bullpane/shared": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CalendarClock, Repeat, Trash2 } from "lucide-react";
-import type { JobScheduler } from "@bullmq-visualizer/shared";
+import type { JobScheduler } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import { useRemoveScheduler, useSchedulers } from "@/api/hooks";

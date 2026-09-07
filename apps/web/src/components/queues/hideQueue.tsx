@@ -14,7 +14,7 @@
  */
 import { EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { HiddenQueue } from "@bullmq-visualizer/shared";
+import type { HiddenQueue } from "@bullpane/shared";
 import { api, errorMessage, seg } from "@/api/client";
 import { qk, useSetQueueHidden } from "@/api/hooks";
 import { toast } from "@/components/Toast";

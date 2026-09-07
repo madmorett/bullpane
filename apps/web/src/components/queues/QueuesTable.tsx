@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import type { JobState } from "@bullmq-visualizer/shared";
+import type { JobState } from "@bullpane/shared";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeOff, Pause, Play, Search } from "lucide-react";
 import { cn } from "@/lib/cn";

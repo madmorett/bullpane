@@ -14,7 +14,7 @@
  */
 import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { HiddenQueue } from "@bullmq-visualizer/shared";
+import type { HiddenQueue } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { usePersistedToggle } from "@/lib/usePersistedToggle";

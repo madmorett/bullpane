@@ -12,7 +12,7 @@ import {
   type LicenseApiErrorCode,
   type LicenseLeaseResponse,
   type LicenseRefreshRequest,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 
 export class LicenseApiFailure extends Error {
   constructor(

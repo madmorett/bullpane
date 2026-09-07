@@ -1,12 +1,12 @@
-# @bullmq-visualizer/server
+# @bullpane/server
 
 Fastify 5 API that owns MySQL (users, sessions, connections, folders, alerts, flow edges,
 settings), auth, licensing and the alert engine, and serves the built web UI. All reads of a
-customer's Redis go through `@bullmq-visualizer/redis-inspector`; this package never opens an
+customer's Redis go through `@bullpane/redis-inspector`; this package never opens an
 ioredis connection itself.
 
 The route contract is `docs/API.md`; the DTOs and zod schemas come from
-`@bullmq-visualizer/shared` and are never redefined here.
+`@bullpane/shared` and are never redefined here.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ The route contract is `docs/API.md`; the DTOs and zod schemas come from
 # from the repo root
 cp .env.example .env            # set SESSION_SECRET (32+ random chars)
 docker compose up mysql -d      # or any MySQL 8 reachable at DATABASE_URL
-pnpm --filter @bullmq-visualizer/server dev   # tsx watch, reads ../../.env
+pnpm --filter @bullpane/server dev   # tsx watch, reads ../../.env
 ```
 
 First boot waits for MySQL (retries for 60 s, one log line every 2 s), applies
@@ -55,16 +55,16 @@ Every variable in `/.env.example` is read in `src/config.ts`; nothing else touch
 | `HOST` | `0.0.0.0` | |
 | `SESSION_SECRET` | — | **Required** unless `DEMO_MODE=true` (then a random one is generated with a loud warning: every restart logs everyone out). Signs the `bmv_session` cookie. |
 | `PUBLIC_URL` | `http://localhost:3000` | Used in Slack/webhook links (`/c/:connectionId/q/:queue`). `https://` makes the cookie `Secure`. |
-| `DATABASE_URL` | `mysql://bmv:bmv@localhost:3306/bmv` | |
-| `BMV_LICENSE_KEY` | empty | Pro license. A key saved via `PUT /api/license` (settings table) wins over the env var. |
-| `BMV_CHECKOUT_URL` | `https://bullmq-visualizer.dev/pro` | Target of the "Unlock Pro" button. |
+| `DATABASE_URL` | `mysql://bullpane:bullpane@localhost:3306/bullpane` | |
+| `BULLPANE_LICENSE_KEY` | empty | Pro license. A key saved via `PUT /api/license` (settings table) wins over the env var. |
+| `BULLPANE_CHECKOUT_URL` | `https://bullpane.com/pro` | Target of the "Unlock Pro" button. |
 | `DEMO_MODE` | `false` | See above. |
 | `DEMO_REDIS_URL` | `redis://localhost:6379` | |
-| `DEMO_ADMIN_EMAIL` | `demo@bullmq-visualizer.dev` | |
+| `DEMO_ADMIN_EMAIL` | `demo@bullpane.com` | |
 | `DEMO_ADMIN_PASSWORD` | `demo1234` | |
-| `BMV_QUEUE_DISCOVERY_TTL` | `30` | seconds the discovered queue list is cached per connection |
-| `BMV_ALERTS_INTERVAL` | `15` | seconds between alert evaluations |
-| `BMV_JOB_PREVIEW_BYTES` | `2048` | bytes of job `data` kept in list views |
+| `BULLPANE_QUEUE_DISCOVERY_TTL` | `30` | seconds the discovered queue list is cached per connection |
+| `BULLPANE_ALERTS_INTERVAL` | `15` | seconds between alert evaluations |
+| `BULLPANE_JOB_PREVIEW_BYTES` | `2048` | bytes of job `data` kept in list views |
 | `WEB_DIST` | `../web/dist` (relative to `apps/server`) | Built UI. Served with an SPA fallback when the directory exists. |
 | `LICENSE_PUBLIC_KEY_B64` | compiled-in key | DER/SPKI base64 Ed25519 public key override (development). |
 | `LOG_LEVEL` | `info` | pino level |
@@ -77,7 +77,7 @@ the public key in `src/license.ts` (`LICENSE_PUBLIC_KEY_B64`). No phone-home.
 Edition resolution (`src/services/edition.ts`), cached and invalidated by `PUT`/`DELETE /api/license`:
 
 1. `DEMO_MODE=true` → `pro` with `demo: true`
-2. valid key in the `settings` table (`license_key`) or `BMV_LICENSE_KEY` → `pro`
+2. valid key in the `settings` table (`license_key`) or `BULLPANE_LICENSE_KEY` → `pro`
 3. otherwise `free` (all four features off; `GET /api/edition` still shows the price and checkout URL)
 
 ### Getting a dev Pro license
@@ -87,9 +87,9 @@ The compiled-in public key is a **development placeholder**. Its private half li
 `dev-license-public.pem`). To test Pro locally:
 
 ```bash
-pnpm --filter @bullmq-visualizer/server license:dev              # perpetual
-pnpm --filter @bullmq-visualizer/server license:dev -- --days 7  # expiring
-BMV_LICENSE_KEY='<printed key>' pnpm dev                         # or paste it in Settings → License
+pnpm --filter @bullpane/server license:dev              # perpetual
+pnpm --filter @bullpane/server license:dev -- --days 7  # expiring
+BULLPANE_LICENSE_KEY='<printed key>' pnpm dev                         # or paste it in Settings → License
 ```
 
 If `keys/` is missing (fresh clone), regenerate a pair and update the constant — the script prints
@@ -128,7 +128,7 @@ become `409 conflict`. Job data is never logged.
 
 ## Read-only mode
 
-`BMV_READ_ONLY=true` refuses every mutating request under `/api` with `423 read_only`,
+`BULLPANE_READ_ONLY=true` refuses every mutating request under `/api` with `423 read_only`,
 enforced by one `onRequest` hook (`src/plugins/gates.ts`) rather than per route, so a new
 route cannot forget it. `POST /api/auth/login` and `/logout` stay allowed. Use it when
 pointing the dashboard at a production Redis for the first time. See
@@ -136,7 +136,7 @@ pointing the dashboard at a production Redis for the first time. See
 
 ## How alerts evaluate
 
-`src/alerts/engine.ts` ticks every `BMV_ALERTS_INTERVAL` seconds, only while the edition has the
+`src/alerts/engine.ts` ticks every `BULLPANE_ALERTS_INTERVAL` seconds, only while the edition has the
 `alerts` feature. An alert is scoped to one **queue** or to a **folder** (every queue in the
 folder, across connections; fires when any breaches, the worst queue is reported). Per tick, per
 connection, it does **one** `discoverQueues + getQueueStats` call, shared by every alert that

@@ -1,5 +1,5 @@
 {
-  "name": "@bullmq-visualizer/redis-inspector",
+  "name": "@bullpane/redis-inspector",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bullmq-visualizer/shared": "workspace:*",
+    "@bullpane/shared": "workspace:*",
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.2"
   },

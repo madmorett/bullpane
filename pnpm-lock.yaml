@@ -29,7 +29,7 @@ importers:
 
   apps/license-api:
     dependencies:
-      '@bullmq-visualizer/shared':
+      '@bullpane/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       zod:
@@ -51,10 +51,10 @@ importers:
 
   apps/server:
     dependencies:
-      '@bullmq-visualizer/redis-inspector':
+      '@bullpane/redis-inspector':
         specifier: workspace:*
         version: link:../../packages/redis-inspector
-      '@bullmq-visualizer/shared':
+      '@bullpane/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@fastify/cookie':
@@ -119,7 +119,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@bullmq-visualizer/shared':
+      '@bullpane/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tanstack/react-query':
@@ -180,7 +180,7 @@ importers:
 
   packages/redis-inspector:
     dependencies:
-      '@bullmq-visualizer/shared':
+      '@bullpane/shared':
         specifier: workspace:*
         version: link:../shared
       bullmq:

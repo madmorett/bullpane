@@ -1,4 +1,4 @@
-import type { Folder, FolderQueueRef } from "@bullmq-visualizer/shared";
+import type { Folder, FolderQueueRef } from "@bullpane/shared";
 import { eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Db } from "../db";

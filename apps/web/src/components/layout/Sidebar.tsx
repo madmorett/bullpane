@@ -14,7 +14,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
-import type { Folder as FolderModel, ProFeature, QueueSummary, RedisConnection } from "@bullmq-visualizer/shared";
+import type { Folder as FolderModel, ProFeature, QueueSummary, RedisConnection } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { queueLandingState } from "@/lib/queueLanding";
@@ -199,7 +199,7 @@ function NavItem({
 }
 
 /**
- * Sidebar disclosure state, persisted under `bmv.sidebar.<key>`.
+ * Sidebar disclosure state, persisted under `bullpane.sidebar.<key>`.
  * The key namespace is unchanged, so choices made before this refactor survive.
  */
 function useExpanded(key: string, defaultOpen = true) {

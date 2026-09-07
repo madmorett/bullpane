@@ -1,5 +1,5 @@
 {
-  "family": "bullmq-visualizer",
+  "family": "bullpane",
   "networkMode": "awsvpc",
   "requiresCompatibilities": [
     "FARGATE"
@@ -14,8 +14,8 @@
   "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<EXECUTION_ROLE>",
   "containerDefinitions": [
     {
-      "name": "bullmq-visualizer",
-      "image": "<REGISTRY>/bullmq-visualizer:<VERSION>",
+      "name": "bullpane",
+      "image": "<REGISTRY>/bullpane:<VERSION>",
       "essential": true,
       "portMappings": [
         {
@@ -38,7 +38,7 @@
           "value": "https://queues.example.com"
         },
         {
-          "name": "BMV_READ_ONLY",
+          "name": "BULLPANE_READ_ONLY",
           "value": "true"
         },
         {
@@ -46,30 +46,30 @@
           "value": "info"
         },
         {
-          "name": "BMV_QUEUE_DISCOVERY_TTL",
+          "name": "BULLPANE_QUEUE_DISCOVERY_TTL",
           "value": "30"
         },
         {
-          "name": "BMV_JOB_PREVIEW_BYTES",
+          "name": "BULLPANE_JOB_PREVIEW_BYTES",
           "value": "2048"
         },
         {
-          "name": "BMV_ALERTS_INTERVAL",
+          "name": "BULLPANE_ALERTS_INTERVAL",
           "value": "15"
         }
       ],
       "secrets": [
         {
           "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullmq-visualizer/database-url"
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullpane/database-url"
         },
         {
           "name": "SESSION_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullmq-visualizer/session-secret"
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullpane/session-secret"
         },
         {
-          "name": "BMV_LICENSE_KEY",
-          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullmq-visualizer/license-key"
+          "name": "BULLPANE_LICENSE_KEY",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:bullpane/license-key"
         }
       ],
       "healthCheck": {
@@ -85,7 +85,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/bullmq-visualizer",
+          "awslogs-group": "/ecs/bullpane",
           "awslogs-region": "<REGION>",
           "awslogs-stream-prefix": "ecs"
         }

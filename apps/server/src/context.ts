@@ -2,8 +2,8 @@
  * Everything a route handler can reach through `request.server.ctx`.
  * Built by buildApp() in app.ts.
  */
-import type { User } from "@bullmq-visualizer/shared";
-import type { InspectorPool } from "@bullmq-visualizer/redis-inspector";
+import type { User } from "@bullpane/shared";
+import type { InspectorPool } from "@bullpane/redis-inspector";
 import type { AlertsEngine } from "./alerts/engine";
 import type { SessionService } from "./auth/sessions";
 import type { Config } from "./config";

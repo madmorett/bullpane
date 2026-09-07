@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { setupSchema } from "@bullmq-visualizer/shared";
+import { setupSchema } from "@bullpane/shared";
 import { errorMessage, isApiError } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";

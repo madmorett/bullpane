@@ -1,4 +1,4 @@
-import type { ProFeature } from "@bullmq-visualizer/shared";
+import type { ProFeature } from "@bullpane/shared";
 
 export interface FeatureCopy {
   title: string;

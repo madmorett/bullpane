@@ -3,7 +3,7 @@
  * same way the dashboard does, so a format drift between the two shows up here.
  */
 import { generateKeyPairSync, verify as cryptoVerify } from "node:crypto";
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import type { LicensePayload } from "@bullpane/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Deps, handle } from "../handler";
 import { importPrivateKey } from "../sign";

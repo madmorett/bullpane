@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Info, Wand2 } from "lucide-react";
-import type { FolderQueueRef } from "@bullmq-visualizer/shared";
+import type { FolderQueueRef } from "@bullpane/shared";
 import { formatNumber } from "@/lib/format";
 import { globMatches } from "@/lib/glob";
 import { useAllQueues } from "@/api/hooks";

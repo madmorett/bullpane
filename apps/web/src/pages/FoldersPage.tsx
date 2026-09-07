@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Check, Folder as FolderIcon, FolderPlus, Pencil, Plus, Trash2, X } from "lucide-react";
-import { createFolderSchema, type Folder, type FolderQueueRef } from "@bullmq-visualizer/shared";
+import { createFolderSchema, type Folder, type FolderQueueRef } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { useAllQueues, useCreateFolder, useDeleteFolder, useFolders, useSetFolderQueues, useUpdateFolder } from "@/api/hooks";

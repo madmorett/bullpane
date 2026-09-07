@@ -1,4 +1,4 @@
-import type { GroupSummary, JobsPage } from "@bullmq-visualizer/shared";
+import type { GroupSummary, JobsPage } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";

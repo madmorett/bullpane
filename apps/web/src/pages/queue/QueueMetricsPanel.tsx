@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Activity, BarChart3, Gauge, Info, Timer } from "lucide-react";
-import type { JobState, QueueSummary } from "@bullmq-visualizer/shared";
-import { JOB_STATES } from "@bullmq-visualizer/shared";
+import type { JobState, QueueSummary } from "@bullpane/shared";
+import { JOB_STATES } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatDuration, formatNumber, formatPercent } from "@/lib/format";
 import { STATE_COLORS } from "@/lib/stateColors";

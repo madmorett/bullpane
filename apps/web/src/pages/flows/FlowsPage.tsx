@@ -18,7 +18,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ExternalLink, Info, Link2, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
-import type { FlowEdge, FlowGraph, FlowNode } from "@bullmq-visualizer/shared";
+import type { FlowEdge, FlowGraph, FlowNode } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatCompact, formatNumber } from "@/lib/format";

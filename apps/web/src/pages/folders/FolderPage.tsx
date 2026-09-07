@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Bell, Folder as FolderIcon, Pencil, Plus, Wand2, X } from "lucide-react";
-import type { Folder, FolderQueueRef } from "@bullmq-visualizer/shared";
+import type { Folder, FolderQueueRef } from "@bullpane/shared";
 import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";
 import { entryKey, matchesFilter, type QueueEntry } from "@/lib/groupQueues";

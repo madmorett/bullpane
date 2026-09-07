@@ -23,7 +23,7 @@ import {
   type RedisServerInfo,
   type QueueRates,
   type QueueSetup,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { createBullmqConnection, createReadClient } from "./connection.js";
 import {
   GROUP_KEY,
@@ -841,7 +841,7 @@ export class RedisInspector implements Inspector {
     }
     job.discard();
     try {
-      await job.moveToFailed(new Error("Discarded from BullMQ Visualizer"), "0");
+      await job.moveToFailed(new Error("Discarded from Bullpane"), "0");
     } catch (err) {
       throw new Error(`cannot_discard_active_job: ${errorMessage(err)}`);
     }

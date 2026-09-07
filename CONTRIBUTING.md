@@ -7,7 +7,7 @@ contract, do not break the demo.
 
 ```sh
 pnpm install
-docker compose up mysql -d          # local MySQL on 3306 (bmv/bmv)
+docker compose up mysql -d          # local MySQL on 3306 (bullpane/bullpane)
 cp .env.example .env
 pnpm dev                            # server :3000 + web (Vite) with proxy
 pnpm dev:simulator                  # optional: fills your local Redis with traffic

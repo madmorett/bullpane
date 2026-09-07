@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { JobState } from "@bullmq-visualizer/shared";
+import type { JobState } from "@bullpane/shared";
 import { useNavigate } from "react-router-dom";
 import { CornerDownLeft, Database, Search } from "lucide-react";
 import { cn } from "@/lib/cn";

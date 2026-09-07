@@ -2,7 +2,7 @@
  * Pure alert logic: turn a measurement into a sample, and a sample + the
  * alert's current state into a decision. No I/O, fully unit tested.
  */
-import type { AlertCondition, AlertKind, AlertMeasurementState } from "@bullmq-visualizer/shared";
+import type { AlertCondition, AlertKind, AlertMeasurementState } from "@bullpane/shared";
 
 /**
  * What the engine could observe for one queue.

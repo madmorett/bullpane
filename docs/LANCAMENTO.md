@@ -11,7 +11,7 @@ re-check before paying. All amounts in USD unless noted.
 
 | # | What | Why | Cost |
 |---|---|---|---|
-| 1 | **Domain** (e.g. `bullmqvisualizer.com`) | Docs site, checkout links, license emails, the demo. Buy the `.com` if free; also grab `.dev` if cheap. | $10–15/yr |
+| 1 | **Domain** (e.g. `bullpane.com`) | Docs site, checkout links, license emails, the demo. Buy the `.com` if free; also grab `.dev` if cheap. | $10–15/yr |
 | 2 | **GitHub organization** | The repo should not live under your personal handle if you want it to look like a product. Free plan gives unlimited public and private repos. | $0 |
 | 3 | **Email on your domain** | `matheus@yourdomain.com`, plus `support@`. Sending license keys from Gmail looks amateur. Google Workspace or Zoho or Fastmail. | $0–7/user/mo |
 | 4 | **Payment processor** | To take the $49. See Part 2. | ~5% + $0.50/sale |
@@ -21,7 +21,7 @@ re-check before paying. All amounts in USD unless noted.
 
 | # | What | Why | Cost |
 |---|---|---|---|
-| 6 | **Docker Hub account** | Publish `yourorg/bullmq-visualizer:latest`. Free tier is fine; GitHub Container Registry (ghcr.io) is a free alternative already tied to your org. | $0 (or $9/mo Pro) |
+| 6 | **Docker Hub account** | Publish `yourorg/bullpane:latest`. Free tier is fine; GitHub Container Registry (ghcr.io) is a free alternative already tied to your org. | $0 (or $9/mo Pro) |
 | 7 | **A host for the live demo** | The playground is the whole sales pitch. Small VPS: Hetzner, DigitalOcean, Fly.io, Railway. Needs ~2 GB RAM for app + MySQL + Redis + simulator. | $5–12/mo |
 | 8 | **Docs / landing page** | Can be GitHub Pages (free) or the same VPS. | $0 |
 | 9 | **Analytics** | Plausible, Umami self-hosted, or nothing at first. | $0–9/mo |
@@ -30,7 +30,7 @@ re-check before paying. All amounts in USD unless noted.
 ### Probably NOT needed
 
 - **npmjs account** — only if you publish a library. You are shipping a Docker image and a
-  repo, not an npm package. Skip it. (Reserve the name `bullmq-visualizer` for $0 if you
+  repo, not an npm package. Skip it. (Reserve the name `bullpane` for $0 if you
   are worried about squatting, but do not build a release flow around it.)
 - **Apple/Google developer accounts** — no mobile app.
 - **Code signing certificate** — no desktop binary.

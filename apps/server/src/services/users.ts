@@ -1,4 +1,4 @@
-import type { CreateUserInput, Role, UpdateUserInput, User } from "@bullmq-visualizer/shared";
+import type { CreateUserInput, Role, UpdateUserInput, User } from "@bullpane/shared";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { hashPassword } from "../auth/password";

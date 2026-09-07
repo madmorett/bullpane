@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Bell, BellRing, Pencil, Plus, Send, Trash2 } from "lucide-react";
-import type { Alert, AlertCondition, AlertEvent } from "@bullmq-visualizer/shared";
+import type { Alert, AlertCondition, AlertEvent } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
 import { useAlertEvents, useAlerts, useConnections, useDeleteAlert, useFolders, useTestAlert, useUpdateAlert } from "@/api/hooks";

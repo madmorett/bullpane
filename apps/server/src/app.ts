@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
-import type { InspectorPool } from "@bullmq-visualizer/redis-inspector";
+import type { InspectorPool } from "@bullpane/redis-inspector";
 import Fastify, { type FastifyInstance, type FastifyServerOptions, LogController } from "fastify";
 import { AlertsEngine } from "./alerts/engine";
 import { SessionService } from "./auth/sessions";

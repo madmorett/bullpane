@@ -1,4 +1,4 @@
-import { loginSchema, type MeResponse } from "@bullmq-visualizer/shared";
+import { loginSchema, type MeResponse } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/guards";
 import { verifyPassword } from "../auth/password";

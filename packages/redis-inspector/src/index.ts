@@ -1,5 +1,5 @@
 /**
- * @bullmq-visualizer/redis-inspector
+ * @bullpane/redis-inspector
  *
  * All reads of a customer's Redis (Lua, one round trip, bounded) and all writes
  * (official bullmq API) live behind the `Inspector` interface exported here.

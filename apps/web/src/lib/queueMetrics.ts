@@ -1,4 +1,4 @@
-import type { JobSummary, QueueMetrics } from "@bullmq-visualizer/shared";
+import type { JobSummary, QueueMetrics } from "@bullpane/shared";
 
 /**
  * Everything derivable from what the server already sends. Nothing here

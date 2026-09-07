@@ -3,7 +3,7 @@
  * API token: the key itself is the credential, scoped by organization id.
  * https://polar.sh/docs/features/benefits/license-keys
  */
-import type { LicenseApiErrorCode } from "@bullmq-visualizer/shared";
+import type { LicenseApiErrorCode } from "@bullpane/shared";
 
 export class ApiFail extends Error {
   constructor(

@@ -52,7 +52,7 @@ choices make it worth trusting:
   (`{ state: "completed", removed: 3412 }`) and, where useful, the payload size in
   bytes. Customer PII does not belong in a table you export as CSV.
 * **Nothing can edit or delete a row.** There is no such endpoint. Rows leave only
-  by age (`BMV_AUDIT_RETENTION_DAYS`, default one year).
+  by age (`BULLPANE_AUDIT_RETENTION_DAYS`, default one year).
 
 Recording happens in every edition; reading and exporting are Pro, because on a
 single-admin install the log only ever says "it was me". Nothing is lost by
@@ -61,11 +61,11 @@ upgrading later — the history is already there.
 ## Try the live demo
 
 ```sh
-git clone https://github.com/matheusmorett/bullmq-visualizer && cd bullmq-visualizer
+git clone https://github.com/madmorett/bullpane && cd bullpane
 pnpm demo        # = docker compose -f docker-compose.demo.yml up --build
 ```
 
-Open <http://localhost:3000> and log in with `demo@bullmq-visualizer.dev` / `demo1234`.
+Open <http://localhost:3000> and log in with `demo@bullpane.com` / `demo1234`.
 
 The demo runs a throwaway Redis plus a simulator that behaves like a mid-sized
 company: payments with ~4% declines, a bursty webhook dispatcher whose worker
@@ -114,7 +114,7 @@ Rules enforced in `packages/redis-inspector`, which owns every read of your Redi
 
 ```sh
 pnpm install
-docker compose up mysql -d       # MySQL on localhost:3306 (bmv/bmv)
+docker compose up mysql -d       # MySQL on localhost:3306 (bullpane/bullpane)
 cp .env.example .env
 pnpm dev                          # server :3000 (tsx watch) + web (Vite, proxied)
 pnpm dev:simulator                # optional: fill your local Redis with demo traffic
@@ -126,8 +126,8 @@ The simulator honours `REDIS_URL`, `BULL_PREFIX`, `SIM_INTENSITY` (0.2-3) and
 
 ## Pro license
 
-1. Buy at the checkout link shown on the "Unlock Pro" button (`BMV_CHECKOUT_URL`).
-2. Paste the key in **Settings → License**, or set `BMV_LICENSE_KEY` in the
+1. Buy at the checkout link shown on the "Unlock Pro" button (`BULLPANE_CHECKOUT_URL`).
+2. Paste the key in **Settings → License**, or set `BULLPANE_LICENSE_KEY` in the
    environment.
 3. Validation is offline against a public key compiled into the server. No
    network call, no telemetry, works air-gapped. Perpetual for 1.x.
@@ -172,4 +172,4 @@ this repository under the same license; what you pay for is the key that
 unlocks them in the shipped build and the maintenance of the project. That
 gating is the business model, and it is the honest reason this exists as
 open source at all.
-# bullmqvisualizer
+# bullpane

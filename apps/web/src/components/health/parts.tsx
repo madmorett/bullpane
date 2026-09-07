@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { HealthWarning } from "@bullmq-visualizer/shared";
+import type { HealthWarning } from "@bullpane/shared";
 import { AlertTriangle, OctagonAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";

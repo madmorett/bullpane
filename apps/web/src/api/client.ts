@@ -1,4 +1,4 @@
-import type { ApiError, ProFeature } from "@bullmq-visualizer/shared";
+import type { ApiError, ProFeature } from "@bullpane/shared";
 
 /**
  * Tiny fetch wrapper. Every call to the server goes through here so the

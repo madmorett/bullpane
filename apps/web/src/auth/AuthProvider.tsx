@@ -19,7 +19,7 @@ import {
   type SetupInput,
   type SetupStatus,
   type User,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { api, isApiError, setApiHandlers } from "@/api/client";
 import { openUpsell } from "@/edition/upsellStore";
 import { toast } from "@/components/Toast";

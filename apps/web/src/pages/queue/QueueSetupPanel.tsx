@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Activity, Boxes, Braces, ChevronDown, ChevronRight, Gauge, History, Hourglass, Layers, Package, Timer, Users } from "lucide-react";
-import type { QueueSetup } from "@bullmq-visualizer/shared";
+import type { QueueSetup } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
 import { readStorage, writeStorage } from "@/lib/storage";

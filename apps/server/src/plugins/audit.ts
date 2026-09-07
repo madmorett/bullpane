@@ -30,7 +30,7 @@
  * "Someone tried to obliterate the payments queue and got a 403" is precisely
  * what an auditor wants to see, and it never appears in a success-only log.
  */
-import type { AuditAction } from "@bullmq-visualizer/shared";
+import type { AuditAction } from "@bullpane/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 /** What a handler can add to the row the hook will write. */

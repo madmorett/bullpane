@@ -11,7 +11,7 @@
  *
  * Cost: one INFO per connection per poll. INFO is O(1).
  */
-import type { ConnectionHealth, HealthPoint, HealthWarning, RedisServerInfo } from "@bullmq-visualizer/shared";
+import type { ConnectionHealth, HealthPoint, HealthWarning, RedisServerInfo } from "@bullpane/shared";
 import type { ConnectionsService } from "./connections";
 import type { ConnectionRow } from "../db/schema";
 

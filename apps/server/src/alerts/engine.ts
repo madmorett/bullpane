@@ -1,5 +1,5 @@
 /**
- * Alert evaluation loop. Runs every BMV_ALERTS_INTERVAL seconds while the
+ * Alert evaluation loop. Runs every BULLPANE_ALERTS_INTERVAL seconds while the
  * edition is pro (a license or DEMO_MODE). One ping and one getQueueStats per
  * connection per tick, shared by every alert on that connection.
  *
@@ -18,9 +18,9 @@
  * `waiting_above` is a gauge, not a rate, so it still comes straight from the
  * state counts.
  */
-import type { Alert, AlertCondition, AlertMeasurement, FolderQueueRef } from "@bullmq-visualizer/shared";
-import { isErrorAlertKind } from "@bullmq-visualizer/shared";
-import type { Inspector, MetricsCounters, QueueStats } from "@bullmq-visualizer/redis-inspector";
+import type { Alert, AlertCondition, AlertMeasurement, FolderQueueRef } from "@bullpane/shared";
+import { isErrorAlertKind } from "@bullpane/shared";
+import type { Inspector, MetricsCounters, QueueStats } from "@bullpane/redis-inspector";
 import type { Config } from "../config";
 import type { AlertRow, ConnectionRow } from "../db/schema";
 import type { AlertsService } from "../services/alerts";

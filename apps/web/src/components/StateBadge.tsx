@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { JobState } from "@bullmq-visualizer/shared";
+import type { JobState } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import { chipStyle, stateColor, type ColoredState } from "@/lib/stateColors";

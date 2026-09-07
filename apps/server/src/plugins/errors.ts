@@ -2,7 +2,7 @@
  * Central error mapping → ApiError (docs/API.md).
  * Throw HttpError (or the helpers) anywhere; the handler serialises it.
  */
-import type { ApiError, ProFeature } from "@bullmq-visualizer/shared";
+import type { ApiError, ProFeature } from "@bullpane/shared";
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 
@@ -37,9 +37,9 @@ export const conflict = (message: string) => new HttpError(409, "conflict", mess
 export const demoLocked = (message = "This action is disabled in the public demo") =>
   new HttpError(423, "demo_locked", message);
 
-/** BMV_READ_ONLY=true: the whole instance refuses writes. */
+/** BULLPANE_READ_ONLY=true: the whole instance refuses writes. */
 export const readOnlyLocked = (): HttpError =>
-  new HttpError(423, "read_only", "This instance runs in read-only mode (BMV_READ_ONLY=true). Writes are disabled.");
+  new HttpError(423, "read_only", "This instance runs in read-only mode (BULLPANE_READ_ONLY=true). Writes are disabled.");
 export const invalidLicense = (reason: string) => new HttpError(400, "invalid_license", `Invalid license: ${reason}`);
 /** The store says the key is already active on another installation. */
 export const licenseAlreadyActivated = (message: string) => new HttpError(409, "license_already_activated", message);

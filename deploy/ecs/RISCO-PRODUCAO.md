@@ -11,7 +11,7 @@ A proteção mais forte não é uma flag do dashboard, é o **próprio Redis rec
 usuário que fisicamente não consegue escrever:
 
 ```bash
-redis-cli ACL SETUSER bmv on '>SENHA_FORTE' '~*' '&*' \
+redis-cli ACL SETUSER bullpane on '>SENHA_FORTE' '~*' '&*' \
   -@all +@read +@scripting -@dangerous -keys -sort \
   +info '+client|list' +ping +echo +hello +auth
 ```
@@ -48,7 +48,7 @@ add job  -> HTTP 409  NOPERM this user has no permissions...
 pause    -> HTTP 409  NOPERM this user has no permissions...
 ```
 
-O Redis recusou sozinho. Nem chegou a depender do `BMV_READ_ONLY`.
+O Redis recusou sozinho. Nem chegou a depender do `BULLPANE_READ_ONLY`.
 
 > Detalhe conhecido: a mensagem de erro cita o comando `info` mesmo numa tentativa de
 > escrita, porque a biblioteca `bullmq` chama `INFO` antes de escrever. O bloqueio está
@@ -59,7 +59,7 @@ dashboard para ela e nenhuma escrita é possível por definição.
 
 ---
 
-## Camada 2 — `BMV_READ_ONLY=true`
+## Camada 2 — `BULLPANE_READ_ONLY=true`
 
 Já está `true` na task definition. Recusa toda requisição de escrita com HTTP 423 antes de
 chegar no handler, num único hook, então nenhuma rota nova pode esquecer. Testado: 14 rotas
@@ -113,17 +113,17 @@ Você disse que dá medo usar o banco de produção, e é um receio razoável. D
 
 1. O que o dashboard grava é **304 KB** medidos numa instância real com filas, usuários,
    pastas e alertas configurados. Ele nunca toca em nada que já exista: cria as tabelas
-   dele num database próprio (`bmv`) e só.
+   dele num database próprio (`bullpane`) e só.
 2. Ainda assim, **se dá medo, não reaproveite**. Um `db.t4g.micro` separado custa ~USD 15/mês
    e encerra o assunto. Eu sugeri reaproveitar por causa dos 304 KB, mas otimizar USD 15 num
    cluster que te deixa desconfortável é a otimização errada.
 
-Se reaproveitar, crie um usuário MySQL com permissão **só no database `bmv`**:
+Se reaproveitar, crie um usuário MySQL com permissão **só no database `bullpane`**:
 
 ```sql
-CREATE DATABASE bmv CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'bmv'@'%' IDENTIFIED BY 'SENHA_FORTE';
-GRANT ALL PRIVILEGES ON bmv.* TO 'bmv'@'%';   -- só nesse database
+CREATE DATABASE bullpane CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'bullpane'@'%' IDENTIFIED BY 'SENHA_FORTE';
+GRANT ALL PRIVILEGES ON bullpane.* TO 'bullpane'@'%';   -- só nesse database
 ```
 
 Assim, mesmo com um bug meu, o alcance é um database de 304 KB.
@@ -133,11 +133,11 @@ Assim, mesmo com um bug meu, o alcance é um database de 304 KB.
 ## Ordem recomendada
 
 1. Usuário Redis só-leitura (ou uma réplica).
-2. `BMV_READ_ONLY=true`.
-3. Usuário MySQL restrito ao database `bmv`.
+2. `BULLPANE_READ_ONLY=true`.
+3. Usuário MySQL restrito ao database `bullpane`.
 4. Rode uns dias e compare as métricas do Redis com a foto do "antes".
 5. Só depois, se quiser escrita, troque para um usuário Redis com permissão e
-   `BMV_READ_ONLY=false`. Um passo de cada vez.
+   `BULLPANE_READ_ONLY=false`. Um passo de cada vez.
 
 Nos passos 1 a 4, o pior caso é o dashboard não funcionar. Não existe caminho para perda de
 dados, porque nem o Redis nem o MySQL aceitam escrita dele.

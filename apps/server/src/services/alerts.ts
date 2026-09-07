@@ -1,7 +1,7 @@
 /**
  * Alert CRUD + events (MySQL). Evaluation lives in ../alerts/engine.ts.
  */
-import type { Alert, AlertEvent, AlertScope, CreateAlertInput, updateAlertSchema } from "@bullmq-visualizer/shared";
+import type { Alert, AlertEvent, AlertScope, CreateAlertInput, updateAlertSchema } from "@bullpane/shared";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { z } from "zod";

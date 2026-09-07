@@ -12,7 +12,7 @@ pnpm demo                                   # full stack: app + mysql + redis + 
 BULL_PREFIX=bull SIM_RESET=true pnpm dev:simulator
 ```
 
-Demo login: `demo@bullmq-visualizer.dev` / `demo1234`.
+Demo login: `demo@bullpane.com` / `demo1234`.
 
 ## Environment
 

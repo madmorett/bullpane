@@ -3,15 +3,15 @@
  * prints it, so the maintainer can test the Pro edition locally without the
  * license API:
  *
- *   pnpm --filter @bullmq-visualizer/server license:dev
- *   # then: BMV_LICENSE_KEY=<printed key> pnpm dev   (or paste it in Settings → License)
+ *   pnpm --filter @bullpane/server license:dev
+ *   # then: BULLPANE_LICENSE_KEY=<printed key> pnpm dev   (or paste it in Settings → License)
  *
  * Options: --licensee "Name" --email you@example.com --days 30 (default perpetual)
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import type { LicensePayload } from "@bullpane/shared";
 import { LICENSE_PUBLIC_KEY_B64, signLicense, verifyLicenseKey } from "../src/license";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -55,4 +55,4 @@ console.log(key);
 console.log("");
 console.log(check.valid ? "verifies against the compiled-in public key: OK" : `WARNING: does NOT verify: ${check.reason}`);
 console.log("");
-console.log("Use it with:  BMV_LICENSE_KEY='" + key + "' pnpm dev");
+console.log("Use it with:  BULLPANE_LICENSE_KEY='" + key + "' pnpm dev");

@@ -18,8 +18,8 @@
  * hiddenQueues.test.ts / readonly.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuditAction, ListAuditQuery, Role } from "@bullmq-visualizer/shared";
-import { AUDIT_ACTIONS, AUDIT_ACTION_LABEL } from "@bullmq-visualizer/shared";
+import type { AuditAction, ListAuditQuery, Role } from "@bullpane/shared";
+import { AUDIT_ACTIONS, AUDIT_ACTION_LABEL } from "@bullpane/shared";
 import { AuditService, decodeCursor, encodeCursor, sanitizeDetail } from "../services/audit";
 import { actionFor, isUnaudited } from "../plugins/audit";
 import type { Db } from "../db";
@@ -50,7 +50,7 @@ function fakeDb(initial: Row[] = []) {
     insert() {
       return {
         values(v: Row) {
-          if (state.failInsert) return Promise.reject(new Error("ER_NO_SUCH_TABLE: Table 'bmv.audit_log' doesn't exist"));
+          if (state.failInsert) return Promise.reject(new Error("ER_NO_SUCH_TABLE: Table 'bullpane.audit_log' doesn't exist"));
           state.rows.push(v);
           state.inserted.push(v);
           return Promise.resolve();

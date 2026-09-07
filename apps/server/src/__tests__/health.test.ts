@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { HealthService, buildWarnings } from "../services/health";
-import type { RedisServerInfo } from "@bullmq-visualizer/shared";
+import type { RedisServerInfo } from "@bullpane/shared";
 import type { ConnectionRow } from "../db/schema";
 
 function info(over: Partial<RedisServerInfo> = {}): RedisServerInfo {

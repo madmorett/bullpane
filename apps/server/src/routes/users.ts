@@ -1,4 +1,4 @@
-import { createUserSchema, updateUserSchema, type User } from "@bullmq-visualizer/shared";
+import { createUserSchema, updateUserSchema, type User } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { requireAuth, requireRole } from "../auth/guards";
 import { SESSION_COOKIE, sessionCookieOptions } from "../auth/sessions";

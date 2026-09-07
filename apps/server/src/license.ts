@@ -5,7 +5,7 @@
  * The signature is over the raw base64url payload string (ASCII bytes).
  */
 import { createPrivateKey, sign as cryptoSign, verify as cryptoVerify, type KeyObject } from "node:crypto";
-import type { LicensePayload } from "@bullmq-visualizer/shared";
+import type { LicensePayload } from "@bullpane/shared";
 import { z } from "zod";
 
 /**

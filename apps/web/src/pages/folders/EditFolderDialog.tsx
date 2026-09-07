@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Folder } from "@bullmq-visualizer/shared";
-import { updateFolderSchema } from "@bullmq-visualizer/shared";
+import type { Folder } from "@bullpane/shared";
+import { updateFolderSchema } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { useUpdateFolder } from "@/api/hooks";
 import { errorMessage } from "@/api/client";

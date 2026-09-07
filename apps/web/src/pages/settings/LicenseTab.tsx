@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, ExternalLink, KeyRound, Lock, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
-import { PRO_FEATURES, type LicenseInfo, type LicenseStatus } from "@bullmq-visualizer/shared";
+import { PRO_FEATURES, type LicenseInfo, type LicenseStatus } from "@bullpane/shared";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
 import { useRefreshLicense, useRemoveLicense, useSetLicense } from "@/api/hooks";
 import { errorMessage, isApiError } from "@/api/client";

@@ -5,8 +5,8 @@ What runs where for the commercial side. Customer-specific secrets live in
 
 | Piece | Where | Source | Deploy |
 |---|---|---|---|
-| Website bullpane.com (+ www) | Cloudflare Worker, static assets | `apps/website/public` | `pnpm --filter @bullmq-visualizer/website deploy` |
-| License API api.bullpane.com | Cloudflare Worker | `apps/license-api` | `pnpm --filter @bullmq-visualizer/license-api deploy` |
+| Website bullpane.com (+ www) | Cloudflare Worker, static assets | `apps/website/public` | `pnpm --filter @bullpane/website deploy` |
+| License API api.bullpane.com | Cloudflare Worker | `apps/license-api` | `pnpm --filter @bullpane/license-api deploy` |
 | Store, checkout, invoices, tax | Polar (merchant of record) | products created via API | `private/bullpane/polar.json` |
 | Docker image | ghcr.io/<owner>/bullpane | `Dockerfile` | `.github/workflows/docker.yml` on push / tag |
 

@@ -15,16 +15,16 @@ export interface Config {
   sessionSecret: string;
   publicUrl: string;
   databaseUrl: string;
-  /** BMV_LICENSE_KEY, null when empty. Offline token or store key, see license.ts */
+  /** BULLPANE_LICENSE_KEY, null when empty. Offline token or store key, see license.ts */
   licenseKey: string | null;
   checkoutUrl: string;
-  /** BMV_LICENSE_API_URL: where subscription keys are activated and refreshed */
+  /** BULLPANE_LICENSE_API_URL: where subscription keys are activated and refreshed */
   licenseApiUrl: string;
-  /** BMV_LICENSE_REFRESH_HOURS: how often an online key is re-checked */
+  /** BULLPANE_LICENSE_REFRESH_HOURS: how often an online key is re-checked */
   licenseRefreshHours: number;
   demoMode: boolean;
   /**
-   * BMV_READ_ONLY=true blocks every mutating route (job/queue actions, connection,
+   * BULLPANE_READ_ONLY=true blocks every mutating route (job/queue actions, connection,
    * user, folder, alert and license writes) with 423. Reads are untouched.
    * Meant for pointing the dashboard at production before you trust it.
    */
@@ -37,7 +37,7 @@ export interface Config {
   /** seconds */
   alertsInterval: number;
   /**
-   * BMV_AUDIT_RETENTION_DAYS: how long audit rows are kept. Default 365 because
+   * BULLPANE_AUDIT_RETENTION_DAYS: how long audit rows are kept. Default 365 because
    * "one year" is what compliance questionnaires ask for. 0 disables pruning
    * (keep forever — then you own the growth).
    */
@@ -50,7 +50,7 @@ export interface Config {
   logLevel: string;
 }
 
-export const DEFAULT_DATABASE_URL = "mysql://bmv:bmv@localhost:3306/bmv";
+export const DEFAULT_DATABASE_URL = "mysql://bullpane:bullpane@localhost:3306/bullpane";
 export const DEFAULT_CHECKOUT_URL = "https://bullpane.com/pricing";
 export const DEFAULT_LICENSE_API_URL = "https://api.bullpane.com";
 
@@ -85,8 +85,27 @@ export interface LoadConfigOptions {
   warn?: (message: string) => void;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfigOptions = {}): Config {
+/**
+ * Until 0.1.x the prefix was BMV_ (BullMQ Visualizer). Installs that still set
+ * BMV_* keep working: each one is copied to its BULLPANE_* name unless that is
+ * already set, with one warning so the operator knows to rename.
+ */
+export function withLegacyEnv(env: NodeJS.ProcessEnv, warn: (message: string) => void): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...env };
+  for (const [key, value] of Object.entries(env)) {
+    if (!key.startsWith("BMV_") || value === undefined) continue;
+    const renamed = `BULLPANE_${key.slice(4)}`;
+    if (out[renamed] === undefined || out[renamed] === "") {
+      out[renamed] = value;
+      warn(`${key} is deprecated, use ${renamed}`);
+    }
+  }
+  return out;
+}
+
+export function loadConfig(rawEnv: NodeJS.ProcessEnv = process.env, opts: LoadConfigOptions = {}): Config {
   const warn = opts.warn ?? ((m: string) => console.warn(m));
+  const env = withLegacyEnv(rawEnv, warn);
   const demoMode = bool(env, "DEMO_MODE", false);
 
   let sessionSecret = optional(env, "SESSION_SECRET");
@@ -114,19 +133,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: LoadConfi
     sessionSecret,
     publicUrl,
     databaseUrl: str(env, "DATABASE_URL", DEFAULT_DATABASE_URL),
-    licenseKey: optional(env, "BMV_LICENSE_KEY"),
-    checkoutUrl: str(env, "BMV_CHECKOUT_URL", DEFAULT_CHECKOUT_URL),
-    licenseApiUrl: str(env, "BMV_LICENSE_API_URL", DEFAULT_LICENSE_API_URL).replace(/\/+$/, ""),
-    licenseRefreshHours: int(env, "BMV_LICENSE_REFRESH_HOURS", 24, 1),
+    licenseKey: optional(env, "BULLPANE_LICENSE_KEY"),
+    checkoutUrl: str(env, "BULLPANE_CHECKOUT_URL", DEFAULT_CHECKOUT_URL),
+    licenseApiUrl: str(env, "BULLPANE_LICENSE_API_URL", DEFAULT_LICENSE_API_URL).replace(/\/+$/, ""),
+    licenseRefreshHours: int(env, "BULLPANE_LICENSE_REFRESH_HOURS", 24, 1),
     demoMode,
-    readOnly: bool(env, "BMV_READ_ONLY", false),
+    readOnly: bool(env, "BULLPANE_READ_ONLY", false),
     demoRedisUrl: str(env, "DEMO_REDIS_URL", "redis://localhost:6379"),
-    demoAdminEmail: str(env, "DEMO_ADMIN_EMAIL", "demo@bullmq-visualizer.dev"),
+    demoAdminEmail: str(env, "DEMO_ADMIN_EMAIL", "demo@bullpane.com"),
     demoAdminPassword: str(env, "DEMO_ADMIN_PASSWORD", "demo1234"),
-    queueDiscoveryTtl: int(env, "BMV_QUEUE_DISCOVERY_TTL", 30, 1),
-    alertsInterval: int(env, "BMV_ALERTS_INTERVAL", 15, 1),
-    auditRetentionDays: int(env, "BMV_AUDIT_RETENTION_DAYS", 365, 0),
-    jobPreviewBytes: int(env, "BMV_JOB_PREVIEW_BYTES", 2048, 64),
+    queueDiscoveryTtl: int(env, "BULLPANE_QUEUE_DISCOVERY_TTL", 30, 1),
+    alertsInterval: int(env, "BULLPANE_ALERTS_INTERVAL", 15, 1),
+    auditRetentionDays: int(env, "BULLPANE_AUDIT_RETENTION_DAYS", 365, 0),
+    jobPreviewBytes: int(env, "BULLPANE_JOB_PREVIEW_BYTES", 2048, 64),
     webDist: path.resolve(SERVER_ROOT, str(env, "WEB_DIST", "../web/dist")),
     licensePublicKeyB64: optional(env, "LICENSE_PUBLIC_KEY_B64"),
     logLevel: str(env, "LOG_LEVEL", "info"),

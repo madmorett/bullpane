@@ -9,7 +9,7 @@ import {
   type JobsPage,
   listJobsQuerySchema,
   searchJobsQuerySchema,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";

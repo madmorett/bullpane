@@ -1,4 +1,4 @@
-# BullMQ Visualizer — company trial (bundled MySQL).
+# Bullpane — company trial (bundled MySQL).
 #
 # Metabase-style first run: bring it up, open it, and the app walks you through
 # creating the first admin and adding your first Redis connection. Nothing is
@@ -20,14 +20,14 @@ services:
     build:
       context: .
       target: runner
-    image: bullmq-visualizer:local
+    image: bullpane:local
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     environment:
       # Where the dashboard keeps its own data. If you change MYSQL_PASSWORD,
       # set DATABASE_URL to match (compose cannot nest variable defaults).
-      DATABASE_URL: ${DATABASE_URL:-mysql://bmv:bmv@mysql:3306/bmv}
+      DATABASE_URL: ${DATABASE_URL:-mysql://bullpane:bullpane@mysql:3306/bullpane}
 
       # REQUIRED. Signs session cookies.  openssl rand -hex 32
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env — openssl rand -hex 32}
@@ -36,17 +36,17 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
 
       # Pro license. Empty = free edition. Can also be pasted in Settings → License.
-      BMV_LICENSE_KEY: ${BMV_LICENSE_KEY:-}
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
 
       # Start read-only against production: every write is refused with 423,
       # reads are untouched. Flip to false once you trust it.
-      BMV_READ_ONLY: ${BMV_READ_ONLY:-true}
+      BULLPANE_READ_ONLY: ${BULLPANE_READ_ONLY:-true}
 
       # Performance knobs — raise the TTLs to make it quieter on a busy Redis.
-      BMV_QUEUE_DISCOVERY_TTL: ${BMV_QUEUE_DISCOVERY_TTL:-30}
-      BMV_JOB_PREVIEW_BYTES: ${BMV_JOB_PREVIEW_BYTES:-2048}
-      BMV_ALERTS_INTERVAL: ${BMV_ALERTS_INTERVAL:-15}
-      BMV_AUDIT_RETENTION_DAYS: ${BMV_AUDIT_RETENTION_DAYS:-365}
+      BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
+      BULLPANE_JOB_PREVIEW_BYTES: ${BULLPANE_JOB_PREVIEW_BYTES:-2048}
+      BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
+      BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       mysql:
@@ -62,9 +62,9 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: bmv
-      MYSQL_USER: bmv
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bmv}
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bullpane}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     volumes:
       - mysql-data:/var/lib/mysql

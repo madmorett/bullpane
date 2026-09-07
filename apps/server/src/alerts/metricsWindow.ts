@@ -13,7 +13,7 @@
  * the newest one and the oldest one still inside the configured window. The delta
  * is what actually finished in that stretch of time, whatever retention does.
  *
- * WINDOW vs TICK. The engine ticks every BMV_ALERTS_INTERVAL seconds (15 s by
+ * WINDOW vs TICK. The engine ticks every BULLPANE_ALERTS_INTERVAL seconds (15 s by
  * default); the user configures `windowMinutes` (1..1440). They do not line up,
  * so we keep a short ring buffer of samples per (alert, queue) and pick the
  * oldest sample at least `windowMinutes` old — that is the only way to report a
@@ -27,7 +27,7 @@
  * at most MAX_SAMPLES. A server watching 500 queues therefore holds at most
  * 500 * MAX_SAMPLES tiny objects, bounded, no matter how long it runs.
  */
-import type { AlertMeasurementState } from "@bullmq-visualizer/shared";
+import type { AlertMeasurementState } from "@bullpane/shared";
 
 /** One reading of the cumulative counters. */
 export interface CounterSample {

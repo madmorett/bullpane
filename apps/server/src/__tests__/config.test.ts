@@ -28,7 +28,7 @@ describe("loadConfig", () => {
     expect(cfg.licenseApiUrl).toBe("https://api.bullpane.com");
     expect(cfg.licenseRefreshHours).toBe(24);
     expect(cfg.demoRedisUrl).toBe("redis://localhost:6379");
-    expect(cfg.demoAdminEmail).toBe("demo@bullmq-visualizer.dev");
+    expect(cfg.demoAdminEmail).toBe("demo@bullpane.com");
     expect(cfg.queueDiscoveryTtl).toBe(30);
     expect(cfg.alertsInterval).toBe(15);
     expect(cfg.jobPreviewBytes).toBe(2048);
@@ -41,8 +41,8 @@ describe("loadConfig", () => {
         SESSION_SECRET: "x".repeat(40),
         PORT: "8080",
         PUBLIC_URL: "https://queues.example.com/",
-        BMV_ALERTS_INTERVAL: "5",
-        BMV_LICENSE_KEY: "  abc.def  ",
+        BULLPANE_ALERTS_INTERVAL: "5",
+        BULLPANE_LICENSE_KEY: "  abc.def  ",
         WEB_DIST: "/srv/web",
       },
       { warn: () => undefined },
@@ -70,5 +70,15 @@ describe("pageToRange", () => {
   it("converts 1-based pages to inclusive offsets", () => {
     expect(pageToRange(1, 25)).toEqual({ start: 0, end: 24 });
     expect(pageToRange(3, 10)).toEqual({ start: 20, end: 29 });
+  });
+
+  it("accepts legacy BMV_* names with a deprecation warning", () => {
+    const warnings: string[] = [];
+    const cfg = loadConfig({ SESSION_SECRET: "x".repeat(40), BMV_READ_ONLY: "true", BMV_LICENSE_KEY: "BULLPANE-LEGACY", BULLPANE_ALERTS_INTERVAL: "7", BMV_ALERTS_INTERVAL: "99" }, { warn: (m) => warnings.push(m) });
+    expect(cfg.readOnly).toBe(true);
+    expect(cfg.licenseKey).toBe("BULLPANE-LEGACY");
+    // the new name wins when both are set
+    expect(cfg.alertsInterval).toBe(7);
+    expect(warnings).toContain("BMV_READ_ONLY is deprecated, use BULLPANE_READ_ONLY");
   });
 });

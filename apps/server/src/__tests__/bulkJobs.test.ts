@@ -13,7 +13,7 @@
  * falso, sem MySQL e sem Redis.
  */
 import { describe, expect, it, vi } from "vitest";
-import { BULK_JOB_LIMIT } from "@bullmq-visualizer/shared";
+import { BULK_JOB_LIMIT } from "@bullpane/shared";
 import { buildApp } from "../app";
 import { loadConfig } from "../config";
 import type { Db } from "../db";

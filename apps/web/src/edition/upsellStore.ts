@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { ProFeature } from "@bullmq-visualizer/shared";
+import type { ProFeature } from "@bullpane/shared";
 
 /**
  * Module-level store so the API client (not a React component) can open the

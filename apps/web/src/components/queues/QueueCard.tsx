@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { EyeOff, Search } from "lucide-react";
-import type { QueueRates } from "@bullmq-visualizer/shared";
+import type { QueueRates } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber, formatPercent } from "@/lib/format";

@@ -14,7 +14,7 @@ import {
   type AuditResult,
   type ListAuditQuery,
   type Role,
-} from "@bullmq-visualizer/shared";
+} from "@bullpane/shared";
 import { and, asc, desc, eq, gte, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Db } from "../db";

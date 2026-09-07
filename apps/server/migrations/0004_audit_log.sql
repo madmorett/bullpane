@@ -24,7 +24,7 @@
 -- (fixed columns ~120 B, user agent ~120 B, detail JSON usually < 200 B). At
 -- 10k mutating actions/day that is ~2 GB/year; a dashboard where humans click
 -- buttons is more like 200/day, i.e. ~40 MB/year. Retention is
--- BMV_AUDIT_RETENTION_DAYS (default 365) and the prune runs with the alerts
+-- BULLPANE_AUDIT_RETENTION_DAYS (default 365) and the prune runs with the alerts
 -- engine tick.
 
 CREATE TABLE IF NOT EXISTS audit_log (

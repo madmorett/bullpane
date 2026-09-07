@@ -13,7 +13,7 @@
  *  - pausing a queue does not fire a backlog alert.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Alert, AlertCondition } from "@bullmq-visualizer/shared";
+import type { Alert, AlertCondition } from "@bullpane/shared";
 import { AlertsEngine, summarise } from "../alerts/engine";
 import type { Sample } from "../alerts/evaluate";
 import type { AlertRow } from "../db/schema";

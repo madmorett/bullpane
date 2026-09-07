@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RefreshCw, Trash2, UserPlus } from "lucide-react";
-import { ROLES, createUserSchema, type Role, type User } from "@bullmq-visualizer/shared";
+import { ROLES, createUserSchema, type Role, type User } from "@bullpane/shared";
 import { useCreateUser, useDeleteUser, useUpdateUser, useUsers } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";

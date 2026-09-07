@@ -1,4 +1,4 @@
-# @bullmq-visualizer/redis-inspector
+# @bullpane/redis-inspector
 
 Every read of a customer's Redis, and every write through the official `bullmq` API.
 The server codes against `src/types.ts` (`Inspector`, `InspectorPool`); nothing else in
@@ -90,8 +90,8 @@ either way.
 ## Tests
 
 ```
-pnpm --filter @bullmq-visualizer/redis-inspector test
-pnpm --filter @bullmq-visualizer/redis-inspector typecheck
+pnpm --filter @bullpane/redis-inspector test
+pnpm --filter @bullpane/redis-inspector typecheck
 ```
 
 The test boots `redis-server --port 6399` (never the dev instance on 6379), creates real

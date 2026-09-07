@@ -1,4 +1,4 @@
-import { cleanQueueSchema, listSchedulersQuerySchema, type QueueSetup, type QueueSummary, type SchedulersPage } from "@bullmq-visualizer/shared";
+import { cleanQueueSchema, listSchedulersQuerySchema, type QueueSetup, type QueueSummary, type SchedulersPage } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";

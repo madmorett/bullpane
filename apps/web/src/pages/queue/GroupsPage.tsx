@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Layers } from "lucide-react";
-import type { GroupSummary } from "@bullmq-visualizer/shared";
+import type { GroupSummary } from "@bullpane/shared";
 import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";
 import { useGroupJobs, useGroups, useJobAction, useQueue, type JobActionKind } from "@/api/hooks";

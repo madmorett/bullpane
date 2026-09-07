@@ -1,5 +1,5 @@
 /**
- * @bullmq-visualizer/shared
+ * @bullpane/shared
  *
  * Single source of truth for the types and validation schemas shared by
  * the server, the web UI, the redis inspector and the simulator.
