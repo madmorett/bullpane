@@ -58,20 +58,30 @@ docker run -d --name bullpane -p 3000:3000 \
 
 <section id="why">
   <div class="wrap">
-    <h2>Why not bull-board or a hosted dashboard?</h2>
-    <p class="sub">bull-board has no auth and a UI from 2016. Hosted dashboards ship your job payloads out of your network and price per connection. Bullpane runs where your queues run.</p>
-    <div class="table-wrap">
+    <h2>How it compares</h2>
+    <p class="sub">bull-board is free but has no login and reads Redis with no limits. Taskforce.sh is the hosted dashboard from the BullMQ authors: polished, but your job data leaves your network and you pay per connection. Bullpane is the third option: self-hosted, safe on production, priced per installation.</p>
+    <div class="legend"><span><i class="pill yes">✓</i> Included</span><span><i class="pill pro">Pro</i> Included in Bullpane Pro</span><span><i class="pill no">–</i> Not available</span></div>
+    <div class="table-wrap compare">
       <table>
-        <thead><tr><th></th><th>bull-board</th><th>Hosted dashboards</th><th>Bullpane</th></tr></thead>
+        <thead>
+          <tr>
+            <th></th>
+            <th><b>bull-board</b><small>open source</small></th>
+            <th><b>Taskforce.sh</b><small>hosted SaaS</small></th>
+            <th class="hl"><b>Bullpane</b><small>self-hosted</small></th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td>Runs inside your network</td><td class="y">yes</td><td class="w">no — payloads leave</td><td class="y">yes</td></tr>
-          <tr><td>Login, users and roles</td><td class="w">none</td><td class="y">yes</td><td class="y">yes (roles in Pro)</td></tr>
-          <tr><td>Safe on a busy production Redis</td><td class="n">unbounded reads</td><td class="y">yes</td><td class="y">no KEYS, one round trip per screen</td></tr>
-          <tr><td>Search inside job data</td><td class="n">no</td><td class="y">yes</td><td class="y">yes, free</td></tr>
-          <tr><td>BullMQ Pro groups &amp; batches</td><td class="n">partial</td><td class="y">yes</td><td class="y">yes, free</td></tr>
-          <tr><td>Alerts to Slack / webhook</td><td class="n">no</td><td class="y">yes</td><td class="y">Pro</td></tr>
-          <tr><td>Audit log: who drained what, from which IP</td><td class="n">no</td><td class="n">in their account</td><td class="y">Pro, in your database</td></tr>
-          <tr><td>Price</td><td>free</td><td>per connection, per month</td><td>free · Pro $19/mo per installation</td></tr>
+          <tr><td>Job data stays in your network</td><td><i class="pill yes">✓</i></td><td><i class="pill no">–</i><small>payloads go to their cloud</small></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>Login</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>Users &amp; roles</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
+          <tr><td>Safe on a busy production Redis</td><td><i class="pill no">–</i><small>unbounded reads</small></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i><small>no KEYS, one round trip per screen</small></td></tr>
+          <tr><td>Search inside job data</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>BullMQ Pro groups &amp; batches</td><td><i class="pill no">–</i><small>basic</small></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>Alerts to Slack / webhook</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
+          <tr><td>Audit log in your own database</td><td><i class="pill no">–</i></td><td><i class="pill no">–</i><small>lives in their account</small></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
+          <tr><td>Flow graph</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
+          <tr class="price-row"><td>Price</td><td>Free</td><td>Monthly, per connection</td><td class="hl">Free · Pro <b>$19/mo</b> per installation</td></tr>
         </tbody>
       </table>
     </div>

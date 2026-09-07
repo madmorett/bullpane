@@ -91,6 +91,22 @@ td.y { color: var(--green); }
 td.n { color: var(--fg-subtle); }
 td.w { color: var(--red); }
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13.5px; color: var(--fg-muted); margin: -12px 0 18px; align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.pill { display: inline-grid; place-items: center; font-style: normal; font-weight: 700; font-size: 12px; min-width: 26px; height: 24px; padding: 0 8px; border-radius: 999px; line-height: 1; }
+.pill.yes { background: rgba(62,207,142,.14); color: var(--green); border: 1px solid rgba(62,207,142,.35); }
+.pill.pro { background: rgba(180,140,255,.14); color: var(--pro); border: 1px solid rgba(180,140,255,.4); letter-spacing: .02em; }
+.pill.no { background: var(--bg-3); color: var(--fg-subtle); border: 1px solid var(--border); }
+.compare th, .compare td { text-align: center; }
+.compare th:first-child, .compare td:first-child { text-align: left; color: var(--fg); font-weight: 500; width: 34%; }
+.compare th { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--fg); padding-top: 16px; padding-bottom: 14px; }
+.compare th b { display: block; font-weight: 700; }
+.compare th small, .compare td small { display: block; font-size: 12px; color: var(--fg-subtle); font-weight: 500; margin-top: 4px; letter-spacing: 0; text-transform: none; }
+.compare .hl { background: rgba(245,165,36,.05); }
+.compare th.hl { border-top: 2px solid var(--accent); }
+.compare tr:last-child td { border-bottom: 0; }
+.compare .price-row td { color: var(--fg-muted); font-size: 14px; padding-top: 16px; padding-bottom: 16px; }
+.compare .price-row td.hl { color: var(--fg); }
 .pricing { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: stretch; }
 .plan { display: flex; flex-direction: column; gap: 14px; }
 .plan .price { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; }
