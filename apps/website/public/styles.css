@@ -75,6 +75,10 @@ h1 em { font-style: normal; color: var(--accent); }
 .terminal .c { color: var(--fg-subtle); }
 .terminal .k { color: var(--accent); }
 .terminal .g { color: var(--green); }
+.builtby { margin: 22px 0 0; font-size: 14px; color: var(--fg-muted); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.builtby a { color: var(--fg); border-bottom: 1px solid var(--border); }
+.builtby a:hover { color: var(--accent); border-color: var(--accent); }
+.builtby .x { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-bottom-color: var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; background: var(--bg-2); }
 section { padding: 72px 0; border-top: 1px solid var(--border); }
 h2 { font-size: clamp(26px, 3.6vw, 36px); letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 750; }
 .sub { color: var(--fg-muted); font-size: 17px; margin: 0 0 36px; max-width: 680px; }
