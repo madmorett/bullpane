@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css"><title>Changelog — Bullpane</title><meta name="description" content="Every release of Bullpane, the self-hosted dashboard for BullMQ and BullMQ Pro: what was added, what changed and what was fixed."></head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Changelog</h1>
+<p class="updated">Last updated 7 September 2026</p>
+
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.0</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="unreleased">In development</h2>
+    <span class="badge-next">next release</span>
+  </div>
+  <p class="release-note">Running in production at Monest before it is tagged. Available today as <code>ghcr.io/madmorett/bullpane:edge</code>, which tracks the main branch and is not recommended for production.</p>
+
+  <h3>Added</h3>
+  <ul>
+    <li><strong>Per-group settings in the BullMQ Pro groups view.</strong> Each group shows its status in Pro's own vocabulary — waiting, limited, maxed, paused — plus jobs waiting and how many are prioritized, active jobs against the group's concurrency cap, its rate limit, and when a rate-limited group returns to rotation.</li>
+    <li><strong>Group jobs in the order Pro serves them:</strong> the group's list first, then its prioritized jobs.</li>
+    <li><strong>Single sign-on (Pro).</strong> OIDC and SAML, with an environment-level password escape hatch so a misconfigured identity provider cannot lock you out of your own installation.</li>
+    <li><strong>Payload sizes in job lists.</strong> A payload too large to preview shows its size and links to the job instead of an empty cell.</li>
+    <li><strong>Discovery progress.</strong> On a Redis with millions of keys the queue list takes a few scan passes; the overview says so instead of letting a partial list pass for the whole truth.</li>
+  </ul>
+
+  <h3>Changed</h3>
+  <ul>
+    <li><strong>Queue discovery finds queues with a live worker immediately</strong> and covers any keyspace over successive passes instead of giving up on large ones. Deleted queues disappear on the next pass.</li>
+    <li><strong>Large payloads no longer set the cost of a page or a search.</strong> Sizes are checked before the data is read, and a search stops after a fixed budget and hands back a cursor. On 1 MB payloads a page of 200 jobs went from 290&nbsp;ms of Redis time to 7&nbsp;ms, and a search from 12.5&nbsp;s to 8&nbsp;ms.</li>
+    <li>The queue setup panel reports groups as counts per status and how many carry a per-group override.</li>
+  </ul>
+
+  <h3>Fixed</h3>
+  <ul>
+    <li><strong>BullMQ Pro queues could show no groups at all.</strong> Verified against <code>@taskforcesh/bullmq-pro</code> 7.48 with real workers: a queue whose groups were all at their concurrency cap looked empty.</li>
+    <li><strong>Group settings keys appeared as phantom queues</strong> in the sidebar and in queue search.</li>
+    <li>Waiting counts for a Pro group ignored prioritized jobs.</li>
+  </ul>
+</article>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-1-0">0.1.0</h2>
+    <span class="release-date">6 September 2026</span>
+  </div>
+  <p class="release-note">First release. Everything the open-source dashboards do, behind a real login, plus the Pro features.</p>
+
+  <h3>Added</h3>
+  <ul>
+    <li><strong>Queues and jobs.</strong> Every BullMQ state, per-minute completed and failed rates from BullMQ's own metrics counters, and an attention view for the queues that need you.</li>
+    <li><strong>Job pages</strong> with data as a tree or raw JSON, options, return value, stack traces, logs, progress and parent/child links.</li>
+    <li><strong>Actions.</strong> Add, retry, promote, remove and discard jobs, in bulk if you like; pause, resume, clean, retry-all, drain and obliterate queues, with the destructive ones behind the admin role.</li>
+    <li><strong>Search inside job data</strong>, bounded and resumable so a big state never blocks Redis.</li>
+    <li><strong>Job schedulers</strong> listed with their pattern, run count and next run.</li>
+    <li><strong>BullMQ Pro groups</strong>, read-only.</li>
+    <li><strong>Redis health monitor.</strong> Memory, CPU, commands per second, latency, clients and keys, sampled on the server and shared across tabs.</li>
+    <li><strong>Command palette</strong> (<span class="kbd">⌘</span> <span class="kbd">K</span>) over every queue on every connection.</li>
+    <li><strong>Pro.</strong> Alerts to Slack or any webhook, users and roles, folders, the flow graph, and an append-only audit log with CSV export.</li>
+    <li><strong>Read-only mode</strong> that refuses every write, for pointing the dashboard at production before you trust it.</li>
+  </ul>
+</article>
+
+<p class="lead-sm" style="margin-top:40px">Something missing, or a change you would like to see? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>
