@@ -1,7 +1,8 @@
 /**
  * Integration test against a REAL redis-server on port 6399 (never the dev one on 6379).
  * Data is produced with the official bullmq API so the key layout is exactly what
- * customers have. Pro group keys are written by hand (no Pro token here).
+ * customers have. Pro group keys are written by hand (no Pro token here) in the
+ * layout keys.ts documents, verified against @taskforcesh/bullmq-pro 7.48.0.
  */
 import { execSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,6 +12,7 @@ import { JOB_STATES } from "@bullpane/shared";
 import {
   RedisInspector,
   RedisInspectorPool,
+  dropGroupMetaNames,
   globToRegExp,
   parseQueueNameFromMetaKey,
   queueNameFromQueueKey,
@@ -20,6 +22,10 @@ const PORT = 6399;
 const URL = `redis://127.0.0.1:${PORT}`;
 const connection = { host: "127.0.0.1", port: PORT };
 const PREVIEW = 200;
+/** fixed scores of the fake Pro status zsets, asserted back verbatim */
+const MAXED_AT = 1_700_000_000_000;
+const PAUSED_AT = MAXED_AT + 1;
+const LIMIT_UNTIL = Date.now() + 60_000;
 
 let raw: Redis;
 let inspector: RedisInspector;
@@ -103,23 +109,45 @@ beforeAll(async () => {
   });
   await flow.close();
 
-  // --- fake BullMQ Pro queue written by hand
+  // --- fake BullMQ Pro queue written by hand, one group per status
   const p = "bull:proq:";
   await raw.hset(`${p}meta`, "opts.maxLenEvents", "10000");
-  await raw.zadd(`${p}groups`, 1, "g1", 2, "g2");
-  for (const id of ["1", "2"]) {
-    await raw.hset(`${p}${id}`, {
+  const grouped = (id: string, gid: string, extra: Record<string, string> = {}) =>
+    raw.hset(`${p}${id}`, {
       name: "grouped",
-      data: JSON.stringify({ g: "g1", i: id }),
-      opts: JSON.stringify({ group: { id: "g1" } }),
+      data: JSON.stringify({ g: gid, i: id }),
+      opts: JSON.stringify({ group: { id: gid } }),
       timestamp: String(Date.now()),
-      gid: "g1",
+      gid,
       delay: "0",
       priority: "0",
+      ...extra,
     });
-  }
-  await raw.rpush(`${p}groups:g1`, "1", "2");
-  await raw.sadd(`${p}groups:paused`, "g2");
+  // g1 waiting: two list jobs (LPUSH => list reads [2, 1]) and one prioritized
+  await grouped("1", "g1");
+  await grouped("2", "g1");
+  await grouped("3", "g1", { priority: "1" });
+  await raw.zadd(`${p}groups`, 1, "g1");
+  await raw.lpush(`${p}groups:g1`, "1", "2");
+  await raw.zadd(`${p}groups:g1:p`, 1, "3");
+  // g4 limited: 5 / 10 s override, counter pinned past 999999, lifts at LIMIT_UNTIL
+  await grouped("40", "g4");
+  await raw.lpush(`${p}groups:g4`, "40");
+  await raw.zadd(`${p}groups:limit`, LIMIT_UNTIL, "g4");
+  await raw.set(`${p}groups:g4:limit`, "1000001", "PX", 60_000);
+  await raw.hset(`${p}groups:g4:meta`, { lm: "5", ld: "10000" });
+  // g3 maxed: concurrency 2, both slots busy
+  await grouped("30", "g3");
+  await raw.lpush(`${p}groups:g3`, "30");
+  await raw.zadd(`${p}groups:max`, MAXED_AT, "g3");
+  await raw.hset(`${p}groups:g3:meta`, "conc", "2");
+  await raw.hset(`${p}groups:active:count`, "g3", "2");
+  // g2 paused
+  await raw.zadd(`${p}groups:paused`, PAUSED_AT, "g2");
+  await raw.zadd(`${p}groups:metas`, 1, "g3", 2, "g4");
+  // a second Pro queue whose only group is maxed: it has NO `groups` key at all
+  await raw.hset("bull:proq2:meta", "version", "bullmq-pro:7.48.0");
+  await raw.zadd("bull:proq2:groups:max", MAXED_AT, "only");
 
   inspector = new RedisInspector({ id: "t", url: URL }, { previewBytes: PREVIEW, discoveryTtlMs: 0 });
 });
@@ -174,7 +202,7 @@ describe("connection", () => {
 describe("discovery", () => {
   it("finds every queue through SCAN on meta keys", async () => {
     const names = await inspector.discoverQueues({ force: true });
-    expect(names).toEqual(["emails", "orders", "proq", "reports"]);
+    expect(names).toEqual(["emails", "orders", "proq", "proq2", "reports"]);
   });
   it("applies the queueFilter glob", async () => {
     const filtered = new RedisInspector({ id: "f", url: URL, queueFilter: "ord*" });
@@ -207,7 +235,7 @@ describe("stats", () => {
     expect(stats.emails.counts.failed).toBe(2);
     expect(stats.reports.counts["waiting-children"]).toBe(1);
     expect(stats.proq.isPro).toBe(true);
-    expect(stats.proq.groupsCount).toBe(2);
+    expect(stats.proq.groupsCount).toBe(4);
   });
   it("window counts use zset scores", async () => {
     const w = await inspector.getWindowCounts("emails", 0);
@@ -233,6 +261,7 @@ describe("getJobs", () => {
     const big = all.jobs.find((j) => j.name === "big");
     expect(big?.dataTruncated).toBe(true);
     expect(big?.dataPreview.length).toBe(PREVIEW);
+    expect(big?.dataBytes).toBeGreaterThan(10_000);
     const small = all.jobs.find((j) => j.name === "order");
     expect(small?.dataTruncated).toBe(false);
     expect(JSON.parse(small!.dataPreview)).toHaveProperty("customer");
@@ -350,20 +379,103 @@ describe("flows", () => {
   });
 });
 
-describe("BullMQ Pro groups (hand-written keys)", () => {
-  it("lists groups with status and waiting counts", async () => {
-    const { groups, total } = await inspector.getGroups("proq", { start: 0, end: 10 });
-    expect(total).toBe(2);
-    expect(groups).toEqual([
-      { id: "g1", score: 1, waiting: 2, status: "waiting" },
-      { id: "g2", score: 2, waiting: 0, status: "paused" },
+describe("BullMQ Pro groups (hand-written keys, bullmq-pro 7.48 layout)", () => {
+  it("lists every status zset in Pro's order with per-group settings", async () => {
+    const page = await inspector.getGroups("proq", { start: 0, end: 10 });
+    expect(page.total).toBe(4);
+    expect(page.byStatus).toEqual({ waiting: 1, limited: 1, maxed: 1, paused: 1 });
+    expect(page.groups).toEqual([
+      { id: "g1", status: "waiting", waiting: 3, prioritized: 1, active: 0, concurrency: null, rateLimit: null, limitedUntil: null, since: null },
+      { id: "g4", status: "limited", waiting: 1, prioritized: 0, active: 0, concurrency: null, rateLimit: { max: 5, durationMs: 10_000 }, limitedUntil: LIMIT_UNTIL, since: null },
+      { id: "g3", status: "maxed", waiting: 1, prioritized: 0, active: 2, concurrency: 2, rateLimit: null, limitedUntil: null, since: MAXED_AT },
+      { id: "g2", status: "paused", waiting: 0, prioritized: 0, active: 0, concurrency: null, rateLimit: null, limitedUntil: null, since: PAUSED_AT },
     ]);
   });
-  it("pages a group's jobs and exposes the group id", async () => {
+  it("pages across the four status zsets as one list", async () => {
+    const mid = await inspector.getGroups("proq", { start: 1, end: 2 });
+    expect(mid.total).toBe(4);
+    expect(mid.groups.map((g) => g.id)).toEqual(["g4", "g3"]);
+    const last = await inspector.getGroups("proq", { start: 3, end: 3 });
+    expect(last.groups.map((g) => g.id)).toEqual(["g2"]);
+    const past = await inspector.getGroups("proq", { start: 4, end: 9 });
+    expect(past.groups).toEqual([]);
+  });
+  it("pages a group's jobs: its list first, then its prioritized zset", async () => {
     const page = await inspector.getGroupJobs("proq", "g1", { start: 0, end: 10 });
-    expect(page.total).toBe(2);
-    expect(page.jobs.map((j) => j.groupId)).toEqual(["g1", "g1"]);
+    expect(page.total).toBe(3);
+    expect(page.jobs.map((j) => j.id)).toEqual(["2", "1", "3"]);
+    expect(page.jobs.map((j) => j.groupId)).toEqual(["g1", "g1", "g1"]);
     expect(page.jobs[0].name).toBe("grouped");
+    const tail = await inspector.getGroupJobs("proq", "g1", { start: 2, end: 2 });
+    expect(tail.total).toBe(3);
+    expect(tail.jobs.map((j) => j.id)).toEqual(["3"]);
+  });
+  it("does not mistake `groups:${gid}:meta` hashes for queues", async () => {
+    const names = await inspector.discoverQueues();
+    expect(names).toContain("proq");
+    expect(names).toContain("proq2");
+    expect(names.filter((n) => n.includes(":groups:"))).toEqual([]);
+    expect(dropGroupMetaNames(["orders", "orders:groups:t1", "a:groups:b"]).sort()).toEqual(["a:groups:b", "orders"]);
+  });
+  it("flags a Pro queue whose groups are all maxed (no `groups` key)", async () => {
+    const stats = await inspector.getQueueStats(["proq2"]);
+    expect(stats.proq2.isPro).toBe(true);
+    expect(stats.proq2.groupsCount).toBe(1);
+    expect(stats.proq2.library).toBe("bullmq-pro:7.48.0");
+  });
+});
+
+describe("payload size caps (a page or a search never moves megabytes through Lua)", () => {
+  it("does not read `data` above listFieldCapBytes but still reports its size", async () => {
+    const capped = new RedisInspector({ id: "cap", url: URL }, { previewBytes: PREVIEW, listFieldCapBytes: 5_000 });
+    const all = await capped.getJobs("orders", "waiting", { start: 0, end: -1, order: "desc" });
+    const big = all.jobs.find((j) => j.name === "big");
+    expect(big?.dataPreview).toBe("");
+    expect(big?.dataTruncated).toBe(true);
+    expect(big?.dataBytes).toBeGreaterThan(10_000);
+    const small = all.jobs.find((j) => j.name === "order");
+    expect(small?.dataPreview).not.toBe("");
+    expect(small?.dataBytes).toBe(Buffer.byteLength(small!.dataPreview));
+    await capped.close();
+  });
+  it("search skips `data` above searchFieldCapBytes and says how many it skipped", async () => {
+    const capped = new RedisInspector({ id: "scap", url: URL }, { previewBytes: PREVIEW, searchFieldCapBytes: 5_000 });
+    const res = await capped.searchJobs("orders", "waiting", "blob", { limit: 10 });
+    expect(res.jobs).toHaveLength(0); // "blob" only occurs inside the 10 KB payload
+    expect(res.skippedLargePayloads).toBe(1);
+    const open = await inspector.searchJobs("orders", "waiting", "blob", { limit: 10 });
+    expect(open.jobs.map((j) => j.name)).toEqual(["big"]);
+    expect(open.skippedLargePayloads).toBe(0);
+    await capped.close();
+  });
+  it("search hands back a cursor once searchByteBudget is spent", async () => {
+    const tight = new RedisInspector({ id: "budget", url: URL }, { previewBytes: PREVIEW, searchByteBudget: 1 });
+    const res = await tight.searchJobs("orders", "waiting", "zz-not-there", { limit: 10 });
+    expect(res.scanned).toBe(1);
+    expect(res.nextCursor).toBe("1");
+    await tight.close();
+  });
+});
+
+describe("discovery on a huge keyspace", () => {
+  it("lists queues with a connected worker even when the SCAN budget finds nothing", async () => {
+    const dq = q("discover-me");
+    await dq.waitUntilReady();
+    const w = new Worker("discover-me", async () => undefined, { connection });
+    workers.push(w);
+    await w.waitUntilReady();
+    // maxScanIterations 0: the SCAN never runs, so only CLIENT LIST can find it.
+    const blind = new RedisInspector({ id: "blind", url: URL }, { maxScanIterations: 0, discoveryTtlMs: 0 });
+    await waitFor(async () => (await blind.discoverQueues({ force: true })).includes("discover-me"));
+    const status = await blind.discoveryStatus();
+    expect(status.complete).toBe(false);
+    expect(status.totalKeys).toBeGreaterThan(0);
+    await blind.close();
+    await w.close();
+  });
+  it("reports a complete cycle once the SCAN wrapped around", async () => {
+    await inspector.discoverQueues({ force: true });
+    expect((await inspector.discoveryStatus()).complete).toBe(true);
   });
 });
 
@@ -544,11 +656,10 @@ describe("rates + setup (round 2)", () => {
     }
   });
 
-  it("flags Pro queues from the groups zset and exposes group settings", async () => {
+  it("flags Pro queues from the group keys and exposes group settings", async () => {
     const setup = await inspector.getQueueSetup("proq");
     expect(setup.isPro).toBe(true);
-    expect(setup.groups?.count).toBe(2);
-    expect(typeof setup.groups?.concurrencyLimited).toBe("boolean");
+    expect(setup.groups).toEqual({ count: 4, byStatus: { waiting: 1, limited: 1, maxed: 1, paused: 1 }, configured: 2, active: 1 });
   });
 });
 

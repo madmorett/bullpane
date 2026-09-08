@@ -611,15 +611,18 @@ export interface QueueSetup {
   rateLimitedNow: { ttlMs: number } | null;
   /** workers connected right now (CLIENT LIST names matching the queue); null if CLIENT LIST unavailable */
   workers: { count: number; names: string[] } | null;
-  /** BullMQ Pro group settings observed in Redis */
+  /** BullMQ Pro groups observed in Redis; null when the queue shows no Pro signal */
   groups: {
+    /** groups that currently hold jobs, across the four status zsets */
     count: number;
-    /** groups:max key exists → per-group concurrency limits configured */
-    concurrencyLimited: boolean;
-    /** groups:limit key exists → per-group rate limits configured */
-    rateLimited: boolean;
-    activeGroups: number;
-    pausedGroups: number;
+    byStatus: GroupsByStatus;
+    /** groups with a per-group override (concurrency and/or rate limit) — the groups:metas zset */
+    configured: number;
+    /**
+     * groups with at least one job being processed — HLEN groups:active:count.
+     * Pro only maintains that hash when the worker runs with group.concurrency.
+     */
+    active: number;
   } | null;
   /** worker `batch` option is not observable from Redis */
   batch: "unknown";
@@ -649,9 +652,16 @@ export interface JobSummary {
   progress: number | string | Record<string, unknown> | null;
   delay: number;
   priority: number;
-  /** stringified data, possibly truncated for list views */
+  /** stringified data, possibly truncated for list views; "" when the payload was not read (see dataBytes) */
   dataPreview: string;
   dataTruncated: boolean;
+  /**
+   * Size of the `data` field in bytes (HSTRLEN, O(1)). Payloads above the
+   * inspector's list cap are not copied out of Redis at all: dataPreview is ""
+   * and dataTruncated is true — the UI shows the size and links to the job.
+   * null on older servers that did not report it.
+   */
+  dataBytes: number | null;
   parent: JobParentRef | null;
   /** BullMQ Pro group id if any */
   groupId: string | null;
@@ -692,14 +702,64 @@ export interface JobSearchResult {
   nextCursor: string | null;
   scanned: number;
   total: number;
+  /** jobs whose data was over the search size cap: matched on id / name / error only */
+  skippedLargePayloads: number;
+}
+
+/**
+ * Where queue discovery stands for a connection. Discovery is a SCAN over the
+ * keyspace with a per-pass budget, so on a Redis with millions of keys the first
+ * full pass takes several passes; queues with a live worker are found at once
+ * through CLIENT LIST regardless.
+ */
+export interface DiscoveryStatus {
+  /** at least one full SCAN cycle has completed since the process started */
+  complete: boolean;
+  /** SCAN iterations spent so far in the current cycle */
+  scannedIterations: number;
+  /** keys in the keyspace (DBSIZE), for the UI to size the wait */
+  totalKeys: number | null;
+}
+
+/**
+ * BullMQ Pro group statuses, in Pro's own vocabulary (QueuePro.getGroupsCountByStatus).
+ * A group is in exactly one of them: the four status zsets are disjoint.
+ */
+export const GROUP_STATUSES = ["waiting", "limited", "maxed", "paused"] as const;
+export type GroupStatus = (typeof GROUP_STATUSES)[number];
+export type GroupsByStatus = Record<GroupStatus, number>;
+
+export interface GroupRateLimit {
+  max: number;
+  durationMs: number;
 }
 
 export interface GroupSummary {
   id: string;
+  status: GroupStatus;
+  /** jobs waiting in the group: its list plus its prioritized zset */
   waiting: number;
-  /** score in the groups zset (Pro uses it for fairness/ordering) */
-  score: number;
-  status: "active" | "waiting" | "paused" | "rate-limited" | "maxed" | "unknown";
+  /** the part of `waiting` that came with opts.priority (`groups:${id}:p`) */
+  prioritized: number;
+  /**
+   * jobs of this group being processed right now (groups:active:count). Pro only
+   * tracks it when the worker runs with group.concurrency; 0 otherwise.
+   */
+  active: number;
+  /** per-group override (queue.setGroupConcurrency); null = the worker's group.concurrency applies */
+  concurrency: number | null;
+  /** per-group override (queue.setGroupRateLimit); null = the worker's group.limit applies */
+  rateLimit: GroupRateLimit | null;
+  /** status "limited": unix ms when Pro puts the group back in rotation */
+  limitedUntil: number | null;
+  /** status "maxed" / "paused": unix ms the group entered that status */
+  since: number | null;
+}
+
+export interface GroupsPage {
+  groups: GroupSummary[];
+  total: number;
+  byStatus: GroupsByStatus;
 }
 
 /**

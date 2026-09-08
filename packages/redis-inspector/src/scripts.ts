@@ -17,19 +17,19 @@ export type RedisClient = Redis | Cluster;
 export const SCRIPTS = {
   /** 8 state keys + meta + groups + metrics (4) + repeat + stalled */
   queueStats: { numberOfKeys: 16, readOnly: true },
-  /** the state (or group) list/zset */
-  getJobs: { numberOfKeys: 1, readOnly: true },
+  /** the state list/zset, or a Pro group's list + its `:p` zset -> numberOfKeys passed at call time */
+  getJobs: { numberOfKeys: undefined, readOnly: true },
   getJobsSearch: { numberOfKeys: 1, readOnly: true, file: "searchJobs" },
   /** hash, logs, dependencies, processed + 8 state keys */
   getJob: { numberOfKeys: 12, readOnly: true },
   /** variable number of state keys -> numberOfKeys passed at call time */
   sampleParents: { numberOfKeys: undefined, readOnly: true },
-  /** groups, groups:active, groups:paused, groups:max, groups:limit */
-  getGroups: { numberOfKeys: 5, readOnly: true },
+  /** groups, groups:limit, groups:max, groups:paused, groups:active:count, groups:concurrency */
+  getGroups: { numberOfKeys: 6, readOnly: true },
   /** the `repeat` zset (job schedulers); the per-scheduler hashes are built inside Lua */
   getSchedulers: { numberOfKeys: 1, readOnly: true },
-  /** meta, limiter, groups, groups:active, groups:paused, groups:max, groups:limit, metrics:completed */
-  queueSetup: { numberOfKeys: 8, readOnly: true },
+  /** meta, limiter, groups, groups:limit, groups:max, groups:paused, groups:active:count, groups:metas, metrics:completed */
+  queueSetup: { numberOfKeys: 9, readOnly: true },
 } as const;
 
 export type ScriptName = keyof typeof SCRIPTS;

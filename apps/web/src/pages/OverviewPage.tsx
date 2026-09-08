@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Database, Plus } from "lucide-react";
 import { routes } from "@/lib/routes";
+import { formatNumber } from "@/lib/format";
 import { groupQueues, matchesFilter, totals, type QueueEntry } from "@/lib/groupQueues";
 import { splitByAttention } from "@/lib/queueAttention";
 import { useTableState } from "@/lib/useTableState";
@@ -52,6 +53,16 @@ export function OverviewPage() {
    * point, so the number is text.
    */
   const hiddenCount = useMemo(() => entries.reduce((n, e) => n + (e.result.data?.hiddenCount ?? 0), 0), [entries]);
+  /**
+   * Connections whose SCAN has not completed a full cycle yet. On a Redis with
+   * millions of keys that takes a few passes; queues with a live worker are
+   * already listed, the rest arrive as the scan advances. Saying so beats letting
+   * an incomplete list read as "these are all your queues".
+   */
+  const scanning = useMemo(
+    () => entries.filter((e) => e.result.data?.discovery && !e.result.data.discovery.complete).map((e) => ({ name: e.connection.name, keys: e.result.data?.discovery?.totalKeys ?? null })),
+    [entries],
+  );
   const soleHiddenConnection = useMemo(() => {
     const withHidden = entries.filter((e) => (e.result.data?.hiddenCount ?? 0) > 0);
     return withHidden.length === 1 ? withHidden[0]!.connection.id : null;
@@ -104,6 +115,13 @@ export function OverviewPage() {
       <PageHeader title="Overview" description="Every connection and queue at a glance. Refreshes every 5 seconds." />
 
       <RedisHealthStrip className="mb-3" />
+
+      {scanning.length > 0 && (
+        <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-fg-muted" role="status">
+          Still discovering queues on {scanning.map((s) => `${s.name}${s.keys ? ` (${formatNumber(s.keys)} keys)` : ""}`).join(", ")}: the keyspace is large and the SCAN runs in bounded passes.
+          Queues with a connected worker are listed already; the others appear as the scan completes.
+        </p>
+      )}
 
       <section className="space-y-3" aria-label="All queues">
         <QueueTotalsStrip

@@ -18,7 +18,8 @@
 import type {
   BulkJobAction,
   BulkJobActionResult,
-  GroupSummary,
+  DiscoveryStatus,
+  GroupsPage,
   JobScheduler,
   QueueRates,
   QueueSetup,
@@ -51,8 +52,27 @@ export interface InspectorOptions {
   maxScanPerCall?: number;
   /** ms connect timeout. default 5000 */
   connectTimeoutMs?: number;
-  /** max SCAN iterations per discovery pass. default 200 (200 * COUNT 500 keys) */
+  /**
+   * max SCAN iterations per discovery pass. default 2000 (× COUNT 1000 = 2M keys).
+   * A pass also stops at discoveryScanBudgetMs; the cursor is kept, so the next
+   * pass continues where this one stopped and the full keyspace is eventually
+   * covered no matter how big it is.
+   */
   maxScanIterations?: number;
+  /** ms of SCAN work one discovery pass may spend. default 1500 */
+  discoveryScanBudgetMs?: number;
+  /** once a full SCAN cycle completed, how often to run another. default 300_000 (5 min) */
+  fullScanIntervalMs?: number;
+  /**
+   * `data` / `returnvalue` longer than this are not copied out of Redis for LIST
+   * views (HSTRLEN first); the row carries the size instead. default 32 KiB, so a
+   * 200-job page never moves more than ~6 MB through Lua.
+   */
+  listFieldCapBytes?: number;
+  /** `data` longer than this is not searched (id / name / error still are). default 256 KiB */
+  searchFieldCapBytes?: number;
+  /** payload bytes one search call may copy before handing back a cursor. default 8 MiB */
+  searchByteBudget?: number;
 }
 
 export interface QueueStats {
@@ -144,6 +164,8 @@ export interface Inspector {
   // --- discovery ----------------------------------------------------------
   /** Cached (discoveryTtlMs). Sorted queue names. */
   discoverQueues(opts?: { force?: boolean }): Promise<string[]>;
+  /** how far the SCAN-based discovery got; see DiscoveryStatus */
+  discoveryStatus(): Promise<DiscoveryStatus>;
 
   // --- reads (Lua, one round trip / pipelined) ----------------------------
   /** Counts for many queues in one pipeline of EVALSHA calls. `rateWindowMinutes` defaults to 60. */
@@ -182,7 +204,7 @@ export interface Inspector {
   getMetrics(queueName: string, points: number): Promise<QueueMetrics>;
 
   // --- BullMQ Pro groups (read) ------------------------------------------
-  getGroups(queueName: string, opts: { start: number; end: number }): Promise<{ groups: GroupSummary[]; total: number }>;
+  getGroups(queueName: string, opts: { start: number; end: number }): Promise<GroupsPage>;
   getGroupJobs(queueName: string, groupId: string, opts: { start: number; end: number }): Promise<JobsPage>;
 
   // --- job schedulers (repeatable jobs) -----------------------------------

@@ -19,11 +19,19 @@ export async function startProGrouped(ctx: SimContext, redis: Redis): Promise<vo
   const queue = ctx.register(new Queue(QUEUE, { connection, prefix, defaultJobOptions: ctx.defaultJobOptions }));
   const groups = new ProGroupWriter(redis, prefix, QUEUE);
 
-  // Static group state: one paused, one at max concurrency, one rate-limited.
+  // Per-group overrides, as queue.setGroupConcurrency / setGroupRateLimit would
+  // store them. acme is capped at 1 so it sits at "maxed" whenever it is busy;
+  // hooli gets a tight rate limit and is re-armed every minute so "limited" is
+  // always on screen; wonka is paused.
   const PAUSED = "tenant-wonka";
+  const LIMITED = "tenant-hooli";
+  await groups.setMeta("tenant-acme", { concurrency: 1 });
+  await groups.setMeta("tenant-globex", { concurrency: 4 });
+  await groups.setMeta(LIMITED, { limit: { max: 5, duration: 60_000 } });
+  await groups.setMeta("tenant-initech", { concurrency: 2, limit: { max: 100, duration: 10_000 } });
   await groups.setPaused(PAUSED, true);
-  await groups.setMaxed("tenant-acme", true);
-  await groups.setRateLimited("tenant-hooli", Date.now() + 5 * 60_000);
+  await groups.setRateLimited(LIMITED, Date.now() + 60_000);
+  ctx.loop("pro.limit", 60_000, () => groups.setRateLimited(LIMITED, Date.now() + 60_000), 60_000);
 
   // Seed every tenant so the groups view is full from the first refresh.
   for (const gid of R.TENANTS) {
@@ -57,9 +65,10 @@ export async function startProGrouped(ctx: SimContext, redis: Redis): Promise<vo
     QUEUE,
     async (job) => {
       const gid: string = job.data.tenantId;
-      // The paused group's jobs stay in their list: a real Pro worker skips them.
-      if (gid === PAUSED) {
-        await job.moveToDelayed(Date.now() + 10 * 60_000, job.token);
+      // A real Pro worker never takes a job from a paused, maxed or rate-limited
+      // group; park it and let the group's state drive the dashboard.
+      if (await groups.isBlocked(gid)) {
+        await job.moveToDelayed(Date.now() + (gid === PAUSED ? 10 * 60_000 : 15_000), job.token);
         throw new DelayedError();
       }
       await groups.markActive(gid, job.id!);

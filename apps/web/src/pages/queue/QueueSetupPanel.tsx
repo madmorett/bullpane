@@ -130,15 +130,13 @@ function SetupGrid({ data, since }: { data: QueueSetup; since: number }) {
               <span className="num">
                 {formatNumber(g.count)} {g.count === 1 ? "group" : "groups"}
               </span>
-              <span className="text-fg-muted">
-                per-group concurrency limits: <YesNo v={g.concurrencyLimited} />
-              </span>
-              <span className="text-fg-muted">
-                per-group rate limits: <YesNo v={g.rateLimited} />
-              </span>
               <span className="num text-fg-muted">
-                {formatNumber(g.activeGroups)} active · {formatNumber(g.pausedGroups)} paused
+                {formatNumber(g.byStatus.waiting)} waiting · {formatNumber(g.byStatus.limited)} limited · {formatNumber(g.byStatus.maxed)} maxed · {formatNumber(g.byStatus.paused)} paused
               </span>
+              <Tooltip content="Groups with their own concurrency or rate limit (queue.setGroupConcurrency / setGroupRateLimit). The others use the worker's group option." side="bottom">
+                <span className="num cursor-help text-fg-muted underline decoration-dotted underline-offset-2">{formatNumber(g.configured)} with per-group overrides</span>
+              </Tooltip>
+              <span className="num text-fg-muted">{formatNumber(g.active)} with active jobs</span>
             </span>
           ) : (
             <Unknown title="No BullMQ Pro group keys found for this queue">none observed</Unknown>
@@ -204,10 +202,6 @@ function Unknown({ children, title, className }: { children: ReactNode; title?: 
       {children}
     </span>
   );
-}
-
-function YesNo({ v }: { v: boolean }) {
-  return <span className={v ? "text-fg" : "text-fg-subtle"}>{v ? "yes" : "no"}</span>;
 }
 
 /** Live "throttled · lifts in Xs" pill; counts down from the TTL observed at fetch time. */

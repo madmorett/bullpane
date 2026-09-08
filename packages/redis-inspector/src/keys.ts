@@ -107,26 +107,63 @@ export const JOB_KEY = {
 /**
  * BullMQ Pro group keys (relative to `${prefix}:${queue}:`).
  *
- * Best knowledge of the layout (not officially documented):
- *  - `groups`            zset  group id -> score (used for fair round-robin ordering)
- *  - `groups:${gid}`     list  waiting job ids of that group
- *  - `groups:active`     zset/set of groups currently being processed
- *  - `groups:paused`     set/zset of paused groups
- *  - `groups:max`        set/zset of groups that hit their max concurrency
- *  - `groups:limit`      zset  rate-limited groups -> score = ms when the limit lifts
- *  - `groups-lid`        string  last group id served (round-robin pointer)
- * The Lua that reads these is written defensively (ZSCORE then SISMEMBER) so a
- * set/zset mismatch degrades to status "unknown" rather than an error.
+ * Layout verified against @taskforcesh/bullmq-pro 7.48.0 (dist/esm/commands/*.lua)
+ * on a live Redis with per-group concurrency AND per-group rate limits enabled:
+ *
+ *   groups                zset   gid -> round-robin score. ONLY groups in status
+ *                                "waiting". A group sits in exactly one of the four
+ *                                status zsets, so "all groups" is the union of the
+ *                                four — a queue whose groups are all maxed has NO
+ *                                `groups` key at all (QueuePro.getGroups does the same union).
+ *   groups:limit          zset   rate-limited gids -> unix ms when the limit lifts
+ *   groups:max            zset   gids at their concurrency cap -> unix ms they got there
+ *   groups:paused         zset   paused gids (queue.pauseGroup) -> unix ms paused
+ *   groups:${gid}         list   waiting job ids (LPUSH; RPOPLPUSH -> active, so tail = next)
+ *   groups:${gid}:p       zset   prioritized waiting jobs of the group (opts.priority)
+ *   groups:${gid}:meta    hash   per-group overrides: conc (concurrency), lm / ld
+ *                                (rate limit max / duration ms) — queue.setGroupConcurrency
+ *                                / setGroupRateLimit
+ *   groups:${gid}:limit   string rate-limit counter, PEXPIRE = duration; >= 999999 = limited
+ *   groups:active:count   hash   gid -> jobs being processed now. Only maintained when
+ *                                the worker runs with group.concurrency.
+ *   groups:metas          zset   gids that have a groups:${gid}:meta hash
+ *   groups:concurrency    hash   legacy per-group concurrency (pre 7.x); Pro reads it first
+ *   groups-lid            string last gid served (round-robin pointer)
+ *
+ * Per-group overrides only take effect when the WORKER runs with `group.concurrency`
+ * / `group.limit`: the Lua that enforces them is only invoked when the worker
+ * option is set (scripts-pro.js passes workerOpts.group into moveToActive).
  */
 export const GROUP_KEY = {
   groups: "groups",
-  group: (groupId: string) => `groups:${groupId}`,
-  active: "groups:active",
-  paused: "groups:paused",
-  max: "groups:max",
   limit: "groups:limit",
+  max: "groups:max",
+  paused: "groups:paused",
+  group: (groupId: string) => `groups:${groupId}`,
+  groupPrioritized: (groupId: string) => `groups:${groupId}:p`,
+  groupMeta: (groupId: string) => `groups:${groupId}:meta`,
+  groupLimit: (groupId: string) => `groups:${groupId}:limit`,
+  activeCount: "groups:active:count",
+  metas: "groups:metas",
+  concurrencyLegacy: "groups:concurrency",
   lastId: "groups-lid",
 } as const;
+
+/**
+ * `bull:orders:groups:tenant-a:meta` matches the discovery pattern `bull:*:meta`
+ * and would surface as a queue called `orders:groups:tenant-a`. It is the settings
+ * hash of a Pro group, not a queue. A name is dropped when it has the shape
+ * `${queue}:groups:${gid}` AND `${queue}` itself was discovered; a real queue that
+ * happens to contain ":groups:" but has no such parent is kept.
+ */
+export function dropGroupMetaNames(names: Iterable<string>): string[] {
+  const set = new Set(names);
+  return [...set].filter((name) => {
+    const idx = name.indexOf(`:${GROUP_KEY.groups}:`);
+    if (idx <= 0) return true;
+    return !set.has(name.slice(0, idx));
+  });
+}
 
 /** Job hash fields that carry the Pro group id (we accept either spelling). */
 export const GROUP_ID_FIELDS = ["gid", "groupId"] as const;

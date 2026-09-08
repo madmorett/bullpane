@@ -34,6 +34,7 @@ export {
   queueKeyPrefix,
   queueNameFromQueueKey,
   stateKey,
+  dropGroupMetaNames,
 } from "./keys.js";
 
 export { parseRedisUrl } from "./connection.js";

@@ -19,7 +19,7 @@ export type RawJobHash = Record<string, string | undefined>;
 // Rows from getJobs.lua / searchJobs.lua: [id, ...JOB_SUMMARY_FIELDS values, truncated]
 // ---------------------------------------------------------------------------
 
-export function rowToHash(row: LuaReply[]): { id: string; hash: RawJobHash; truncated: boolean } {
+export function rowToHash(row: LuaReply[]): { id: string; hash: RawJobHash; truncated: boolean; dataBytes: number | null } {
   const id = String(row[0] ?? "");
   const hash: RawJobHash = {};
   JOB_SUMMARY_FIELDS.forEach((field, i) => {
@@ -28,7 +28,8 @@ export function rowToHash(row: LuaReply[]): { id: string; hash: RawJobHash; trun
     else if (typeof v === "number") hash[field] = String(v);
   });
   const truncated = row[JOB_SUMMARY_FIELDS.length + 1] === 1;
-  return { id, hash, truncated };
+  const size = row[JOB_SUMMARY_FIELDS.length + 2];
+  return { id, hash, truncated, dataBytes: typeof size === "number" ? size : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ export function hashToSummary(
   hash: RawJobHash,
   state: JobState | "unknown",
   dataTruncated: boolean,
+  dataBytes: number | null = null,
 ): JobSummary {
   const opts = parseOpts(hash);
   return {
@@ -127,6 +129,7 @@ export function hashToSummary(
     priority: toInt(hash.priority, 0),
     dataPreview: hash.data ?? "",
     dataTruncated,
+    dataBytes,
     parent: parseParent(prefix, hash),
     groupId: parseGroupId(hash, opts),
     // `stc` é o contador de stalls do BullMQ (Job.fromJSON: parseInt(json.stc || '0')).
@@ -144,7 +147,7 @@ export function hashToDetail(
   state: JobState | "unknown",
   extra: { logs: string[]; logsCount: number; dependencies: { processed: number; unprocessed: number } | null },
 ): JobDetail {
-  const { dataPreview: _p, dataTruncated: _t, ...summary } = hashToSummary(prefix, id, hash, state, false);
+  const { dataPreview: _p, dataTruncated: _t, ...summary } = hashToSummary(prefix, id, hash, state, false, hash.data ? Buffer.byteLength(hash.data) : 0);
   return {
     ...summary,
     data: safeJsonParse(hash.data, null),

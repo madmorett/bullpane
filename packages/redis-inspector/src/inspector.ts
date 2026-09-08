@@ -11,7 +11,11 @@ import {
   type BulkJobAction,
   type BulkJobActionResult,
   type BulkJobFailure,
+  type DiscoveryStatus,
+  GROUP_STATUSES,
+  type GroupStatus,
   type GroupSummary,
+  type GroupsPage,
   type JobDetail,
   type JobScheduler,
   type JobSearchResult,
@@ -33,6 +37,7 @@ import {
   SCHEDULER_KEY,
   STATE_ORDER,
   allStateKeys,
+  dropGroupMetaNames,
   metaScanPattern,
   parseQueueNameFromMetaKey,
   queueKeyPrefix,
@@ -70,11 +75,20 @@ const DEFAULTS: Required<InspectorOptions> = {
   previewBytes: 2048,
   maxScanPerCall: 1000,
   connectTimeoutMs: 5000,
-  maxScanIterations: 200,
+  maxScanIterations: 2000,
+  discoveryScanBudgetMs: 1500,
+  fullScanIntervalMs: 300_000,
+  listFieldCapBytes: 32 * 1024,
+  searchFieldCapBytes: 256 * 1024,
+  searchByteBudget: 8 * 1024 * 1024,
 };
 
-/** SCAN COUNT hint: big enough to finish quickly, small enough not to stall Redis. */
-const SCAN_COUNT = 500;
+/**
+ * SCAN COUNT hint. One SCAN with COUNT 1000 is ~0.3 ms on a 3M-key Redis; with
+ * maxScanIterations 2000 a pass covers ~2M keys in well under a second of Redis
+ * time, and the cursor carries over to the next pass for bigger keyspaces.
+ */
+const SCAN_COUNT = 1000;
 /** Metric points returned by getQueueStats when withMetrics is set (one per minute). */
 const STATS_METRIC_POINTS = 60;
 /**
@@ -86,6 +100,13 @@ const STATS_METRIC_POINTS = 60;
 const BULK_CONCURRENCY = 8;
 /** Trailing window for QueueRates (success / failure %). */
 const DEFAULT_RATE_WINDOW_MINUTES = 60;
+/**
+ * A forced discovery (`?refresh=1`) re-runs the SCAN cycle, which is ~0.7 s of
+ * Redis time on a 1.3M-key keyspace. Twenty clients clicking refresh in a loop
+ * turned that into a steady 40% of a Redis core in the stress test, so a forced
+ * pass is honoured at most this often; in between the cached list is returned.
+ */
+const FORCE_DISCOVERY_MIN_MS = 5_000;
 /** getQueueSetup cache TTL: CLIENT LIST is O(clients), so never hammer it. */
 const SETUP_CACHE_MS = 10_000;
 /** Log lines shipped with job detail. More are available through getJobLogs. */
@@ -102,6 +123,24 @@ export class RedisInspector implements Inspector {
   private readonly filter: RegExp | null;
 
   private discovered: { at: number; names: string[] } | null = null;
+
+  /** incremental SCAN state for discovery; see discoverQueues */
+
+  private readonly scan = {
+
+    known: new Set<string>(),
+
+    cursors: new Map<string, string>(),
+
+    doneNodes: new Set<string>(),
+
+    iterationsThisCycle: 0,
+
+    completedCycles: 0,
+
+    lastCycleEndAt: 0,
+
+  };
   private readonly setupCache = new Map<string, { at: number; value: QueueSetup }>();
   private discovering: Promise<string[]> | null = null;
 
@@ -260,17 +299,24 @@ export class RedisInspector implements Inspector {
   // ---------------------------------------------------------------------------
 
   /**
-   * SCAN (never KEYS) for `${prefix}:*:meta`, one meta hash per queue. Bounded by
-   * maxScanIterations * COUNT keys per pass and cached for discoveryTtlMs; concurrent
-   * callers share one in-flight pass.
+   * Which queues exist = SCAN for `${prefix}:*:meta` ∪ the queues whose workers
+   * are connected right now (CLIENT LIST names), minus names whose meta key is
+   * gone. Cached for discoveryTtlMs; concurrent callers share one in-flight pass.
+   *
+   * The SCAN is incremental: each pass spends at most maxScanIterations /
+   * discoveryScanBudgetMs and keeps its cursor, so on a Redis with millions of
+   * keys the first full cycle may take a few passes (see discoveryStatus) while
+   * every queue with a live worker is listed from the very first call. After a
+   * full cycle the SCAN runs again only every fullScanIntervalMs, or on `force`.
    */
   async discoverQueues(opts: { force?: boolean } = {}): Promise<string[]> {
     const now = Date.now();
-    if (!opts.force && this.discovered && now - this.discovered.at < this.opts.discoveryTtlMs) {
+    const age = this.discovered ? now - this.discovered.at : Number.POSITIVE_INFINITY;
+    if (this.discovered && age < (opts.force ? FORCE_DISCOVERY_MIN_MS : this.opts.discoveryTtlMs)) {
       return this.discovered.names;
     }
     if (!this.discovering) {
-      this.discovering = this.scanQueues()
+      this.discovering = this.refreshDiscovery(opts.force === true)
         .then((names) => {
           this.discovered = { at: Date.now(), names };
           return names;
@@ -282,27 +328,120 @@ export class RedisInspector implements Inspector {
     return this.discovering;
   }
 
-  private async scanQueues(): Promise<string[]> {
+  async discoveryStatus(): Promise<DiscoveryStatus> {
+    let totalKeys: number | null = null;
+    try {
+      const c = await this.ensureConnected();
+      // DBSIZE is O(1); in cluster mode sum the masters.
+      const nodes: Redis[] = c instanceof Cluster ? c.nodes("master") : [c];
+      const sizes = await Promise.all(nodes.map((n) => n.dbsize()));
+      totalKeys = sizes.reduce((a, b) => a + b, 0);
+    } catch {
+      totalKeys = null;
+    }
+    return { complete: this.scan.completedCycles > 0, scannedIterations: this.scan.iterationsThisCycle, totalKeys };
+  }
+
+  /** One discovery pass: verify what we know, advance the SCAN if due, add worker queues. */
+  private async refreshDiscovery(force: boolean): Promise<string[]> {
     const c = await this.ensureConnected();
-    // In cluster mode SCAN is per node; every master owns a disjoint slice of the keyspace.
+    await this.dropVanished(c);
+    const now = Date.now();
+    const scanDue = force || this.scan.completedCycles === 0 || now - this.scan.lastCycleEndAt >= this.opts.fullScanIntervalMs;
+    if (scanDue) await this.advanceScan(c);
+    for (const name of await this.queueNamesFromClients(c)) this.scan.known.add(name);
+    const names = [...this.scan.known].filter((n) => !this.filter || this.filter.test(n));
+    return dropGroupMetaNames(names).sort((a, b) => a.localeCompare(b));
+  }
+
+  /** EXISTS on every known meta key, one pipeline: O(#queues), and it keeps deleted queues from lingering. */
+  private async dropVanished(c: RedisClient): Promise<void> {
+    if (this.scan.known.size === 0) return;
+    const names = [...this.scan.known];
+    const pipe = c.pipeline();
+    for (const n of names) pipe.exists(queueKeyPrefix(this.config.prefix, n) + QUEUE_KEY.meta);
+    const res = (await pipe.exec()) ?? [];
+    names.forEach((n, i) => {
+      const [err, v] = res[i] ?? [null, 1];
+      if (!err && v === 0) this.scan.known.delete(n);
+    });
+  }
+
+  /**
+   * Continue the SCAN cycle from the stored cursors until every node wraps to "0"
+   * (cycle complete) or the pass budget runs out. In cluster mode SCAN is per
+   * node; every master owns a disjoint slice of the keyspace.
+   */
+  private async advanceScan(c: RedisClient): Promise<void> {
     const nodes: Redis[] = c instanceof Cluster ? c.nodes("master") : [c];
     const pattern = metaScanPattern(this.config.prefix);
-    const found = new Set<string>();
+    const deadline = Date.now() + this.opts.discoveryScanBudgetMs;
     let budget = this.opts.maxScanIterations;
     for (const node of nodes) {
-      let cursor = "0";
-      do {
+      const key = `${node.options.host}:${node.options.port}`;
+      let cursor = this.scan.cursors.get(key) ?? "0";
+      if (this.scan.doneNodes.has(key)) continue;
+      while (budget > 0 && Date.now() < deadline) {
         const [next, keys] = await node.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
         cursor = next;
         budget -= 1;
-        for (const key of keys) {
-          const name = parseQueueNameFromMetaKey(this.config.prefix, key);
-          if (name && (!this.filter || this.filter.test(name))) found.add(name);
+        this.scan.iterationsThisCycle += 1;
+        for (const k of keys) {
+          const name = parseQueueNameFromMetaKey(this.config.prefix, k);
+          if (name) this.scan.known.add(name);
         }
-      } while (cursor !== "0" && budget > 0);
-      if (budget <= 0) break;
+        if (cursor === "0") {
+          this.scan.doneNodes.add(key);
+          break;
+        }
+      }
+      this.scan.cursors.set(key, cursor);
+      if (budget <= 0 || Date.now() >= deadline) break;
     }
-    return [...found].sort((a, b) => a.localeCompare(b));
+    if (nodes.every((n) => this.scan.doneNodes.has(`${n.options.host}:${n.options.port}`))) {
+      this.scan.completedCycles += 1;
+      this.scan.lastCycleEndAt = Date.now();
+      this.scan.iterationsThisCycle = 0;
+      this.scan.cursors.clear();
+      this.scan.doneNodes.clear();
+    }
+  }
+
+  /**
+   * BullMQ workers announce themselves with CLIENT SETNAME `${prefix}:${base64(queue)}`
+   * (older versions: the raw queue name), optionally followed by `:w:${workerName}`.
+   * CLIENT LIST is O(clients) and finds every queue that is being worked on right
+   * now even when the SCAN has not reached its meta key yet. Both spellings are
+   * tried and only names whose meta key exists are kept.
+   */
+  private async queueNamesFromClients(c: RedisClient): Promise<string[]> {
+    const head = `${this.config.prefix}:`;
+    const nodes: Redis[] = c instanceof Cluster ? c.nodes("master") : [c];
+    const raws = await Promise.all(nodes.map((n) => n.client("LIST").then((r) => String(r)).catch(() => "")));
+    const candidates = new Set<string>();
+    for (const raw of raws) {
+      for (const line of raw.split("\n")) {
+        const name = /(?:^|\s)name=(\S*)/.exec(line)?.[1] ?? "";
+        if (!name.startsWith(head)) continue;
+        let body = name.slice(head.length);
+        const w = body.indexOf(":w:");
+        if (w !== -1) body = body.slice(0, w);
+        if (!body) continue;
+        candidates.add(body);
+        try {
+          const decoded = Buffer.from(body, "base64").toString("utf8");
+          if (decoded && Buffer.from(decoded, "utf8").toString("base64").replace(/=+$/, "") === body.replace(/=+$/, "")) candidates.add(decoded);
+        } catch {
+          /* not base64 */
+        }
+      }
+    }
+    if (candidates.size === 0) return [];
+    const list = [...candidates];
+    const pipe = c.pipeline();
+    for (const n of list) pipe.exists(queueKeyPrefix(this.config.prefix, n) + QUEUE_KEY.meta);
+    const res = (await pipe.exec()) ?? [];
+    return list.filter((_, i) => res[i]?.[1] === 1);
   }
 
   private invalidateDiscovery(): void {
@@ -417,12 +556,13 @@ export class RedisInspector implements Inspector {
     opts: { start: number; end: number; order: "asc" | "desc" },
   ): Promise<JobsPage> {
     const key = stateKey(this.config.prefix, queueName, state);
-    return this.readPage(queueName, key, STATE_KEY[state].type, state, opts);
+    return this.readPage(queueName, [key], STATE_KEY[state].type, state, opts);
   }
 
+  /** `keys` is the state key, or for a Pro group its list followed by its `:p` zset. */
   private async readPage(
     queueName: string,
-    key: string,
+    keys: string[],
     type: "list" | "zset",
     state: JobState | "unknown",
     opts: { start: number; end: number; order: "asc" | "desc" },
@@ -430,13 +570,15 @@ export class RedisInspector implements Inspector {
     const c = await this.ensureConnected();
     const reply = asArray(
       await callScript(c, "getJobs", [
-        key,
+        keys.length,
+        ...keys,
         type,
         opts.start,
         opts.end,
         opts.order,
         queueKeyPrefix(this.config.prefix, queueName),
         this.opts.previewBytes,
+        this.opts.listFieldCapBytes,
         ...JOB_SUMMARY_FIELDS,
       ]),
     );
@@ -449,13 +591,16 @@ export class RedisInspector implements Inspector {
   }
 
   private rowToSummary(row: LuaReply, state: JobState | "unknown"): JobSummary {
-    const { id, hash, truncated } = rowToHash(asArray(row));
-    return hashToSummary(this.config.prefix, id, hash, state, truncated);
+    const { id, hash, truncated, dataBytes } = rowToHash(asArray(row));
+    return hashToSummary(this.config.prefix, id, hash, state, truncated, dataBytes);
   }
 
   /**
-   * Bounded, resumable search: at most maxScanPerCall hashes per call, plain
-   * substring match done in Lua. The cursor is the index of the next job (newest = 0).
+   * Bounded, resumable search: at most maxScanPerCall hashes AND at most
+   * searchByteBudget payload bytes per call (payloads over searchFieldCapBytes
+   * are not read at all), plain substring match done in Lua. The cursor is the
+   * index of the next job (newest = 0). Measured: 1000 × 1 MB jobs used to hold
+   * Redis for 13 s per call; both bounds keep a call in the milliseconds.
    */
   async searchJobs(
     queueName: string,
@@ -475,6 +620,8 @@ export class RedisInspector implements Inspector {
         Math.max(1, opts.limit),
         queueKeyPrefix(this.config.prefix, queueName),
         this.opts.previewBytes,
+        this.opts.searchFieldCapBytes,
+        this.opts.searchByteBudget,
         ...JOB_SUMMARY_FIELDS,
       ]),
     );
@@ -484,6 +631,7 @@ export class RedisInspector implements Inspector {
       nextCursor: next < 0 ? null : String(next),
       scanned: asNumber(reply[2]),
       total: asNumber(reply[3]),
+      skippedLargePayloads: asNumber(reply[4]),
     };
   }
 
@@ -559,10 +707,11 @@ export class RedisInspector implements Inspector {
         p + QUEUE_KEY.meta,
         p + QUEUE_KEY.limiter,
         p + GROUP_KEY.groups,
-        p + GROUP_KEY.active,
-        p + GROUP_KEY.paused,
-        p + GROUP_KEY.max,
         p + GROUP_KEY.limit,
+        p + GROUP_KEY.max,
+        p + GROUP_KEY.paused,
+        p + GROUP_KEY.activeCount,
+        p + GROUP_KEY.metas,
         p + QUEUE_KEY.metricsCompleted,
       ]),
       this.listWorkers(c, queueName).catch(() => null),
@@ -570,9 +719,12 @@ export class RedisInspector implements Inspector {
     const r = asArray(reply);
     const meta = flatToHash(asArray(r[0]));
     const limiterTtl = asNumber(r[1], -2);
-    const hasGroups = asNumber(r[2]) === 1;
+    const byStatus = groupsByStatus(r, 2);
+    const groupsCount = byStatus.waiting + byStatus.limited + byStatus.maxed + byStatus.paused;
+    const configured = asNumber(r[7]);
     const version = meta.version ?? null;
-    const isPro = hasGroups || (version !== null && version.startsWith("bullmq-pro"));
+    // Same rule as queueStats.lua: any group key or a bullmq-pro version stamp.
+    const isPro = groupsCount > 0 || configured > 0 || (version !== null && version.startsWith("bullmq-pro"));
     const max = toIntOrNull(meta.max);
     const duration = toIntOrNull(meta.duration);
 
@@ -588,15 +740,7 @@ export class RedisInspector implements Inspector {
       globalRateLimit: max !== null && duration !== null ? { max, durationMs: duration } : null,
       rateLimitedNow: limiterTtl >= 0 ? { ttlMs: limiterTtl } : null,
       workers,
-      groups: isPro
-        ? {
-            count: asNumber(r[3]),
-            activeGroups: asNumber(r[4]),
-            pausedGroups: asNumber(r[5]),
-            concurrencyLimited: asNumber(r[6]) === 1,
-            rateLimited: asNumber(r[7]) === 1,
-          }
-        : null,
+      groups: isPro ? { count: groupsCount, byStatus, configured, active: asNumber(r[6]) } : null,
       batch: "unknown",
       metricsEnabled: asNumber(r[8]) === 1,
       maxLenEvents: toIntOrNull(meta["opts.maxLenEvents"]),
@@ -638,38 +782,58 @@ export class RedisInspector implements Inspector {
     return { count: names.length, names: pretty };
   }
 
-  async getGroups(queueName: string, opts: { start: number; end: number }): Promise<{ groups: GroupSummary[]; total: number }> {
+  /**
+   * One EVALSHA: pages across the four status zsets in Pro's own order (waiting,
+   * limited, maxed, paused) and reads each group's list length, prioritized count,
+   * active count and per-group overrides. See getGroups.lua and keys.ts.
+   */
+  async getGroups(queueName: string, opts: { start: number; end: number }): Promise<GroupsPage> {
     const c = await this.ensureConnected();
     const p = queueKeyPrefix(this.config.prefix, queueName);
     const reply = asArray(
       await callScript(c, "getGroups", [
         p + GROUP_KEY.groups,
-        p + GROUP_KEY.active,
-        p + GROUP_KEY.paused,
-        p + GROUP_KEY.max,
         p + GROUP_KEY.limit,
+        p + GROUP_KEY.max,
+        p + GROUP_KEY.paused,
+        p + GROUP_KEY.activeCount,
+        p + GROUP_KEY.concurrencyLegacy,
         opts.start,
         opts.end,
         p,
       ]),
     );
-    const groups = asArray(reply[1]).map((row): GroupSummary => {
+    const groups = asArray(reply[2]).map((row): GroupSummary => {
       const r = asArray(row);
-      const status = typeof r[3] === "string" ? r[3] : "unknown";
+      const status = typeof r[1] === "string" && isGroupStatus(r[1]) ? r[1] : "waiting";
+      const max = toIntOrNull(typeof r[6] === "string" ? r[6] : null);
+      const duration = toIntOrNull(typeof r[7] === "string" ? r[7] : null);
+      const score = Number(r[8]) || 0;
       return {
         id: String(r[0] ?? ""),
-        score: Number(r[1]) || 0,
+        status,
         waiting: asNumber(r[2]),
-        status: isGroupStatus(status) ? status : "unknown",
+        prioritized: asNumber(r[3]),
+        active: asNumber(r[4]),
+        concurrency: toIntOrNull(typeof r[5] === "string" ? r[5] : null),
+        rateLimit: max !== null && duration !== null ? { max, durationMs: duration } : null,
+        limitedUntil: status === "limited" ? score : null,
+        since: status === "maxed" || status === "paused" ? score : null,
       };
     });
-    return { groups, total: asNumber(reply[0]) };
+    return { groups, total: asNumber(reply[0]), byStatus: groupsByStatus(asArray(reply[1]), 0) };
   }
 
-  /** A group's waiting jobs live in the `groups:${id}` list; same script as getJobs. */
+  /**
+   * A group's waiting jobs are its `groups:${id}` list followed by its `groups:${id}:p`
+   * zset (prioritized), the order Pro serves them in; same script as getJobs.
+   */
   async getGroupJobs(queueName: string, groupId: string, opts: { start: number; end: number }): Promise<JobsPage> {
-    const key = queueKeyPrefix(this.config.prefix, queueName) + GROUP_KEY.group(groupId);
-    return this.readPage(queueName, key, "list", "waiting", { ...opts, order: "desc" });
+    const p = queueKeyPrefix(this.config.prefix, queueName);
+    return this.readPage(queueName, [p + GROUP_KEY.group(groupId), p + GROUP_KEY.groupPrioritized(groupId)], "list", "waiting", {
+      ...opts,
+      order: "desc",
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -965,9 +1129,19 @@ function isJobState(s: string): s is JobState {
   return JOB_STATE_SET.has(s);
 }
 
-const GROUP_STATUSES = new Set<string>(["active", "waiting", "paused", "rate-limited", "maxed", "unknown"]);
-function isGroupStatus(s: string): s is GroupSummary["status"] {
-  return GROUP_STATUSES.has(s);
+const GROUP_STATUS_SET = new Set<string>(GROUP_STATUSES);
+function isGroupStatus(s: string): s is GroupStatus {
+  return GROUP_STATUS_SET.has(s);
+}
+
+/** Four consecutive ZCARDs in GROUP_STATUSES order, starting at `from`. */
+function groupsByStatus(r: LuaReply[], from: number): Record<GroupStatus, number> {
+  return {
+    waiting: asNumber(r[from]),
+    limited: asNumber(r[from + 1]),
+    maxed: asNumber(r[from + 2]),
+    paused: asNumber(r[from + 3]),
+  };
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {

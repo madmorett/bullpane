@@ -1,4 +1,5 @@
 import {
+  type DiscoveryStatus,
   type ConnectionStatus,
   createConnectionSchema,
   type HiddenQueue,
@@ -77,7 +78,7 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [viewer] },
     async (
       request,
-    ): Promise<{ info: RedisServerInfo; queues: QueueSummary[]; status: ConnectionStatus; hiddenCount: number }> => {
+    ): Promise<{ info: RedisServerInfo; queues: QueueSummary[]; status: ConnectionStatus; hiddenCount: number; discovery: DiscoveryStatus }> => {
       const row = await app.ctx.connections.getRow(request.params.id);
       const inspector = app.ctx.connections.inspectorFor(row);
       const [info, queues, status, hidden] = await Promise.all([
@@ -90,7 +91,11 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
         // sum what it is given and still say "N hidden" out loud.
         app.ctx.connections.hiddenQueueNames(row.id),
       ]);
-      return { info, queues, status, hiddenCount: hidden.size };
+      // After listQueues so it reflects the pass that just ran. On a huge keyspace
+      // the first SCAN cycle takes several passes; the UI must say the list may be
+      // incomplete rather than let "no queues" pass for the truth.
+      const discovery = await inspector.discoveryStatus();
+      return { info, queues, status, hiddenCount: hidden.size, discovery };
     },
   );
 

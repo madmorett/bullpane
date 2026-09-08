@@ -26,7 +26,8 @@ import type {
   FlowEdge,
   FlowGraph,
   Folder,
-  GroupSummary,
+  DiscoveryStatus,
+  GroupsPage,
   HiddenQueue,
   JobDetail,
   JobSearchResult,
@@ -37,6 +38,12 @@ import type {
   QueueSummary,
   SchedulersPage,
   RedisConnection,
+  CreateSsoProviderInput,
+  SsoLoginOptions,
+  SsoProvider,
+  SsoSettings,
+  SsoTestResult,
+  UpdateSsoProviderInput,
   RedisServerInfo,
   SetupStatus,
   UpdateConnectionInput,
@@ -76,6 +83,8 @@ export interface ConnectionOverview {
   status: ConnectionStatus;
   /** how many queues were left out because they are hidden */
   hiddenCount?: number;
+  /** SCAN progress; absent on older servers */
+  discovery?: DiscoveryStatus;
 }
 
 export interface JobLogsResponse {
@@ -83,10 +92,6 @@ export interface JobLogsResponse {
   count: number;
 }
 
-export interface GroupsPage {
-  groups: GroupSummary[];
-  total: number;
-}
 
 export interface AlertTestResult {
   ok: boolean;
@@ -172,6 +177,9 @@ export const qk = {
   alerts: ["alerts"] as const,
   alertEvents: (p: { limit?: number; alertId?: string }) => ["alerts", "events", p] as const,
   users: ["users"] as const,
+  ssoProviders: ["sso", "providers"] as const,
+  ssoSettings: ["sso", "settings"] as const,
+  ssoLoginOptions: ["sso", "login-options"] as const,
   audit: (p: AuditFilters & { limit?: number }) => ["audit", p] as const,
   auditActors: ["audit", "actors"] as const,
 };
@@ -920,5 +928,95 @@ export function useRefreshLicense() {
 export function useRemoveLicense() {
   return useMutation({
     mutationFn: () => api.del<Edition>("/license"),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// SSO (Pro)
+// ---------------------------------------------------------------------------
+
+/**
+ * The login page's own query. Unauthenticated and never gated: on the free
+ * edition the server answers with an empty provider list, so the page just
+ * renders the password form. `silent: true` because a failure here must not
+ * fire the global 401/402 handlers — nobody is logged in yet.
+ */
+export function useSsoLoginOptions() {
+  return useQuery({
+    queryKey: qk.ssoLoginOptions,
+    queryFn: () => api.get<SsoLoginOptions>("/auth/sso/options", { silent: true }),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useSsoProviders(enabled = true) {
+  return useQuery({
+    queryKey: qk.ssoProviders,
+    queryFn: () => api.get<SsoProvider[]>("/sso/providers", { silent: [402] }),
+    enabled,
+  });
+}
+
+export function useSsoSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.ssoSettings,
+    queryFn: () => api.get<SsoSettings>("/sso/settings", { silent: [402] }),
+    enabled,
+  });
+}
+
+export function useCreateSsoProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSsoProviderInput) => api.post<SsoProvider>("/sso/providers", input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.ssoProviders });
+      // The login page's button list changes with it.
+      void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });
+    },
+  });
+}
+
+export function useUpdateSsoProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateSsoProviderInput }) =>
+      api.patch<SsoProvider>(`/sso/providers/${seg(id)}`, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.ssoProviders });
+      void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });
+    },
+  });
+}
+
+export function useDeleteSsoProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ ok: true }>(`/sso/providers/${seg(id)}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.ssoProviders });
+      void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });
+      // Deleting the last provider can flip requireSso's guard.
+      void qc.invalidateQueries({ queryKey: qk.ssoSettings });
+    },
+  });
+}
+
+/** Discovery only — performs no login, so it is safe to click repeatedly. */
+export function useTestSsoProvider() {
+  return useMutation({
+    mutationFn: (id: string) => api.post<SsoTestResult>(`/sso/providers/${seg(id)}/test`),
+  });
+}
+
+export function useSetSsoSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SsoSettings) => api.put<SsoSettings>("/sso/settings", input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.ssoSettings });
+      void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });
+    },
   });
 }

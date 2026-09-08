@@ -108,6 +108,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
   const searchPages = search.data?.pages ?? [];
   const searchJobs = searchPages.flatMap((p) => p.jobs);
   const scanned = searchPages.reduce((sum, p) => sum + (p.scanned ?? 0), 0);
+  const skippedLarge = searchPages.reduce((sum, p) => sum + (p.skippedLargePayloads ?? 0), 0);
   const searchTotal = searchPages.length ? searchPages[searchPages.length - 1].total : (summary.data?.counts?.[state] ?? 0);
 
   /** os jobs que estão de fato na tela — é sobre eles que "select all" age */
@@ -463,6 +464,11 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
                     <span className="num font-semibold text-fg">{formatNumber(searchJobs.length)}</span> {searchJobs.length === 1 ? "match" : "matches"} · scanned <span className="num text-fg">{formatNumber(Math.min(scanned, searchTotal))}</span> of{" "}
                     <span className="num text-fg">{formatNumber(searchTotal)}</span> jobs in <span className={STATE_COLORS[state].textClass}>{state}</span>
                     {!search.hasNextPage && search.data && <span className="text-fg-subtle"> · whole state scanned</span>}
+                    {skippedLarge > 0 && (
+                      <span className="text-fg-subtle" title="Payloads above the search size cap are not read into Lua; those jobs still match on id, name and error.">
+                        {" "}· {formatNumber(skippedLarge)} {skippedLarge === 1 ? "payload" : "payloads"} too large to search inside
+                      </span>
+                    )}
                   </>
                 )}
               </span>

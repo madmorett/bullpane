@@ -20,8 +20,9 @@
   Returns a flat array:
     [1..8]  counts (LLEN for lists, ZCARD for zsets)
     [9]     1 when the queue is paused (meta.paused exists)
-    [10]    1 when the `groups` zset exists (BullMQ Pro)
-    [11]    ZCARD groups
+    [10]    1 when the queue shows a BullMQ Pro signal (any group status zset,
+            groups:metas, or meta.version "bullmq-pro:x")
+    [11]    groups with jobs = sum of the four status zsets (see keys.ts)
     [12]    completed metric points, newest first (empty when withMetrics = 0)
     [13]    failed metric points, newest first
     [14]    ZCOUNT completed since ARGV[3]  (scores are finishedOn timestamps; O(log N))
@@ -67,17 +68,28 @@ out[8] = rcall("ZCARD", KEYS[8])         -- waiting-children
 
 out[9] = rcall("HEXISTS", KEYS[9], "paused")
 
--- Pro detection. `groups` is a zset of group ids; EXISTS is O(1). A queue created
--- by bullmq-pro also stamps meta.version = "bullmq-pro:x.y.z", even before any
--- grouped job exists, so we accept either signal.
-local version = rcall("HGET", KEYS[9], "version")
-if rcall("EXISTS", KEYS[10]) == 1 then
-  out[10] = 1
-  out[11] = rcall("ZCARD", KEYS[10])
-else
-  out[10] = (version and string.sub(version, 1, 10) == "bullmq-pro") and 1 or 0
-  out[11] = 0
+-- Pro detection + group count. A group sits in exactly ONE of four status zsets
+-- (`groups` = waiting, groups:limit, groups:max, groups:paused — see keys.ts), so
+-- "how many groups" is the sum of their ZCARDs and a queue whose groups are all
+-- maxed has no `groups` key at all. groups:metas (per-group overrides) and
+-- meta.version = "bullmq-pro:x" also mark a Pro queue, so an idle one still shows
+-- as Pro. The three extra zsets hang off ARGV[4] (same queue, same hash tag):
+-- three more O(1) commands in the same EVALSHA, no extra round trip.
+local function card(key)
+  local ok, n = pcall(rcall, "ZCARD", key)
+  if ok then return n end
+  return 0
 end
+local version = rcall("HGET", KEYS[9], "version")
+local groupsCount = card(KEYS[10])
+  + card(ARGV[4] .. "groups:limit")
+  + card(ARGV[4] .. "groups:max")
+  + card(ARGV[4] .. "groups:paused")
+local isPro = groupsCount > 0
+  or rcall("EXISTS", ARGV[4] .. "groups:metas") == 1
+  or (version and string.sub(version, 1, 10) == "bullmq-pro") or false
+out[10] = isPro and 1 or 0
+out[11] = groupsCount
 
 if ARGV[1] == "1" then
   local points = tonumber(ARGV[2]) or 60

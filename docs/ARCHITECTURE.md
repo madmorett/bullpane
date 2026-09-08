@@ -42,8 +42,19 @@ Browser ──HTTP/JSON──> Fastify (apps/server)
 Customers point this at production Redis. A dashboard that hurts the workload is worse than
 no dashboard. Rules, enforced in `redis-inspector`:
 
-1. **No `KEYS`, ever.** Discovery is `SCAN ... MATCH prefix:*:meta COUNT 500`, bounded by
-   `maxScanIterations`, cached for `discoveryTtlMs` (30 s).
+1. **No `KEYS`, ever.** Discovery is `SCAN ... MATCH prefix:*:meta COUNT 1000`, **incremental**:
+   a pass spends at most `maxScanIterations` / `discoveryScanBudgetMs` and keeps its cursor, so a
+   keyspace of millions of keys is covered over a few passes instead of silently giving up
+   (the old fixed 200 × 500 budget returned zero queues on a 1.3M-key Redis). Queues with a
+   connected worker are found immediately through `CLIENT LIST` names, known names are
+   re-verified with `EXISTS` every pass, and `discoveryStatus()` tells the UI whether a full
+   cycle has completed. Cached for `discoveryTtlMs` (30 s); a full re-scan every 5 min.
+1b. **Payload size never sets the cost of a page.** `HMGET data` copies the whole field into
+   Lua before it can be truncated, so list reads check `HSTRLEN` first and skip fields above
+   `listFieldCapBytes` (32 KiB; the row carries `dataBytes` instead). Search skips `data`
+   above `searchFieldCapBytes` (256 KiB) and stops a call at `searchByteBudget` (8 MiB),
+   handing back the cursor. Measured on 1 MB payloads: a 200-job page went from 290 ms to
+   single-digit ms of Redis time; a search call from 13 s to milliseconds.
 2. **One round trip per read.** Counts, pages and details are Lua scripts registered with
    `defineCommand` (EVALSHA). Multi-queue reads are a single pipeline.
 3. **Truncate inside Redis.** List views return `string.sub(data, 1, previewBytes)`.
@@ -200,10 +211,74 @@ docs/API.md, "Hidden queues".
 | Folders to organise queues (default: one per connection) | – | ✓ |
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what to which queue, persisted + CSV export | – | ✓ |
+| SSO: OIDC + SAML 2.0, configured by the customer's admin in the UI | – | ✓ |
 
 Gating is one function on the server (`requireFeature(feature)`) returning HTTP 402
 `{ error: "pro_required", feature }`, and one hook on the web (`useEdition()`), so the UI
 shows the locked feature with a lock icon and an upsell instead of hiding it.
+
+## SSO: the IdP proves identity, it does not create accounts
+
+Configured **in the UI**, not through env vars (`sso_providers` in MySQL, one row per
+provider, `config` as JSON). A self-hosted install has no vendor to file a ticket with:
+if a wrong issuer URL could only be fixed by editing a compose file and redeploying,
+the feature would be a liability. `Settings → SSO` also prints the two values the
+admin has to paste at the IdP (redirect URI, or ACS URL + entity ID) and a **Test**
+button that resolves OIDC discovery without performing a login.
+
+**There is deliberately no just-in-time provisioning.** The callback resolves the
+asserted email against an existing `users` row and refuses when there is none — the
+person gets "ask an admin to add you under Users & roles", and the admin gets an
+`auth.sso_denied` audit row naming the email, which is how they learn who to invite.
+JIT would silently turn "anybody with a Google account" into "anybody with a Bullpane
+login", on a dashboard that sits on production queues. Role assignment stays a human
+decision. An admin can now create a **password-less account** (`password` omitted →
+NULL `password_hash`), so an SSO user has no dormant credential; `verifyPassword`
+refuses a NULL hash outright, so such an account cannot use the password form at all.
+
+**The escape hatch is the reason "require SSO" is safe to ship.** The toggle hides the
+password form, but admins keep password access, and `BULLPANE_ALLOW_PASSWORD_LOGIN=true`
+widens that to everyone. Without a way back in, one misconfigured IdP locks a customer
+out of their own installation permanently. The check runs *after* the password is
+verified, so it cannot be used to enumerate accounts or roles. Deleting the last
+enabled provider while the toggle is on is refused, and turning the toggle on with no
+enabled provider is refused.
+
+**What is validated, and why each one is load-bearing.** OIDC is hand-rolled (three
+fetches and one signature check; `openid-client` would be a dependency tree in a binary
+customers audit) with PKCE always on: signature against the JWKS key named by `kid`,
+`iss` equals the *discovered* issuer, `aud`/`azp` contains our client id (without it, a
+token minted for a different app at the same IdP logs somebody in here), `nonce` equals
+the one in the signed flow cookie, `exp`/`iat` within 120 s. `alg: none` and HMAC are
+refused before any key lookup. SAML uses `@node-saml/node-saml` — signed XML means
+canonicalisation and signature-wrapping defences, which is how CVEs happen when
+hand-rolled — with `wantAssertionsSigned`, the audience pinned to our entity id, and
+`validateInResponseTo: always` against a TTL- and size-bounded cache (the replay
+defence, equivalent to OIDC's nonce).
+
+**Flow state lives in a signed, single-use cookie**, not in server memory: an install
+behind two replicas would otherwise fail every other login, and an in-memory map is a
+leak an anonymous caller can drive. `?next` is validated to a local path — an open
+redirect in a login flow is a phishing primitive. Failures redirect to
+`/login?sso_error=<one sentence>`, because the user is in a browser mid-redirect and a
+JSON 500 is not an answer.
+
+**Client secrets are encrypted, not hashed** (AES-256-GCM, key derived via HKDF from
+`SESSION_SECRET`): an OIDC secret must be replayed to the token endpoint, so it has to
+be recoverable. A MySQL dump therefore does not yield the customer's IdP credentials.
+It never comes back out of the API — `SsoProvider.hasSecret` is all the UI learns. The
+operator consequence: **rotating `SESSION_SECRET` makes stored secrets undecryptable**,
+and the error says so and tells the admin to re-enter it. SAML needs no secret; it
+verifies a signature with a public cert.
+
+**Two places the SSO login flow bends an existing rule, both on purpose.** The OIDC
+callback is a `GET` that authenticates somebody, so it is the single exception to
+"reads are never audited" (`AUDITED_READS` in `plugins/audit.ts`) — otherwise the trail
+would record password logins but not SSO ones, and its contents would depend on which
+protocol the customer chose. And the SAML callback is a `POST`, so read-only mode
+allows that one path (`isLoginWrite`): read-only is about not touching the customer's
+queues, and it was never meant to stop people signing in. The admin CRUD under
+`/api/sso/*` stays blocked, because that is a configuration write.
 
 Two kinds of key, one verifier. Both are `base64url(payload).base64url(signature)`
 signed with the vendor Ed25519 key whose public half is compiled into the server:
@@ -246,10 +321,21 @@ MySQL. Both kinds render on the same graph, styled differently.
 ## BullMQ Pro
 
 Pro queues share the standard key layout and add group keys under `${prefix}:${queue}:groups*`.
-The inspector detects a Pro queue by `EXISTS groups` and reads groups read-only. Key names
-are centralised in `packages/redis-inspector/src/keys.ts` so a layout change in Pro is a
-one-file fix. The simulator writes the same layout so the demo shows groups without needing
-a `@taskforcesh/bullmq-pro` token.
+The layout is documented in `packages/redis-inspector/src/keys.ts` (`GROUP_KEY`), verified
+against `@taskforcesh/bullmq-pro` 7.48.0. The facts that shape the reader:
+
+- A group sits in exactly one of four status zsets: `groups` (waiting), `groups:limit`,
+  `groups:max`, `groups:paused`. "All groups" is their union, paged in that order — a queue
+  whose groups are all maxed has **no** `groups` key, so Pro detection looks at all four
+  (plus `groups:metas` and `meta.version`).
+- Per-group settings live in `groups:${gid}:meta` (`conc`, `lm`, `ld`) and only take effect
+  when the worker runs with `group.concurrency` / `group.limit`; `groups:active:count` is only
+  maintained in that case. The UI says "worker default" when no override exists instead of
+  guessing a number.
+- `groups:${gid}:meta` matches the discovery pattern `*:meta`; discovery drops those names.
+
+Reads are read-only, one EVALSHA per page (`getGroups.lua`). The simulator writes the same
+layout so the demo shows groups without needing a Pro token.
 
 ## Audit log (Pro)
 

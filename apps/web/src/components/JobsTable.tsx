@@ -5,7 +5,7 @@ import type { JobSummary } from "@bullpane/shared";
 import type { JobSelection } from "@/lib/useJobSelection";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
-import { formatDateTime, formatDuration, tryPrettyJson } from "@/lib/format";
+import { formatBytes, formatDateTime, formatDuration, tryPrettyJson } from "@/lib/format";
 import type { JobActionKind } from "@/api/hooks";
 import { Table, TableMessage, Td, Th, Tr } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
@@ -325,6 +325,20 @@ export function Highlight({ text, needle }: { text: string; needle?: string | nu
 function DataPreview({ job, highlight }: { job: JobSummary; highlight?: string }) {
   const [expanded, setExpanded] = useState(false);
   const preview = job.dataPreview ?? "";
+  // Payload over the list cap: the server did not copy it out of Redis at all
+  // (HSTRLEN said it is big). Show the size and point at the job page.
+  if (!preview && job.dataTruncated && job.dataBytes) {
+    return (
+      <span className="font-mono text-xs text-fg-subtle" title="Payloads this large are not previewed in lists so a page never moves megabytes through Redis. Open the job to see it.">
+        payload {formatBytes(job.dataBytes)} · open the job
+        {job.failedReason && (
+          <span className="block truncate font-sans text-danger" title={job.failedReason}>
+            <Highlight text={job.failedReason} needle={highlight} />
+          </span>
+        )}
+      </span>
+    );
+  }
   if (job.failedReason && !expanded) {
     return (
       <div className="flex flex-col gap-0.5" data-no-row-click>

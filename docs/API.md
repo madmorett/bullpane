@@ -54,8 +54,8 @@ Pro column: the feature that gates the route (402 in free edition).
 | POST | /connections/:id/queues/:queue/obliterate | admin | | → `{ ok }` |
 | GET | /connections/:id/queues/:queue/schedulers | viewer | | `listSchedulersQuerySchema` (`?page&pageSize`) → `SchedulersPage` |
 | DELETE | /connections/:id/queues/:queue/schedulers/:key | operator | | → `{ ok }` (404 when the id is unknown) |
-| GET | /connections/:id/queues/:queue/groups | viewer | | `?page&pageSize` → `{ groups: GroupSummary[], total }` |
-| GET | /connections/:id/queues/:queue/groups/:groupId/jobs | viewer | | `?page&pageSize` → `JobsPage` |
+| GET | /connections/:id/queues/:queue/groups | viewer | | `?page&pageSize` → `GroupsPage` (`{ groups: GroupSummary[], total, byStatus }`; per group: status, waiting, prioritized, active, concurrency, rateLimit, limitedUntil, since) |
+| GET | /connections/:id/queues/:queue/groups/:groupId/jobs | viewer | | `?page&pageSize` → `JobsPage` (the group's list, then its prioritized zset) |
 | GET | /connections/:id/flows | viewer | flows | `?sample=200` → `FlowGraph` |
 | POST | /flow-edges | operator | flows | `createFlowEdgeSchema` → `FlowEdge` |
 | DELETE | /flow-edges/:id | operator | flows | → `{ ok }` |
@@ -92,6 +92,11 @@ Notes
 |---|---|---|---|---|
 | GET | /connections/:id/queues/:queue/setup | viewer | | → `QueueSetup` (meta hash, limiter TTL, workers via CLIENT LIST, group settings; cached 10 s) |
 | GET | /connections/:id/queues/:queue/jobs?groupId= | viewer | | when `groupId` is set the page comes from that Pro group's list and `state` is ignored |
+| GET | /connections/:id/overview | viewer | | → `{ info, queues, status, hiddenCount, discovery: DiscoveryStatus }` — `discovery.complete` is false until one full SCAN cycle finished (large keyspaces) |
+
+`JobSummary.dataBytes` is the payload size (HSTRLEN). Payloads above the list cap (32 KiB) are not read:
+`dataPreview` is `""` with `dataTruncated: true`. `JobSearchResult.skippedLargePayloads` counts jobs whose
+data was above the search cap (256 KiB) and matched on id / name / error only.
 
 `QueueSummary.rates` (trailing 60 min completed/failed + successPct) is now included in every
 queues/overview response. It costs two `ZCOUNT`s per queue inside the same stats script.

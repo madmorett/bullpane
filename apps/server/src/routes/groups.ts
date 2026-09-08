@@ -1,4 +1,4 @@
-import type { GroupSummary, JobsPage } from "@bullpane/shared";
+import type { GroupsPage, JobsPage } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";
@@ -17,7 +17,7 @@ export async function groupRoutes(app: FastifyInstance): Promise<void> {
   const viewer = requireRole("viewer");
   const base = "/connections/:id/queues/:queue/groups";
 
-  app.get<QueueParams>(base, { preHandler: [viewer] }, async (request): Promise<{ groups: GroupSummary[]; total: number }> => {
+  app.get<QueueParams>(base, { preHandler: [viewer] }, async (request): Promise<GroupsPage> => {
     const query = pagingSchema.parse(request.query);
     const inspector = await app.ctx.connections.getInspector(request.params.id);
     const { start, end } = pageToRange(query.page, query.pageSize);
