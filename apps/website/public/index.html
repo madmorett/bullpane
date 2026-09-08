@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bullpane — the self-hosted BullMQ dashboard you can put in front of production</title>
-<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, flows and groups behind a real login, in one container next to your stack. Free core; Pro adds alerts, roles, folders, flow graphs and an audit log.">
+<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and BullMQ Pro groups behind a real login, in one container next to your stack. Free core; Pro adds alerts, roles, folders, flow graphs and an audit log.">
 <meta property="og:title" content="Bullpane — self-hosted BullMQ dashboard">
 <meta property="og:description" content="Everything bull-board does, faster and behind a login. Pro adds alerts, users & roles, folders, flows and an audit log. USD 19/month or 149/year per installation.">
 <meta property="og:url" content="https://bullpane.com/">
@@ -21,10 +21,11 @@
       Bullpane
     </a>
     <div class="nav-links">
-      <a href="#features">Features</a>
+      <a href="#features">See it</a>
       <a href="#pro">Pro</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
+      <a href="/changelog">Changelog</a>
       <a href="#install" class="btn sm">Install</a>
     </div>
   </div>
@@ -40,6 +41,11 @@
       <a class="btn" href="#pricing">See Pro pricing</a>
       <span class="note">Free core, MIT-style honesty: Pro features are shown locked, never hidden.</span>
     </div>
+
+    <figure class="hero-shot frame">
+      <div class="bar"><span></span><span></span><span></span><em>bullpane · overview</em></div>
+      <img src="/shots/overview.jpg" width="2160" height="1350" alt="Bullpane overview: every connection and queue with counts, success rate and a sparkline, grouped in folders" fetchpriority="high">
+    </figure>
 
     <div class="terminal" id="install">
       <div class="bar"><span></span><span></span><span></span></div>
@@ -81,7 +87,7 @@ docker run -d --name bullpane -p 3000:3000 \
           <tr><td>Login</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
           <tr><td>Users &amp; roles</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Search inside job data</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
-          <tr><td>BullMQ Pro groups &amp; batches</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>BullMQ Pro groups, per-group concurrency &amp; rate limits</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
           <tr><td>Alerts to Slack / webhook</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Audit log in your own database</td><td><i class="pill no">–</i></td><td><i class="pill no">–</i><small>lives in their account</small></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Flow graph</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
@@ -92,32 +98,122 @@ docker run -d --name bullpane -p 3000:3000 \
   </div>
 </section>
 
-<section id="features">
+<section id="features" class="showcase">
   <div class="wrap">
-    <h2>Free, and complete</h2>
-    <p class="sub">The free edition is not a trial. It does everything the open-source dashboards do, on unlimited connections and queues, and it is built for the Redis that runs your business.</p>
-    <div class="grid">
-      <div class="card"><h3>Every queue, every state</h3><p>Waiting, active, delayed, prioritized, completed, failed, paused. Per-minute completed/failed rates. Attention view surfaces the queues that need you.</p></div>
-      <div class="card"><h3>Jobs you can actually read</h3><p>Data, options, progress, logs, stack traces, parent/child links. Search inside job data. Add, retry, promote, remove, discard, in bulk if you like.</p></div>
-      <div class="card"><h3>Queue operations, with guard rails</h3><p>Pause, resume, clean, retry-all, drain and obliterate. The destructive ones need the admin role and are recorded.</p></div>
-      <div class="card"><h3>BullMQ Pro aware</h3><p>Groups, batches and group-level concurrency are first-class. Job schedulers are listed and removable.</p></div>
-      <div class="card"><h3>Built for production Redis</h3><p>No <code>KEYS</code>. Discovery via <code>SCAN</code>, cached. One Lua round trip per queue, payloads truncated inside Redis. Cluster-safe.</p></div>
-      <div class="card"><h3>Real login, read-only mode</h3><p>Admin account with sessions. <code>BULLPANE_READ_ONLY=true</code> refuses every write while you point it at production for the first time.</p></div>
+    <h2>Everything you wished bull-board showed you</h2>
+    <p class="sub">Real screenshots of the dashboard, running against a BullMQ Pro queue and a busy demo. No mockups, no "artist's impression". If it is on this page, it is on the screen.</p>
+
+    <div class="show">
+      <div class="copy">
+        <h3>Any queue in one keystroke</h3>
+        <p><span class="kbd">⌘</span> <span class="kbd">K</span> searches every queue on every connection. Waiting and failed counts sit right in the result, so you know which one is on fire before you open it.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/cmdk.jpg" width="1776" height="960" loading="lazy" alt="Command palette listing queues matching 'pay' with waiting and failed counts"></figure>
+    </div>
+
+    <div class="show flip">
+      <div class="copy">
+        <span class="tag pro-tag">BullMQ Pro</span>
+        <h3>Groups, with every per-group setting</h3>
+        <p>Status straight from Pro's own keys: <em>waiting</em>, <em>limited</em>, <em>maxed</em>, <em>paused</em>. Active jobs against the group's concurrency cap, its rate limit, and exactly when a limited group resumes.</p>
+        <p>Validated against <code>@taskforcesh/bullmq-pro</code> 7.48 running real workers, not against a guess at the key layout. Group jobs are listed in the order Pro will serve them.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/groups.jpg" width="1776" height="570" loading="lazy" alt="Groups view: four tenant groups with status, waiting, active over concurrency, rate limit and when they resume"></figure>
+    </div>
+
+    <div class="show">
+      <div class="copy">
+        <h3>How the queue is configured, without opening the code</h3>
+        <p>Library and version, workers connected right now, global concurrency, global rate limit, whether a limiter is throttling this very second, metrics on or off, max events.</p>
+        <p>And when something lives only in worker options, like batch size, it says <em>not observable from Redis</em> instead of inventing a number. You can trust every field because we refuse to guess the ones we cannot read.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/queue-setup-pro.jpg" width="1776" height="450" loading="lazy" alt="Queue setup panel showing bullmq-pro 7.48.0, workers connected, concurrency, rate limit and group settings read from Redis"></figure>
+    </div>
+
+    <div class="show flip">
+      <div class="copy">
+        <h3>Retry, remove, promote, add. One job or two hundred.</h3>
+        <p>Row actions on every job, bulk actions on a selection, <em>Retry all failed</em>, Pause, Clean. Drain and Obliterate exist too, behind the admin role.</p>
+        <p>The failure reason sits in the row. No click, no modal, no "loading job 5440…".</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/queue-failed.jpg" width="1776" height="1278" loading="lazy" alt="Failed tab of a queue with two jobs selected and Retry / Remove bulk actions, plus Add job, Pause and Retry all failed"></figure>
+    </div>
+
+    <div class="show">
+      <div class="copy">
+        <h3>Jobs you can actually read</h3>
+        <p>A timeline from created to processed to finished, with wait and run time. Data as a collapsible tree or raw JSON. Options, return value, stack trace, logs, and the audit trail of who touched this job.</p>
+        <p>Payloads are truncated inside Redis for the list view and fetched whole only when you open the job.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/job.jpg" width="1776" height="930" loading="lazy" alt="Job page: timeline, attempts, data tree, tabs for options, return value, error, logs and audit"></figure>
+    </div>
+
+    <div class="show flip">
+      <div class="copy">
+        <h3>Metrics from BullMQ's own counters</h3>
+        <p>Throughput, rate and success per minute, read from the <code>metrics:completed</code> and <code>metrics:failed</code> counters your workers already write. Fifteen minutes, an hour, or everything the queue kept.</p>
+        <p>Not a <code>ZCOUNT</code> over the completed set, which lies the moment <code>removeOnComplete</code> starts pruning. The card tells you which source it used.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/metrics.jpg" width="1776" height="900" loading="lazy" alt="Metrics tab with per-state counts, throughput, rate, success rate and processed / success charts"></figure>
+    </div>
+
+    <div class="show">
+      <div class="copy">
+        <h3>Redis health, one <code>INFO</code> every three seconds</h3>
+        <p>Memory, CPU, commands per second, latency, clients, keys, with history per connection. Sampled on the server and shared, so ten open tabs cost your Redis exactly as much as one.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/health.jpg" width="1776" height="810" loading="lazy" alt="Redis health monitor for two connections with memory, CPU, commands/sec, latency, clients and keys"></figure>
     </div>
   </div>
 </section>
 
-<section id="pro">
+<section id="pro" class="showcase">
   <div class="wrap">
     <h2>Pro: the features a team needs</h2>
-    <p class="sub">One key unlocks everything below for one installation, unlimited users. The key is verified with bullpane.com once a day and keeps working for seven days without internet.</p>
-    <div class="grid">
-      <div class="card pro"><span class="tag">Pro</span><h3>Alerts</h3><p>Per queue or per folder: waiting depth, failures, failure rate over a window. Delivered to Slack or any webhook, with a link straight to the queue.</p></div>
-      <div class="card pro"><span class="tag">Pro</span><h3>Users &amp; roles</h3><p>Admin, operator and viewer. Viewers see everything and change nothing; operators run the queues; only admins drain, obliterate or manage access.</p></div>
-      <div class="card pro"><span class="tag">Pro</span><h3>Folders</h3><p>Group hundreds of queues across connections by team, product or environment. Totals and alerts per folder.</p></div>
-      <div class="card pro"><span class="tag">Pro</span><h3>Flow graph</h3><p>Detected from your BullMQ flows, plus manual edges for the hops your code does by hand. See where a failure upstream will land.</p></div>
-      <div class="card pro"><span class="tag">Pro</span><h3>Audit log</h3><p>Who paused, cleaned or drained which queue, when, from which IP, including refused attempts. Persisted in your database, filterable, CSV export. Never stores job payloads.</p></div>
-      <div class="card pro"><span class="tag">Pro</span><h3>Priority support</h3><p>Email answered by the person who wrote the code, and a say in what gets built next.</p></div>
+    <p class="sub">One key unlocks everything below for one installation, unlimited users. Verified with bullpane.com once a day, keeps working for seven days offline. Pro features are always shown locked in the free edition, never hidden.</p>
+
+    <div class="show flip">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Alerts that watch BullMQ's metrics, not a screenshot</h3>
+        <p>Backlog alerts from live counts. Failure and failure-rate alerts from BullMQ's metrics counters over a window you choose, with a minimum sample so a quiet minute cannot trip them.</p>
+        <p>The engine says <em>warming up</em> until it has real history and <em>no metrics</em> when a worker was created without them, instead of firing on a number it cannot stand behind. Slack or any webhook, cooldown per alert, every delivery logged.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/alerts.jpg" width="1776" height="720" loading="lazy" alt="Alerts page: one alert firing on SMS backlog, two warming up, and the delivery events below"></figure>
+    </div>
+
+    <div class="show">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Who did what, including the refused attempts</h3>
+        <p>Every mutating action: who, what, on which queue or job, result, IP. Append-only, in your own MySQL. A discard the role did not allow shows up as <em>refused</em>, which is the row you will actually want one day.</p>
+        <p>Filter by person, action, connection, queue or date. Export CSV for the auditor. Job payloads are never stored.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/audit.jpg" width="1776" height="1278" loading="lazy" alt="Audit log listing retries, a refused discard, a queue clean and user invites with actor, target, result and IP"></figure>
+    </div>
+
+    <div class="show flip">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Roles enforced on every API call</h3>
+        <p><b>Viewer</b> sees everything and changes nothing. <b>Operator</b> runs the queues, alerts and folders. <b>Admin</b> is the only role that can drain, obliterate, manage users or touch the license. Not a UI convention: the server checks.</p>
+      </div>
+      <figure class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="/shots/users.jpg" width="1776" height="600" loading="lazy" alt="Users page with admin, operator and viewer roles and what each one can do"></figure>
+    </div>
+
+    <div class="trio">
+      <figure class="frame small">
+        <img src="/shots/folder.jpg" width="1776" height="870" loading="lazy" alt="Folder dashboard for Payments with aggregate counts and the queues inside">
+        <figcaption><span class="tag pro-tag">Pro</span><h4>Folders</h4><p>Hundreds of queues across connections, grouped by team or product, with totals, success rate and alerts per folder.</p></figcaption>
+      </figure>
+      <figure class="frame small">
+        <img src="/shots/flows.jpg" width="1776" height="960" loading="lazy" alt="Flow graph of queues detected from BullMQ parent references">
+        <figcaption><span class="tag pro-tag">Pro</span><h4>Flow graph</h4><p>Detected from the parent references your BullMQ flows already leave in Redis, plus manual edges for the hops your code does by hand.</p></figcaption>
+      </figure>
+      <figure class="frame small">
+        <img src="/shots/schedulers.jpg" width="1776" height="780" loading="lazy" alt="Schedulers tab listing repeatable jobs with interval, run count and next run">
+        <figcaption><span class="tag free-tag">Free</span><h4>Job schedulers</h4><p>Every repeatable job with its pattern, how many times it ran, next run, and a Remove button that goes through the official API.</p></figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -133,7 +229,7 @@ docker run -d --name bullpane -p 3000:3000 \
         <ul>
           <li>Unlimited connections and queues</li>
           <li>Jobs, search, bulk actions</li>
-          <li>BullMQ Pro groups &amp; batches</li>
+          <li>BullMQ Pro groups, with per-group settings</li>
           <li>Single admin login</li>
           <li>Read-only mode</li>
         </ul>
@@ -176,7 +272,7 @@ docker run -d --name bullpane -p 3000:3000 \
     <details><summary>How does the license work?</summary><p>You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one and paste it on the new one. Lost access to the old server? Write to hello@bullpane.com and we free it.</p></details>
     <details><summary>What if my server cannot reach the internet?</summary><p>After a successful check the installation keeps Pro for seven days without any contact, and shows a "grace period" badge so you know. Air-gapped for real? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> for an offline key that never phones home.</p></details>
     <details><summary>Does anything about my queues leave my network?</summary><p>No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all.</p></details>
-    <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups, batches and group concurrency are shown in both editions. Bullpane reads the same Redis keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>
+    <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups are first-class in both editions: status per group, waiting and prioritized jobs, active jobs against the group's concurrency, per-group rate limits and when a limited group resumes, validated against bullmq-pro 7.48. Batch size is a worker option BullMQ never writes to Redis, so the setup panel says "not observable" rather than guessing. Bullpane reads the same keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>
     <details><summary>Can it hurt my production Redis?</summary><p>That was the design constraint. No <code>KEYS</code>, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with <code>BULLPANE_READ_ONLY=true</code> if you want to watch before you trust it.</p></details>
     <details><summary>What happens when I cancel?</summary><p>The installation goes back to the free edition. Alerts, folders, users and the audit log stay in your database and become accessible again the moment a key is activated.</p></details>
     <details><summary>Which database does it need?</summary><p>MySQL 8 (or MariaDB) for users, sessions, alerts and the audit log. Redis is only ever read, and written through the official BullMQ API for job actions.</p></details>
@@ -191,6 +287,7 @@ docker run -d --name bullpane -p 3000:3000 \
       <a href="https://x.com/Morett_the_best" rel="noopener">X</a>
       <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">LinkedIn</a>
       <a href="https://github.com/madmorett" rel="noopener">GitHub</a>
+      <a href="/changelog">Changelog</a>
       <a href="/terms">Terms</a>
       <a href="/privacy">Privacy</a>
       <a href="/refunds">Refunds</a>
