@@ -1,48 +1,48 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 /**
- * Seleção de jobs numa tabela que se recarrega a cada 3 s.
+ * Job selection in a table that reloads every 3 s.
  *
- * A decisão que faz isto funcionar: a seleção é guardada por **jobId**, nunca
- * por índice. A tabela repolla e as linhas trocam de posição (é a causa dos
- * erros de alvo que já existem hoje); um índice guardado aponta para outro job
- * no ciclo seguinte, e o operador remove o job errado.
+ * The decision that makes this work: the selection is stored by **jobId**, never
+ * by index. The table repolls and the rows swap positions (that's the cause of
+ * the wrong-target mistakes that already happen today); a stored index points at
+ * a different job on the next cycle, and the operator removes the wrong job.
  *
- * A segunda decisão: um id selecionado que SAIU da página visível continua
- * selecionado. Descartá-lo em silêncio seria pior que qualquer alternativa —
- * o operador clicou nele. A UI mostra "3 selected (2 not on this page)" e
- * `visibleSelected` vs `selectedIds` deixa as duas contagens disponíveis.
+ * The second decision: a selected id that LEFT the visible page stays selected.
+ * Dropping it silently would be worse than any alternative — the operator
+ * clicked it. The UI shows "3 selected (2 not on this page)" and
+ * `visibleSelected` vs `selectedIds` keeps both counts available.
  */
 export interface JobSelection {
-  /** todos os ids selecionados, inclusive os que não estão na página atual */
+  /** every selected id, including the ones that are not on the current page */
   selectedIds: string[];
-  /** quantos ids selecionados estão na página visível agora */
+  /** how many selected ids are on the visible page right now */
   visibleSelectedCount: number;
-  /** ids selecionados que não estão na lista visível (saíram com o polling/paginação) */
+  /** selected ids that are not in the visible list (left with the polling/pagination) */
   offPageCount: number;
-  /** true quando TODA a página visível está selecionada (e a página não é vazia) */
+  /** true when the WHOLE visible page is selected (and the page is not empty) */
   allVisibleSelected: boolean;
   has(jobId: string): boolean;
   toggle(jobId: string): void;
-  /** Shift+clique: seleciona/limpa o intervalo entre a última âncora e este id */
+  /** Shift+click: selects/clears the range between the last anchor and this id */
   toggleRange(jobId: string): void;
-  /** marca ou desmarca a página visível inteira, sem tocar no que está fora dela */
+  /** checks or unchecks the whole visible page, without touching what is off it */
   toggleAllVisible(): void;
   clear(): void;
-  /** remove ids da seleção (usado depois de uma ação bem-sucedida) */
+  /** removes ids from the selection (used after a successful action) */
   deselect(jobIds: string[]): void;
 }
 
 /**
- * A matemática da seleção, extraída como funções PURAS.
+ * The selection math, extracted as PURE functions.
  *
- * Motivo: o valor destas regras está no comportamento sob polling (ids que
- * saem da página, âncora que desaparece, intervalo que inverte o sentido) e isso
- * merece teste. Testar isso através de um hook exigiria um DOM; como funções
- * puras, cabe num teste de node.
+ * Reason: the value of these rules is in the behavior under polling (ids that
+ * leave the page, an anchor that disappears, a range that flips direction) and
+ * that deserves a test. Testing it through a hook would require a DOM; as pure
+ * functions, it fits in a node test.
  */
 
-/** Marca ou desmarca um id. */
+/** Checks or unchecks an id. */
 export function applyToggle(selected: ReadonlySet<string>, jobId: string): Set<string> {
   const next = new Set(selected);
   if (next.has(jobId)) next.delete(jobId);
@@ -51,12 +51,12 @@ export function applyToggle(selected: ReadonlySet<string>, jobId: string): Set<s
 }
 
 /**
- * Shift+clique: aplica o intervalo entre a âncora e `jobId` DENTRO da página
- * visível. Se a âncora não está mais visível (o polling a tirou da página),
- * degrada para um clique simples em vez de adivinhar um intervalo.
+ * Shift+click: applies the range between the anchor and `jobId` WITHIN the
+ * visible page. If the anchor is no longer visible (the polling took it off the
+ * page), it degrades to a plain click instead of guessing a range.
  *
- * O sentido segue o id clicado: clicar num desmarcado marca o intervalo,
- * clicar num marcado limpa o intervalo.
+ * The direction follows the clicked id: clicking an unchecked one selects the
+ * range, clicking a checked one clears the range.
  */
 export function applyRange(
   selected: ReadonlySet<string>,
@@ -78,9 +78,9 @@ export function applyRange(
 }
 
 /**
- * Cabeçalho: marca a página visível inteira, ou a limpa se já estava toda
- * marcada. NUNCA toca nos ids selecionados que estão fora da página — quem
- * clicou neles clicou de propósito.
+ * Header: selects the whole visible page, or clears it if it was already fully
+ * selected. NEVER touches the selected ids that are off the page — whoever
+ * clicked them clicked them on purpose.
  */
 export function applyToggleAllVisible(selected: ReadonlySet<string>, visibleIds: readonly string[]): Set<string> {
   const all = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
@@ -92,14 +92,14 @@ export function applyToggleAllVisible(selected: ReadonlySet<string>, visibleIds:
   return next;
 }
 
-/** Quantos ids selecionados estão na página visível agora. */
+/** How many selected ids are on the visible page right now. */
 export function countVisibleSelected(selected: ReadonlySet<string>, visibleIds: readonly string[]): number {
   return visibleIds.reduce((n, id) => (selected.has(id) ? n + 1 : n), 0);
 }
 
 export function useJobSelection(visibleIds: string[]): JobSelection {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  /** último id clicado, âncora do Shift+clique */
+  /** last clicked id, the anchor for Shift+click */
   const anchor = useRef<string | null>(null);
 
   const has = useCallback((jobId: string) => selected.has(jobId), [selected]);

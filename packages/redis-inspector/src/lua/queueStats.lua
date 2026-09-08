@@ -7,15 +7,15 @@
   KEYS[10]    Pro `groups` zset
   KEYS[11]    metrics:completed:data list
   KEYS[12]    metrics:failed:data list
-  KEYS[13]    metrics:completed hash  (campo `count`, acumulado desde sempre)
+  KEYS[13]    metrics:completed hash  (field `count`, cumulative since forever)
   KEYS[14]    metrics:failed hash
   KEYS[15]    `repeat` zset (job schedulers)
-  KEYS[16]    `stalled` SET (ids marcados como stallados pelo StalledCheck)
+  KEYS[16]    `stalled` SET (ids marked as stalled by the StalledCheck)
 
   ARGV[1]     withMetrics "1" | "0"
   ARGV[2]     number of metric points (newest N minutes)
   ARGV[3]     window start (unix ms) for the success/failure rate ZCOUNTs
-  ARGV[4]     `${prefix}:${queue}:` (para ler o opts de um job e detectar retenção)
+  ARGV[4]     `${prefix}:${queue}:` (to read a job's opts and detect retention)
 
   Returns a flat array:
     [1..8]  counts (LLEN for lists, ZCARD for zsets)
@@ -28,15 +28,15 @@
     [14]    ZCOUNT completed since ARGV[3]  (scores are finishedOn timestamps; O(log N))
     [15]    ZCOUNT failed since ARGV[3]
     [16]    meta.version ("bullmq:5.x" / "bullmq-pro:7.x") or false
-    [17]    `opts` do job mais recente em completed, ou false. Serve só para
-            descobrir se a fila usa removeOnComplete: com retenção agressiva as
-            contagens dos zsets mentem, e o caller precisa avisar o usuário.
-    [20]    ZCARD `repeat` — quantos job schedulers a fila tem. Um ZCARD é O(1),
-            então cabe aqui e o badge da aba Schedulers não custa uma ida extra.
-    [21]    SCARD `stalled` — jobs que perderam o lock. Custo: UM comando O(1) a
-            mais no mesmo EVALSHA (nenhuma ida extra ao Redis). Vale o orçamento
-            porque é o único jeito de a aba `active` dizer "3 destes travaram";
-            sem isso o operador vê "active 8" e não sabe que metade está morta.
+    [17]    `opts` of the newest job in completed, or false. Only used to find out
+            whether the queue uses removeOnComplete: with aggressive retention the
+            zset counts lie, and the caller has to warn the user.
+    [20]    ZCARD `repeat` — how many job schedulers the queue has. A ZCARD is O(1),
+            so it fits here and the Schedulers tab badge costs no extra round trip.
+    [21]    SCARD `stalled` — jobs that lost their lock. Cost: ONE more O(1) command
+            in the same EVALSHA (no extra round trip to Redis). Worth the budget
+            because it is the only way for the `active` tab to say "3 of these hung";
+            without it the operator sees "active 8" and cannot tell half are dead.
 
   Cluster safe: every key belongs to the same queue (same hash tag).
   Read only: the legacy "0:" wait-list marker is skipped, never popped.
@@ -108,33 +108,33 @@ out[14] = rcall("ZCOUNT", KEYS[3], since, "+inf")
 out[15] = rcall("ZCOUNT", KEYS[4], since, "+inf")
 out[16] = version or false
 
--- Retenção: `removeOnComplete` vive no opts de CADA job, não no meta. Lemos o
--- opts de UM job (HGET num hash pequeno, O(1)) só para saber se a fila poda os
--- concluídos. Sem isso não há como diferenciar "99% de sucesso" de
--- "poda agressiva fazendo a razão mentir".
--- ARGV[4] = "${prefix}:${queue}:" para montar a chave do hash do job.
+-- Retention: `removeOnComplete` lives in EACH job's opts, not in meta. We read the
+-- opts of ONE job (an HGET on a small hash, O(1)) just to know whether the queue
+-- prunes completed jobs. Without it there is no way to tell "99% success" apart
+-- from "aggressive pruning making the ratio lie".
+-- ARGV[4] = "${prefix}:${queue}:" to build the job hash key.
 out[17] = false
 local newest = rcall("ZREVRANGE", KEYS[3], 0, 0)
 if newest and newest[1] then
   out[17] = rcall("HGET", ARGV[4] .. newest[1], "opts") or false
 end
 
--- Contadores acumulados do BullMQ. Só existem quando o Worker foi criado com
--- `metrics: { maxDataPoints }`, mas quando existem são a ÚNICA fonte correta:
--- são incrementados quando o job termina e nunca diminuem, então removeOnComplete
--- não os afeta. A lista :data só ganha ponto na virada do minuto, por isso lemos
--- o hash e não só a lista.
+-- BullMQ's cumulative counters. They only exist when the Worker was created with
+-- `metrics: { maxDataPoints }`, but when they do they are the ONLY correct source:
+-- they are incremented as each job finishes and never decremented, so
+-- removeOnComplete cannot touch them. The :data list only gains a point when the
+-- minute rolls over, which is why we read the hash and not just the list.
 out[18] = rcall("HGET", KEYS[13], "count") or false
 out[19] = rcall("HGET", KEYS[14], "count") or false
 
--- Job schedulers (repeatable jobs). Vivem fora dos 8 estados, na zset `repeat`.
--- ZCARD é O(1), então a contagem viaja junto com o resto e a aba Schedulers já
--- nasce com o número certo sem uma segunda ida ao Redis.
+-- Job schedulers (repeatable jobs). They live outside the 8 states, in the `repeat`
+-- zset. ZCARD is O(1), so the count rides along with everything else and the
+-- Schedulers tab starts with the right number without a second round trip to Redis.
 out[20] = rcall("ZCARD", KEYS[15])
 
--- `stalled` é um SET auxiliar, NÃO um estado: o BullMQ não o expõe em
--- getState() (um job stallado responde `active`) e ele só existe enquanto algo
--- está travado. SCARD é O(1), então a contagem viaja de graça neste script.
+-- `stalled` is an auxiliary SET, NOT a state: BullMQ does not expose it in
+-- getState() (a stalled job answers `active`) and it only exists while something is
+-- hung. SCARD is O(1), so the count rides along for free in this script.
 out[21] = rcall("SCARD", KEYS[16])
 
 return out

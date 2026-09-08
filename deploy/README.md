@@ -1,30 +1,30 @@
 # Deploy
 
-Formas de rodar o Bullpane em produção. Escolha uma.
+Ways to run Bullpane in production. Pick one.
 
-| Caminho | Quando faz sentido | Custo aproximado |
+| Path | When it makes sense | Rough cost |
 |---|---|---|
-| **EC2 + Docker** (`instalar-ec2.sh`) | Uma máquina, o jeito mais rápido de começar | ~USD 15/mês |
-| **ECS Fargate** (`ecs/`) | Já usa ECS e quer o sistema gerenciado | ~USD 33/mês com ALB |
-| **Docker Compose** (raiz do repo) | Local, ou um servidor que você já tem | — |
+| **EC2 + Docker** (`install-ec2.sh`) | One box, the fastest way to start | ~USD 15/month |
+| **ECS Fargate** (`ecs/`) | You already run ECS and want it managed | ~USD 33/month with an ALB |
+| **Docker Compose** (repo root) | Local, or a server you already have | — |
 
-Em todos os casos o dashboard precisa de:
+In every case the dashboard needs:
 
-1. **MySQL** para os dados dele (usuários, conexões, pastas, alertas). São
-   centenas de KB, não gigabytes: um container ou a menor instância serve.
-2. **Rota de rede até o seu Redis.** É o passo que mais trava deploys.
-3. **`SESSION_SECRET`**, 32+ caracteres aleatórios. Trocar desloga todo mundo.
+1. **MySQL** for its own data (users, connections, folders, alerts). That is
+   hundreds of KB, not gigabytes: a container or the smallest instance is fine.
+2. **A network route to your Redis.** This is the step that stalls most deploys.
+3. **`SESSION_SECRET`**, 32+ random characters. Changing it signs everyone out.
 
-E, opcionalmente, `BULLPANE_LICENSE_KEY` para habilitar a edição Pro.
+Optionally, `BULLPANE_LICENSE_KEY` to unlock the Pro edition.
 
-## Comece em modo leitura
+## Start in read-only mode
 
-`BULLPANE_READ_ONLY=true` recusa toda escrita com HTTP 423, mantendo a leitura intacta.
-Ao apontar para uma produção movimentada pela primeira vez, use isso por alguns
-dias. Ver `ecs/RISCO-PRODUCAO.md`.
+`BULLPANE_READ_ONLY=true` refuses every write with HTTP 423 and leaves reads
+untouched. The first time you point the dashboard at a busy production Redis,
+run it this way for a few days. See `ecs/REDIS-SAFETY.md`.
 
-## Arquivos
+## Files
 
-- `instalar-ec2.sh` — instala Docker, gera senhas e sobe app + MySQL numa EC2
-- `ecs/task-definition.example.json` — task definition genérica, com placeholders
-- `ecs/RISCO-PRODUCAO.md` — o que o dashboard faz no seu Redis, medido
+- `install-ec2.sh` — installs Docker, generates passwords and brings up app + MySQL on an EC2 box
+- `ecs/task-definition.example.json` — generic task definition, with placeholders
+- `ecs/REDIS-SAFETY.md` — what the dashboard does to your Redis, measured

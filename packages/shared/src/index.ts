@@ -578,13 +578,13 @@ export interface QueueSummary {
   /** job schedulers (repeatable jobs) configured on this queue — ZCARD of `repeat` */
   schedulersCount: number;
   /**
-   * SCARD de `${prefix}:${queue}:stalled` — jobs que o BullMQ marcou como
-   * stallados nesta rodada do StalledCheck.
+   * SCARD of `${prefix}:${queue}:stalled` — jobs BullMQ flagged as stalled in
+   * this round of the StalledCheck.
    *
-   * Deliberadamente NÃO é um `JobState` e nunca aparece em `counts`: no modelo
-   * do BullMQ um job stallado continua `active` (o worker morreu sem renovar o
-   * lock). Fingir um estado "stalled" mentiria sobre o modelo. Este número
-   * existe para a aba `active` poder dizer "3 destes estão travados".
+   * Deliberately NOT a `JobState` and it never shows up in `counts`: in BullMQ's
+   * model a stalled job is still `active` (the worker died without renewing the
+   * lock). Faking a "stalled" state would lie about the model. This number
+   * exists so the `active` tab can say "3 of these are stuck".
    */
   stalledCount: number;
   /** success / failure over the trailing window (default 60 min) */
@@ -666,13 +666,13 @@ export interface JobSummary {
   /** BullMQ Pro group id if any */
   groupId: string | null;
   /**
-   * Hash field `stc` (lido por `Job.fromJSON` como `stalledCounter`): quantas
-   * vezes este job foi recuperado por ter stallado — o worker perdeu o lock e
-   * o StalledCheck devolveu o job para `wait`.
+   * Hash field `stc` (read by `Job.fromJSON` as `stalledCounter`): how many
+   * times this job was recovered for having stalled — the worker lost the lock
+   * and the StalledCheck put the job back into `wait`.
    *
-   * NÃO é um estado. `stalled` é um SET auxiliar (`${prefix}:${queue}:stalled`);
-   * `getState()` de um job stallado devolve `active`. Um valor > 0 aqui é o
-   * único rastro, no próprio job, de que ele já travou uma vez.
+   * NOT a state. `stalled` is an auxiliary SET (`${prefix}:${queue}:stalled`);
+   * `getState()` on a stalled job returns `active`. A value > 0 here is the only
+   * trace, on the job itself, that it got stuck at least once.
    */
   stalledCounter: number;
   state: JobState | "unknown";
@@ -830,24 +830,26 @@ export const cleanQueueSchema = z.object({
 export type CleanQueueInput = z.infer<typeof cleanQueueSchema>;
 
 // ---------------------------------------------------------------------------
-// Ações em lote sobre jobs (retry / remove / promote)
+// Bulk actions on jobs (retry / remove / promote)
 //
-// Entre "um job" e "todos os 1.000 de um estado" não havia nada, e o caso real
-// é o do meio: os erros vêm agrupados (um webhook de um tenant devolvendo 410),
-// a busca server-side acha exatamente esses 50 e o operador quer agir sobre eles.
+// Between "one job" and "all 1,000 in a state" there was nothing, and the real
+// case is the one in the middle: errors come clustered (one tenant's webhook
+// returning 410), the server-side search finds exactly those 50 and the operator
+// wants to act on them.
 //
-// Duas decisões que moldam o contrato:
+// Two decisions that shape the contract:
 //
-//  1. TETO POR CHAMADA (`BULK_JOB_LIMIT`). Sem teto alguém cola 100 mil ids e
-//     prende o Redis — contraria o contrato de performance. O limite é validado
-//     no zod, então a recusa é 400 com a mensagem explicando, não um timeout.
-//  2. RESULTADO PARCIAL É A REGRA. Um id pode ter sido podado, estar noutro
-//     estado ou falhar no script atômico do BullMQ. Abortar no primeiro erro
-//     esconderia os 47 que deram certo, então a resposta é 200 com
-//     `{ ok, failed }` e o operador vê exatamente quais 3 dos 50 não foram.
+//  1. PER-CALL CAP (`BULK_JOB_LIMIT`). Without a cap someone pastes 100 thousand
+//     ids and locks up Redis — that goes against the performance contract. The
+//     limit is validated in zod, so the refusal is a 400 with an explanatory
+//     message, not a timeout.
+//  2. PARTIAL RESULT IS THE RULE. An id may have been pruned, be in another state
+//     or fail inside BullMQ's atomic script. Aborting on the first error would
+//     hide the 47 that worked, so the response is 200 with `{ ok, failed }` and
+//     the operator sees exactly which 3 of the 50 did not go through.
 // ---------------------------------------------------------------------------
 
-/** Teto de ids por chamada em lote. Ver o comentário acima. */
+/** Cap of ids per bulk call. See the comment above. */
 export const BULK_JOB_LIMIT = 500;
 
 export const BULK_JOB_ACTIONS = ["retry", "remove", "promote"] as const;
@@ -863,17 +865,17 @@ export type BulkJobActionInput = z.infer<typeof bulkJobActionSchema>;
 
 export interface BulkJobFailure {
   jobId: string;
-  /** motivo curto e legível ("job_not_found", "cannot_retry_job_in_state_active") */
+  /** short, human-readable reason ("job_not_found", "cannot_retry_job_in_state_active") */
   reason: string;
 }
 
 export interface BulkJobActionResult {
   action: BulkJobAction;
-  /** ids em que a ação foi aplicada */
+  /** ids the action was applied to */
   ok: string[];
-  /** ids que não foram, com o porquê — nunca silenciados */
+  /** ids that did not go through, with the why — never silenced */
   failed: BulkJobFailure[];
-  /** quantos ids foram pedidos (ok.length + failed.length) */
+  /** how many ids were requested (ok.length + failed.length) */
   requested: number;
 }
 
@@ -1200,8 +1202,8 @@ export const AUDIT_HIGH_RISK_ACTIONS: readonly AuditAction[] = [
   "queue.drain",
   "queue.clean",
   "job.remove",
-  // Remover 50 jobs de uma vez destrói mais dado que remover um; entra aqui
-  // pelo mesmo motivo que `job.remove`.
+  // Removing 50 jobs at once destroys more data than removing one; it is here
+  // for the same reason as `job.remove`.
   "job.bulk_remove",
   "connection.delete",
   "user.create",

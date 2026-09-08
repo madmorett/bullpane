@@ -111,18 +111,18 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Ações em lote: retry / remove / promote sobre uma lista de ids.
+   * Bulk actions: retry / remove / promote over a list of ids.
    *
-   * Por que existem: entre "um job" e "todos os 1.000" não havia nada, e o caso
-   * real é o do meio — as falhas vêm agrupadas (um webhook de um tenant
-   * devolvendo 410), a busca server-side acha exatamente esses 50 e o operador
-   * quer reprocessar esses e descartar os outros.
+   * Why they exist: between "one job" and "all 1,000" there was nothing, and the
+   * real case is the one in the middle — failures come clustered (one tenant's
+   * webhook returning 410), the server-side search finds exactly those 50 and the
+   * operator wants to reprocess those and discard the others.
    *
-   * Duas regras do contrato, iguais nas três rotas:
-   *  - TETO de BULK_JOB_LIMIT ids por chamada, validado no zod (400 com a
-   *    mensagem). Sem teto alguém cola 100 mil ids e prende o Redis.
-   *  - RESULTADO PARCIAL com 200: `{ ok, failed }`. Um id podado ou em estado
-   *    incompatível não derruba os outros 47, e o operador vê quais 3 falharam.
+   * Two contract rules, the same on all three routes:
+   *  - CAP of BULK_JOB_LIMIT ids per call, validated in zod (400 with the
+   *    message). Without a cap someone pastes 100 thousand ids and locks up Redis.
+   *  - PARTIAL RESULT with 200: `{ ok, failed }`. An id that was pruned or is in an
+   *    incompatible state does not drop the other 47, and the operator sees which 3 failed.
    */
   for (const action of BULK_JOB_ACTIONS) {
     app.post<QueueParams>(`${base}/bulk/${action}`, { preHandler: [operator] }, async (request): Promise<BulkJobActionResult> => {
@@ -131,10 +131,10 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       const result = await withRedis(() =>
         inspector.bulkJobAction(request.params.queue, action as BulkJobAction, input.jobIds),
       );
-      // Auditoria: só CONTAGENS e os ids, nunca o payload dos jobs (regra do
-      // CLAUDE.md; `sanitizeDetail` também derrubaria `data`, mas o handler não
-      // deve nem chegar perto). Os motivos das falhas são erros do BullMQ, não
-      // dados do cliente, então cabem — limitados para a linha não explodir.
+      // Audit: only COUNTS and the ids, never the job payload (CLAUDE.md rule;
+      // `sanitizeDetail` would drop `data` too, but the handler must not even go
+      // near it). Failure reasons are BullMQ errors, not customer data, so they
+      // fit — capped so the row does not blow up.
       request.auditDetail({
         requested: result.requested,
         ok: result.ok.length,

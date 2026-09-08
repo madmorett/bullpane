@@ -61,8 +61,8 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
     { to: routes.alerts, label: "Alerts", icon: Bell, feature: "alerts" },
     ...(SHOW_FLOWS ? [{ to: routes.flows(), label: "Flows", icon: Workflow, feature: "flows" as ProFeature }] : []),
     { to: routes.users, label: "Users", icon: Users, feature: "users", adminOnly: true },
-    // Audit é admin: a trilha mostra ações que só admin faz (conexões, usuários,
-    // licença), então lê-la é um direito diferente de pausar uma fila.
+    // Audit is admin-only: the trail shows actions only an admin performs
+    // (connections, users, license), so reading it is a different right from pausing a queue.
     { to: routes.audit(), label: "Audit log", icon: ScrollText, feature: "audit", adminOnly: true },
   ];
 
@@ -287,8 +287,8 @@ function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: str
   return (
     <li>
       <NavLink
-        // Mesma regra do card e da tabela: o clique cai no estado que importa
-        // (failed → waiting → completed), não no `waiting` padrão. Ver
+        // Same rule as the card and the table: the click lands on the state that
+        // matters (failed → waiting → completed), not on the default `waiting`. See
         // lib/queueLanding.ts.
         to={routes.queue(connectionId, queue.name, queueLandingState(queue.counts))}
         onClick={onNavigate}
@@ -303,9 +303,9 @@ function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: str
         <span className="num text-[10px] text-fg-subtle" title="waiting">
           {formatCompact(queue.counts.waiting + queue.counts.prioritized)}
         </span>
-        {/* A pílula de falhas NÃO pode virar um <a>: já estamos dentro de um
-            NavLink e link dentro de link é HTML inválido. Não faz falta — quando
-            há falhas, a própria linha já leva para `failed` (queueLandingState). */}
+        {/* The failed pill must NOT become an <a>: we are already inside a
+            NavLink and a link inside a link is invalid HTML. No loss — when there
+            are failures, the row itself already goes to `failed` (queueLandingState). */}
         {queue.counts.failed > 0 && (
           <Tooltip content={`${formatCompact(queue.counts.failed)} failed · click to open them`}>
             <span className="flex items-center gap-1 text-[10px] text-danger">

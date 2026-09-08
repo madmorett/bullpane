@@ -34,10 +34,10 @@ export interface JobsTableProps {
   highlight?: string;
   compact?: boolean;
   /**
-   * Seleção múltipla. Quando presente a tabela ganha a coluna de checkbox e o
-   * cabeçalho de selecionar-a-página. A seleção é por jobId (ver
-   * lib/useJobSelection.ts): a tabela repolla a cada 3 s e as linhas mudam de
-   * posição, então um índice guardado apontaria para outro job.
+   * Multi-selection. When present the table gains the checkbox column and the
+   * select-this-page header. The selection is by jobId (see
+   * lib/useJobSelection.ts): the table repolls every 3 s and the rows change
+   * position, so a stored index would point at a different job.
    */
   selection?: JobSelection;
 }
@@ -75,8 +75,8 @@ export function JobsTable({
                 aria-label={selection.allVisibleSelected ? "Clear selection on this page" : "Select every job on this page"}
                 title={selection.allVisibleSelected ? "Clear this page" : "Select this page"}
                 checked={selection.allVisibleSelected}
-                // Indeterminado quando parte da página está marcada: o operador
-                // vê a diferença entre "nenhum", "alguns" e "todos".
+                // Indeterminate when part of the page is checked: the operator
+                // sees the difference between "none", "some" and "all".
                 ref={(el) => {
                   if (el) el.indeterminate = !selection.allVisibleSelected && selection.visibleSelectedCount > 0;
                 }}
@@ -87,10 +87,10 @@ export function JobsTable({
           )}
           <Th className="w-28">ID</Th>
           {/*
-            NAME é o primeiro argumento de `queue.add()` — o nome do JOB (o
-            tipo/handler), não o da fila. Verificado contra Redis real: 
-            `q.add("enviar-email", {...})` grava `name: "enviar-email"` no hash.
-            Ninguém adivinha isso sozinho, então a coluna explica.
+            NAME is the first argument of `queue.add()` — the name of the JOB (the
+            type/handler), not the queue name. Verified against a real Redis: 
+            `q.add("send-email", {...})` writes `name: "send-email"` into the hash.
+            Nobody guesses that on their own, so the column explains it.
           */}
           <Th>
             <span className="cursor-help border-b border-dotted border-border-strong" title={'The job name — the first argument of queue.add("name", data). It is the job type / handler, not the queue name.'}>
@@ -188,8 +188,8 @@ function JobRow({
             aria-label={`Select job ${job.id}`}
             checked={selected}
             onChange={() => undefined}
-            // Shift+clique seleciona o intervalo. O evento de clique carrega o
-            // shiftKey; o onChange não, por isso a lógica vive aqui.
+            // Shift+click selects the range. The click event carries the
+            // shiftKey; onChange doesn't, which is why the logic lives here.
             onClick={(e) => {
               e.stopPropagation();
               if (e.shiftKey) selection.toggleRange(job.id);
@@ -236,11 +236,11 @@ function JobRow({
           {job.attempts != null && <span className="text-fg-subtle"> / {job.attempts}</span>}
         </span>
         {/*
-          `stc` > 0: este job já stallou. NÃO é um estado — o job está `active`
-          ou voltou para `wait`; o que aconteceu é que o worker perdeu o lock
-          (morreu, travou, ou o event loop bloqueou) e o StalledCheck do BullMQ
-          o recuperou. É a informação que faltava para explicar por que um job
-          "rodou duas vezes".
+          `stc` > 0: this job has stalled before. It is NOT a state — the job is
+          `active` or went back to `wait`; what happened is that the worker lost
+          the lock (it died, hung, or the event loop blocked) and BullMQ's
+          StalledCheck recovered it. This is the information that was missing to
+          explain why a job "ran twice".
         */}
         {job.stalledCounter > 0 && (
           <Badge variant="warning" size="xs" className="ml-1.5 gap-0.5" title={`Stalled ${job.stalledCounter} time${job.stalledCounter === 1 ? "" : "s"}: the worker lost the lock (it died or blocked) and BullMQ recovered the job. Not a state — the job went back to waiting.`}>

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Instala o Bullpane Pro numa EC2 (Amazon Linux 2023 / Ubuntu).
-# Roda DENTRO da instância, via Session Manager ou SSH.
+# Installs Bullpane on an EC2 box (Amazon Linux 2023 / Ubuntu).
+# Run it INSIDE the instance, over Session Manager or SSH.
 #
-#   sudo bash instalar-ec2.sh
+#   sudo bash install-ec2.sh
 #
-# Não clona repositório e não precisa de token: puxa a imagem pública do ghcr.
-# Sobe o app (porta 3000) + MySQL, ambos em Docker, com restart automático.
+# It clones nothing and needs no token: it pulls the public image from ghcr.
+# Brings up the app (port 3000) + MySQL, both in Docker, with automatic restart.
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.1.0}"
+IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.0.1}"
 APP_DIR="${APP_DIR:-/opt/bullpane}"
 LICENSE_KEY="${LICENSE_KEY:-}"
 READ_ONLY="${READ_ONLY:-false}"
@@ -46,12 +46,12 @@ PUBLIC_URL=http://$(hostname -I | awk '{print $1}'):3000
 LOG_LEVEL=info
 ENVEOF
   chmod 600 .env
-  echo "    .env criado (senhas geradas aleatoriamente)"
+  echo "    .env created (passwords generated at random)"
 else
   echo "    .env já existe, mantendo"
 fi
 
-# compose autocontido: não depende do repositório
+# self-contained compose file: does not depend on the repo
 cat > docker-compose.yml <<'YMLEOF'
 services:
   app:
@@ -109,7 +109,7 @@ if curl -sf http://localhost:3000/api/health >/dev/null 2>&1; then
   echo " health : $(curl -s http://localhost:3000/api/health)"
   echo " edição : $(curl -s http://localhost:3000/api/edition | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["tier"], "| licenciado para:", (d.get("license") or {}).get("licensee","-"))' 2>/dev/null || echo '?')"
   echo
-  echo " Se disser 'free', o BULLPANE_LICENSE_KEY não chegou: edite $APP_DIR/.env"
+  echo " If it says 'free', BULLPANE_LICENSE_KEY did not reach it: edit $APP_DIR/.env"
   echo " e rode: docker compose --env-file .env up -d"
 else
   echo " NÃO SUBIU. Logs:"

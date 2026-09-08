@@ -1,27 +1,27 @@
 import type { JobState, QueueCounts } from "@bullpane/shared";
 
 /**
- * Para qual estado um clique numa fila deve levar.
+ * Which state a click on a queue should land on.
  *
- * O problema que isto resolve: todo ponto de entrada (card, linha da tabela,
- * sidebar) mostrava um contador vermelho de `failed` e nenhum levava até lá —
- * `routes.queue()` era chamado sem `state` e a QueuePage caía em `waiting`.
- * Você clicava numa fila com 1.000 falhas e lia "No jobs in this state". Um
- * clique desperdiçado em 100% dos incidentes.
+ * The problem this solves: every entry point (card, table row, sidebar) showed
+ * a red `failed` counter and none of them took you there — `routes.queue()` was
+ * called without `state` and QueuePage fell back to `waiting`. You clicked a
+ * queue with 1,000 failures and read "No jobs in this state". A wasted click in
+ * 100% of incidents.
  *
- * A regra, em ordem:
- *   1. `failed > 0`  → `failed`. Se há falhas, é por elas que o operador veio.
- *   2. `waiting > 0` → `waiting`. Sem falhas, o que importa é a fila de entrada.
- *   3. senão         → `completed`. Fila saudável e vazia: mostra o histórico,
- *                      que é a única aba com conteúdo. Cair em `waiting` aqui
- *                      significa cair numa tabela vazia.
+ * The rule, in order:
+ *   1. `failed > 0`  → `failed`. If there are failures, that's what the operator came for.
+ *   2. `waiting > 0` → `waiting`. With no failures, what matters is the inbound queue.
+ *   3. otherwise     → `completed`. Healthy, empty queue: show the history, which
+ *                      is the only tab with content. Landing on `waiting` here
+ *                      means landing on an empty table.
  *
- * `prioritized` conta como espera (é a fila de entrada com prioridade), mas o
- * destino continua sendo `waiting`, que é a aba que o operador procura; um
- * `waiting: 0 / prioritized: 5` manda para `prioritized`, senão o clique cairia
- * numa tabela vazia de novo.
+ * `prioritized` counts as waiting (it's the inbound queue with priority), but the
+ * destination stays `waiting`, which is the tab the operator looks for; a
+ * `waiting: 0 / prioritized: 5` goes to `prioritized`, otherwise the click would
+ * land on an empty table again.
  *
- * Função pura de propósito: é o coração da correção e tem teste próprio.
+ * Pure function on purpose: it's the heart of the fix and has its own test.
  */
 export function queueLandingState(counts: Partial<QueueCounts> | undefined): JobState {
   const failed = counts?.failed ?? 0;

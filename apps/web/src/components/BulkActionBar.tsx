@@ -7,15 +7,16 @@ import { Button } from "@/components/ui/Button";
 import type { JobSelection } from "@/lib/useJobSelection";
 
 /**
- * Quais ações fazem sentido para o estado que está na tela.
+ * Which actions make sense for the state on screen.
  *
- * Vem direto do que o BullMQ permite (e do que as ações unitárias já checavam
- * em `inspector.retryJob` / `promoteJob`): `retry` só de `failed`/`completed`,
- * `promote` só de `delayed`. Mostrar um botão que vai devolver 50 falhas com
- * "cannot_retry_job_in_state_waiting" seria pior que não mostrar.
+ * It comes straight from what BullMQ allows (and from what the single actions
+ * already checked in `inspector.retryJob` / `promoteJob`): `retry` only from
+ * `failed`/`completed`, `promote` only from `delayed`. Showing a button that will
+ * come back with 50 failures saying "cannot_retry_job_in_state_waiting" would be
+ * worse than not showing it.
  *
- * `remove` vale em qualquer estado — inclusive `active`, onde o BullMQ recusa se
- * o job estiver com lock; nesse caso o resultado parcial diz o motivo.
+ * `remove` is valid in any state — including `active`, where BullMQ refuses if the
+ * job is locked; in that case the partial result gives the reason.
  */
 export function bulkActionsFor(state: JobState | "mixed"): BulkJobAction[] {
   if (state === "mixed") return ["retry", "promote", "remove"];
@@ -29,14 +30,14 @@ export function bulkActionsFor(state: JobState | "mixed"): BulkJobAction[] {
 const LABEL: Record<BulkJobAction, string> = { retry: "Retry", promote: "Promote", remove: "Remove" };
 
 /**
- * Barra que aparece quando há seleção. Três coisas que ela precisa dizer bem:
+ * The bar that appears when there is a selection. Three things it has to say well:
  *
- *  1. QUANTOS, e quantos estão fora da página visível. A tabela repolla a cada
- *     3 s: um id selecionado que saiu da página continua selecionado, e sumir
- *     com ele em silêncio seria trair o clique do operador.
- *  2. QUE CONJUNTO. Com uma busca na tela, "select all" pegou os RESULTADOS DA
- *     BUSCA carregados, não a fila toda. Dizer isso evita o erro caro.
- *  3. Remove em lote SEMPRE confirma (com o número e o nome da fila).
+ *  1. HOW MANY, and how many are off the visible page. The table repolls every
+ *     3 s: a selected id that left the page stays selected, and dropping it
+ *     silently would betray the operator's click.
+ *  2. WHICH SET. With a search on screen, "select all" took the loaded SEARCH
+ *     RESULTS, not the whole queue. Saying so avoids the expensive mistake.
+ *  3. Bulk remove ALWAYS confirms (with the count and the queue name).
  */
 export function BulkActionBar({
   selection,
@@ -49,14 +50,14 @@ export function BulkActionBar({
   className,
 }: {
   selection: JobSelection;
-  /** estado exibido; define quais ações aparecem */
+  /** the displayed state; decides which actions appear */
   state: JobState | "mixed";
   queue: string;
-  /** override da lista de ações (a QueuePage já sabe o estado) */
+  /** override for the action list (QueuePage already knows the state) */
   actions?: BulkJobAction[];
   onRun: (action: BulkJobAction) => void;
   pending?: BulkJobAction | null;
-  /** true quando o que está na tela são resultados de busca, não a fila inteira */
+  /** true when what is on screen are search results, not the whole queue */
   searching?: boolean;
   className?: string;
 }) {
@@ -101,9 +102,9 @@ export function BulkActionBar({
 }
 
 /**
- * O resultado parcial, mostrado como painel e não só como toast: "47 retried ·
- * 3 failed" com os motivos expansíveis. Um toast que desaparece em 4 s não
- * serve para o operador que precisa anotar quais 3 ids ficaram para trás.
+ * The partial result, shown as a panel and not just as a toast: "47 retried ·
+ * 3 failed" with the reasons expandable. A toast that disappears in 4 s is no
+ * good for the operator who needs to write down which 3 ids were left behind.
  */
 export function BulkResultPanel({ result, onDismiss }: { result: BulkJobActionResult; onDismiss: () => void }) {
   const [open, setOpen] = useState(false);

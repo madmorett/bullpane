@@ -88,12 +88,12 @@ export interface QueueStats {
   /** ZCARD of the `repeat` zset: how many job schedulers this queue has */
   schedulersCount: number;
   /**
-   * SCARD de `${prefix}:${queue}:stalled`. Um SCARD é O(1), então cabe no
-   * orçamento do queueStats (um comando a mais no MESMO EVALSHA, zero ida extra).
+   * SCARD of `${prefix}:${queue}:stalled`. A SCARD is O(1), so it fits inside the
+   * queueStats budget (one more command in the SAME EVALSHA, zero extra round trips).
    *
-   * `stalled` NÃO é um estado do BullMQ: é um SET auxiliar que só existe quando
-   * algo stalla, e `getState()` de um job stallado devolve `active`. Por isso
-   * este número vive fora de `counts`.
+   * `stalled` is NOT a BullMQ state: it is an auxiliary SET that only exists while
+   * something is stalling, and `getState()` on a stalled job returns `active`. That
+   * is why this number lives outside `counts`.
    */
   stalledCount: number;
   metrics?: QueueMetrics;
@@ -227,17 +227,17 @@ export interface Inspector {
   removeJob(queueName: string, jobId: string): Promise<void>;
   promoteJob(queueName: string, jobId: string): Promise<void>;
   /**
-   * Mesma ação unitária (retry / remove / promote) aplicada a vários ids, SEMPRE
-   * pela API oficial do bullmq (`job.retry()` / `job.remove()` / `job.promote()`),
-   * nunca por DEL na mão: os scripts atômicos do BullMQ cuidam de índices,
-   * dependências de flow e locks.
+   * The same single-job action (retry / remove / promote) applied to many ids, ALWAYS
+   * through the official bullmq API (`job.retry()` / `job.remove()` / `job.promote()`),
+   * never a hand-rolled DEL: BullMQ's atomic scripts take care of indexes, flow
+   * dependencies and locks.
    *
-   * Duas garantias que o chamador pode assumir:
-   *  - RESULTADO PARCIAL: um id inexistente ou em estado incompatível vira uma
-   *    entrada em `failed` com o motivo; os outros seguem. Nunca lança por
-   *    causa de um id ruim (só por Redis inacessível).
-   *  - CONCORRÊNCIA LIMITADA (`BULK_CONCURRENCY`): as ações vão em janelas
-   *    pequenas, não num `Promise.all` de 500, para não pipocar o Redis.
+   * Two guarantees the caller can rely on:
+   *  - PARTIAL RESULT: an id that does not exist or is in an incompatible state
+   *    becomes an entry in `failed` with the reason; the rest go through. It never
+   *    throws because of a bad id (only when Redis is unreachable).
+   *  - BOUNDED CONCURRENCY (`BULK_CONCURRENCY`): the actions run in small windows,
+   *    not in a `Promise.all` of 500, so Redis is not flooded.
    */
   bulkJobAction(queueName: string, action: BulkJobAction, jobIds: string[]): Promise<BulkJobActionResult>;
   /** Move an active/stalled job back to failed with a reason (operator "discard") */

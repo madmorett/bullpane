@@ -27,9 +27,9 @@ export function QueueCard({
 }) {
   const { connection, queue } = entry;
   const c = queue.counts;
-  // Clicar no card leva ao estado que importa (failed → waiting → completed),
-  // não ao `waiting` padrão. Ver lib/queueLanding.ts: antes, uma fila com 1.000
-  // falhas abria em "No jobs in this state".
+  // Clicking the card goes to the state that matters (failed → waiting → completed),
+  // not to the default `waiting`. See lib/queueLanding.ts: before, a queue with 1,000
+  // failures opened on "No jobs in this state".
   const href = routes.queue(connection.id, queue.name, queueLandingState(c));
 
   return (
@@ -72,11 +72,11 @@ export function QueueCard({
       </header>
 
       {/*
-        Cada chip é um link para o SEU estado — "failed 22" abre a aba failed.
-        O card tem um link esticado (`after:absolute after:inset-0` no nome da
-        fila) que cobre tudo, então os chips só são clicáveis porque o StateChip
-        com `to` ganha `relative z-10` e sobe acima desse overlay. O clique no
-        resto do card continua caindo no overlay e indo para o landing state.
+        Each chip is a link to ITS own state — "failed 22" opens the failed tab.
+        The card has a stretched link (`after:absolute after:inset-0` on the queue
+        name) that covers everything, so the chips are only clickable because
+        StateChip with `to` gets `relative z-10` and rises above that overlay. A
+        click on the rest of the card still hits the overlay and goes to the landing state.
       */}
       <div className="flex flex-wrap gap-1">
         {PRIMARY_STATES.map((s) => (

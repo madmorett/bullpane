@@ -29,17 +29,25 @@ contract lives in `packages/shared/src/index.ts`; the Redis contract in
 - Must keep working with BullMQ Pro (groups/batches). Pro key names live in
   `packages/redis-inspector/src/keys.ts` only.
 
-## Segredos e configuração de clientes
+## Language
 
-`private/` está no `.gitignore` e é onde vive tudo que é específico de um cliente:
-IDs de conta AWS, IPs, endpoints, licenças assinadas. **Nunca** coloque nada disso
-em `docs/`, `deploy/` ou `README.md` — o repositório pode virar open source.
-O equivalente genérico usa placeholders (`<ACCOUNT_ID>`, `<REGION>`).
+**English only, everywhere.** Docs, code comments, test names, commit messages,
+filenames. The repo may become open source and is part of how the product is
+judged; Portuguese content means a rewrite later. `private/` is exempt — it is
+gitignored and never ships.
 
-Instalação em produção da Monest: `private/monest/INSTALACAO-ATUAL.md`.
-Creem (IDs de produto, payment links, cupom de teste): `private/bullpane/creem.json`. Polar foi
-descartado (não paga no Brasil); `private/bullpane/polar.json` é só histórico.
-Chave privada de licença (backup): `private/bullpane/license-private.pem` — nunca sai daqui.
+## Secrets and customer configuration
+
+`private/` is gitignored and holds everything specific to one customer: AWS
+account ids, IPs, endpoints, signed licenses. **Never** put any of that in
+`docs/`, `deploy/` or `README.md` — the repository may become open source. The
+generic equivalent uses placeholders (`<ACCOUNT_ID>`, `<REGION>`).
+
+Files that live there: the production install notes for the first customer,
+`private/bullpane/creem.json` (product ids, payment links, test coupon), and
+`private/bullpane/license-private.pem` (license signing key — never leaves that
+directory). Polar was dropped because it does not pay out in Brazil;
+`private/bullpane/polar.json` is history only.
 
 ## Commands
 - `pnpm install` · `pnpm dev` (server :3000 + web :5173) · `pnpm dev:simulator`

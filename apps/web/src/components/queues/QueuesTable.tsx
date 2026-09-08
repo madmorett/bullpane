@@ -160,13 +160,13 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
 }
 
 /**
- * A coluna de contagem de um estado. O número é um LINK para aquele estado da
- * fila: "failed 22" na tabela abre a aba failed, em vez de abrir a fila em
- * `waiting` e mostrar uma tabela vazia.
+ * The count column for a state. The number is a LINK to that state of the
+ * queue: "failed 22" in the table opens the failed tab, instead of opening the
+ * queue on `waiting` and showing an empty table.
  *
- * `noRowClick` fica ligado para o clique no número não disputar com a ativação
- * da linha (que vai para o landing state). Um zero não vira link: não há nada
- * para ver, e um link para o vazio é a armadilha que estamos corrigindo.
+ * `noRowClick` is on so the click on the number does not compete with the row
+ * activation (which goes to the landing state). A zero does not become a link:
+ * there is nothing to see, and a link to nothing is the trap we are fixing.
  */
 function count(key: string, header: string, get: (e: QueueEntry) => number, mutedWhenZero = false): SortableColumn<QueueEntry> {
   const color = (STATE_COLORS as Record<string, { textClass: string } | undefined>)[key]?.textClass;

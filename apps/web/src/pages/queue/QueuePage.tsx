@@ -102,20 +102,20 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
   const queueAction = useQueueAction(connectionId, queue);
   const bulkAction = useBulkJobAction(connectionId, queue);
 
-  // Resultados da busca. Calculados aqui (antes eram no fim do componente)
-  // porque a seleção precisa saber quais ids estão VISÍVEIS agora — e com uma
-  // busca na tela os visíveis são os resultados carregados, não a página do estado.
+  // Search results. Computed here (they used to be at the end of the component)
+  // because the selection needs to know which ids are VISIBLE right now — and with
+  // a search on screen the visible ones are the loaded results, not the state's page.
   const searchPages = search.data?.pages ?? [];
   const searchJobs = searchPages.flatMap((p) => p.jobs);
   const scanned = searchPages.reduce((sum, p) => sum + (p.scanned ?? 0), 0);
   const skippedLarge = searchPages.reduce((sum, p) => sum + (p.skippedLargePayloads ?? 0), 0);
   const searchTotal = searchPages.length ? searchPages[searchPages.length - 1].total : (summary.data?.counts?.[state] ?? 0);
 
-  /** os jobs que estão de fato na tela — é sobre eles que "select all" age */
+  /** the jobs actually on screen — these are the ones "select all" acts on */
   const visibleJobs = searching ? searchJobs : (jobs.data?.jobs ?? []);
   const visibleIds = useMemo(() => visibleJobs.map((j) => j.id), [visibleJobs]);
-  // Seleção por jobId, não por índice: a tabela repolla a cada 3 s e as linhas
-  // trocam de lugar. Ver lib/useJobSelection.ts.
+  // Selection by jobId, not by index: the table repolls every 3 s and the rows
+  // swap places. See lib/useJobSelection.ts.
   const selection = useJobSelection(visibleIds);
   const [bulkResult, setBulkResult] = useState<BulkJobActionResult | null>(null);
   const [pendingBulk, setPendingBulk] = useState<BulkJobAction | null>(null);
@@ -176,9 +176,9 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
   };
 
   /**
-   * Remove unitário passa por confirmação. Antes não passava, e um clique
-   * errado numa tabela que se reordena a cada 3 s apagava o job errado sem
-   * volta. `retry` e `promote` seguem imediatos: são reversíveis.
+   * A single remove goes through a confirmation. It didn't before, and a wrong
+   * click on a table that reorders every 3 s deleted the wrong job with no way
+   * back. `retry` and `promote` stay immediate: they are reversible.
    */
   const onAction = (jobId: string, action: JobActionKind) => {
     if (action === "remove") {
@@ -188,14 +188,14 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
     runSingle(jobId, action);
   };
 
-  /** Ações que fazem sentido para o que está na tela. Na busca os estados se misturam. */
+  /** Actions that make sense for what is on screen. In a search the states are mixed. */
   const availableBulkActions = useMemo(() => bulkActionsFor(searching ? "mixed" : state), [searching, state]);
 
   const runBulk = (action: BulkJobAction) => {
     const jobIds = selection.selectedIds;
     if (jobIds.length === 0) return;
     if (jobIds.length > BULK_JOB_LIMIT) {
-      // O servidor recusaria com 400; dizer aqui evita a viagem e explica o teto.
+      // The server would refuse with a 400; saying it here saves the round trip and explains the cap.
       toast.error(`Select at most ${formatNumber(BULK_JOB_LIMIT)} jobs per action (${formatNumber(jobIds.length)} selected).`);
       return;
     }
@@ -205,8 +205,8 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
       {
         onSuccess: (result) => {
           setBulkResult(result);
-          // Só os que DERAM CERTO saem da seleção. Os que falharam ficam
-          // marcados para o operador poder tentar de novo ou olhar cada um.
+          // Only the ones that SUCCEEDED leave the selection. The failed ones stay
+          // checked so the operator can retry them or look at each one.
           selection.deselect(result.ok);
           const verb = action === "retry" ? "retried" : action === "promote" ? "promoted" : "removed";
           if (result.failed.length === 0) toast.success(`${formatNumber(result.ok.length)} ${verb}`);
@@ -221,7 +221,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
     );
   };
 
-  /** Remove em lote SEMPRE confirma, com o número e o nome da fila. */
+  /** Bulk remove ALWAYS confirms, with the count and the queue name. */
   const onBulk = (action: BulkJobAction) => {
     if (action === "remove") setConfirmBulk("remove");
     else runBulk(action);
@@ -333,9 +333,9 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
                       />
                     )}
                     {isAdmin && <MenuItem icon={<Trash2 />} label="Drain" hint="remove all waiting jobs" onClick={() => (setActionsOpen(false), setDialog("drain"))} />}
-                    {/* Obliterate fica ao lado de Hide de propósito, e as dicas
-                        dizem a diferença: esconder some da lista e é reversível,
-                        obliterate APAGA a fila e os jobs, e não é. */}
+                    {/* Obliterate sits next to Hide on purpose, and the hints
+                        spell out the difference: hiding drops it from the list and is
+                        reversible, obliterate DELETES the queue and the jobs, and is not. */}
                     {isAdmin && <MenuItem icon={<Flame />} label="Obliterate…" hint="deletes the queue and every job · permanent" danger onClick={() => (setActionsOpen(false), setDialog("obliterate"))} />}
                   </div>
                 </>
@@ -485,10 +485,10 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
             </div>
             {bulkResult && <BulkResultPanel result={bulkResult} onDismiss={() => setBulkResult(null)} />}
             {/*
-              Com uma busca na tela, a seleção é dos RESULTADOS carregados —
-              exatamente o caso de uso: "reprocessa os 50 do tenant-globex".
-              A barra diz isso com `searching` para ninguém pensar que pegou a
-              fila inteira.
+              With a search on screen, the selection is over the loaded RESULTS —
+              exactly the use case: "reprocess the 50 from tenant-globex".
+              The bar says so via `searching` so nobody thinks it took the whole
+              queue.
             */}
             {isOperator && <BulkActionBar selection={selection} state="mixed" queue={queue} actions={availableBulkActions} onRun={onBulk} pending={pendingBulk} searching />}
             <JobsTable
@@ -522,11 +522,11 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
         ) : (
           <>
             {/*
-              `stalled` NÃO é um estado do BullMQ: é um SET auxiliar, e um job
-              stallado responde `active` em getState(). Por isso não existe aba
-              "stalled" — mentiria sobre o modelo. O que existe é este aviso na
-              aba `active`, porque "active 8" sem dizer que 3 travaram é um
-              ponto cego real.
+              `stalled` is NOT a BullMQ state: it is an auxiliary SET, and a
+              stalled job answers `active` in getState(). That is why there is no
+              "stalled" tab — it would lie about the model. What exists is this
+              notice on the `active` tab, because "active 8" without saying that 3
+              are stuck is a real blind spot.
             */}
             {state === "active" && (summary.data?.stalledCount ?? 0) > 0 && (
               <div className="flex items-start gap-2 border-b border-border bg-warning/10 px-3 py-2 text-xs" role="status">
@@ -584,8 +584,8 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
         />
       )}
       {/*
-        Remove em lote: confirmação com o NÚMERO e o nome da fila. É irreversível
-        e o número é o que impede o "achei que eram 3".
+        Bulk remove: confirmation with the COUNT and the queue name. It is
+        irreversible, and the count is what prevents the "I thought it was 3".
       */}
       <ConfirmDialog
         open={confirmBulk === "remove"}
@@ -597,8 +597,8 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
         loading={pendingBulk === "remove"}
         onConfirm={() => runBulk("remove")}
       />
-      {/* Remove unitário também confirma — antes não confirmava, e a tabela se
-          reordena a cada 3 s. */}
+      {/* A single remove confirms too — it didn't before, and the table
+          reorders every 3 s. */}
       <ConfirmDialog
         open={confirmRemoveJob !== null}
         onClose={() => setConfirmRemoveJob(null)}

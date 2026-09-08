@@ -1,11 +1,11 @@
 /**
- * Interruptores de build para trabalho que existe mas ainda não deve aparecer.
+ * Build switches for work that exists but shouldn't show up yet.
  *
- * Flows ficou escondida por um tempo porque as arestas detectadas só cobrem
- * links parent/child de flows do BullMQ: uma fila que simplesmente chama
- * `outraFila.add()` não aparece, e isso lia como "quebrado" em vez de
- * "não observável". A página resolve isso deixando o usuário desenhar as
- * arestas que faltam à mão, e o texto da tela explica a diferença — então
- * está ligada de novo. Também é o que a tela de licença promete.
+ * Flows stayed hidden for a while because the detected edges only cover
+ * parent/child links of BullMQ flows: a queue that simply calls
+ * `otherQueue.add()` doesn't show up, and that read as "broken" instead of
+ * "not observable". The page solves this by letting the user draw the missing
+ * edges by hand, and the on-screen copy explains the difference — so it's
+ * back on. It's also what the license screen promises.
  */
 export const SHOW_FLOWS = true;

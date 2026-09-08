@@ -187,9 +187,9 @@ export const JOB_SUMMARY_FIELDS = [
   "priority",
   "parentKey",
   "parent",
-  // `stc` = stalledCounter (Job.fromJSON: `parseInt(json.stc || '0')`). Quantas
-  // vezes o job foi recuperado por stall. É o único rastro no job de que ele
-  // travou; `stalled` em si é um SET auxiliar, não um estado.
+  // `stc` = stalledCounter (Job.fromJSON: `parseInt(json.stc || '0')`). How many
+  // times the job was recovered from a stall. It is the only trace on the job that
+  // it ever hung; `stalled` itself is an auxiliary SET, not a state.
   "stc",
   ...GROUP_ID_FIELDS,
 ] as const;

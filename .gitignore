@@ -1,7 +1,7 @@
 node_modules
 dist
 .env
-# qualquer .env real (.env.trial, .env.production, ...), mas mantendo os templates
+# any real .env (.env.trial, .env.production, ...), while keeping the templates
 .env.*
 !.env.example
 !.env.company.example
@@ -14,12 +14,12 @@ apps/server/public
 keys/
 *.tsbuildinfo
 
-# --- Nada aqui vai para o git ---
-# Configuração de clientes (Monest incluída), chaves de licença assinadas,
-# endpoints e IPs reais. O repositório pode virar open source; esta pasta não.
+# --- Nothing in here goes to git ---
+# Customer configuration, signed license keys, real endpoints and IPs.
+# The repository may become open source; this directory never does.
 private/
 keys/
 *.pem
 
-# cache local do `wrangler dev` (miniflare)
+# local `wrangler dev` cache (miniflare)
 apps/website/.wrangler/

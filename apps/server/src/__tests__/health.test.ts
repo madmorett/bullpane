@@ -105,8 +105,8 @@ describe("HealthService rates", () => {
     expect(serverInfo).toHaveBeenCalledTimes(1);
   });
 
-  it("nunca mostra um aviso em branco quando o erro vem vazio", () => {
-    // ioredis às vezes rejeita sem mensagem (socket fechado no meio do INFO)
+  it("never shows a blank warning when the error comes back empty", () => {
+    // ioredis sometimes rejects with no message (socket closed mid-INFO)
     for (const empty of ["", "   "]) {
       const w = buildWarnings(null, empty, null);
       expect(w[0]?.code).toBe("unreachable");

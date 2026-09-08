@@ -294,11 +294,11 @@ export class ConnectionsService {
           isPro: s?.isPro ?? false,
           groupsCount: s?.groupsCount ?? 0,
           schedulersCount: s?.schedulersCount ?? 0,
-          // Não é um estado, então fica fora de `counts`: um job stallado
-          // continua `active` para o BullMQ. Ver QueueSummary.stalledCount.
+          // Not a state, so it stays out of `counts`: a stalled job is still
+          // `active` as far as BullMQ is concerned. See QueueSummary.stalledCount.
           stalledCount: s?.stalledCount ?? 0,
-          // Fila cujo stats falhou: os zeros vêm dos zsets (fonte "zset") e não há
-          // nada podado para distorcer a razão, então retentionSkewed é false.
+          // Queue whose stats call failed: the zeros come from the zsets (source "zset")
+          // and nothing was pruned to skew the ratio, so retentionSkewed is false.
           rates: s?.rates ?? { windowMinutes: 60, completed: 0, failed: 0, successPct: null, source: "zset", retentionSkewed: false },
           ...(s?.metrics ? { metrics: s.metrics } : {}),
         };

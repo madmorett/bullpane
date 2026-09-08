@@ -166,8 +166,8 @@ export function buildWarnings(
 ): HealthWarning[] {
   const out: HealthWarning[] = [];
   if (error !== null || info === null) {
-    // `??` não cobre string vazia, e alguns erros do ioredis chegam sem mensagem
-    // (socket fechado no meio do INFO). Sem isto o alerta aparece em branco.
+    // `??` does not cover an empty string, and some ioredis errors arrive with no
+    // message (socket closed mid-INFO). Without this the warning shows up blank.
     const detail = error?.trim();
     out.push({
       level: "critical",

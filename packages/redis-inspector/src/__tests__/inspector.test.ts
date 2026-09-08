@@ -663,19 +663,19 @@ describe("rates + setup (round 2)", () => {
   });
 });
 
-describe("taxa de sucesso vs retenção (removeOnComplete)", () => {
+describe("success rate vs retention (removeOnComplete)", () => {
   /**
-   * O bug relatado: com `removeOnComplete: { count: 50 }` os zsets só guardam
-   * 50 concluídos, mas os falhados ficam. A razão vira 50/(50+N) e mostra um
-   * número péssimo para uma fila saudável. As métricas do BullMQ são contadores
-   * acumulados e não sofrem disso.
+   * The reported bug: with `removeOnComplete: { count: 50 }` the zsets only keep
+   * 50 completed jobs while the failed ones stay. The ratio becomes 50/(50+N) and
+   * shows a terrible number for a healthy queue. BullMQ's metrics are cumulative
+   * counters and do not suffer from this.
    */
-  it("usa as métricas do BullMQ e ignora a poda dos zsets", async () => {
+  it("uses BullMQ's metrics and ignores the zset pruning", async () => {
     const fila = q("retencao-com-metrics");
     const w = new Worker(
       "retencao-com-metrics",
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection, metrics: { maxDataPoints: 100 } },
@@ -686,12 +686,12 @@ describe("taxa de sucesso vs retenção (removeOnComplete)", () => {
     for (let i = 0; i < 20; i++) await fila.add("bad", { i }, { removeOnComplete: { count: 50 }, attempts: 1 });
     await waitFor(async () => {
       const c = await fila.getJobCounts("completed", "failed");
-      return c.failed === 20 && c.completed === 50; // poda já aconteceu
+      return c.failed === 20 && c.completed === 50; // pruning already happened
     });
     await w.close();
 
     const s = (await inspector.getQueueStats(["retencao-com-metrics"]))["retencao-com-metrics"];
-    // zsets diriam 50/(50+20) = 71,4%; o real é 200/(200+20) = 90,9%
+    // the zsets would say 50/(50+20) = 71.4%; the real number is 200/(200+20) = 90.9%
     expect(s.rates.source).toBe("metrics");
     expect(s.rates.completed).toBe(200);
     expect(s.rates.failed).toBe(20);
@@ -699,12 +699,12 @@ describe("taxa de sucesso vs retenção (removeOnComplete)", () => {
     expect(s.rates.retentionSkewed).toBe(false);
   });
 
-  it("marca retentionSkewed quando não há métricas e a fila poda concluídos", async () => {
+  it("flags retentionSkewed when there are no metrics and the queue prunes completed jobs", async () => {
     const fila = q("retencao-sem-metrics");
     const w = new Worker(
       "retencao-sem-metrics",
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection },
@@ -721,16 +721,16 @@ describe("taxa de sucesso vs retenção (removeOnComplete)", () => {
 
     const s = (await inspector.getQueueStats(["retencao-sem-metrics"]))["retencao-sem-metrics"];
     expect(s.rates.source).toBe("zset");
-    // a razão está errada (10/15 = 66,7% em vez de 92,3%), e por isso é sinalizada
+    // the ratio is wrong (10/15 = 66.7% instead of 92.3%), which is why it is flagged
     expect(s.rates.retentionSkewed).toBe(true);
   });
 
-  it("não marca skew quando a fila guarda tudo", async () => {
+  it("does not flag skew when the queue keeps everything", async () => {
     const fila = q("retencao-guarda-tudo");
     const w = new Worker(
       "retencao-guarda-tudo",
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection },
@@ -752,20 +752,20 @@ describe("taxa de sucesso vs retenção (removeOnComplete)", () => {
 });
 
 /**
- * `getMetricsCounters` é a ÚNICA fonte que os alertas de erro usam. Ela lê os
- * contadores acumulados do BullMQ (`metrics:completed`/`metrics:failed`, campo
- * `count`), que são incrementados quando o job termina e nunca diminuem — logo
- * `removeOnComplete` não os afeta. Os testes abaixo rodam contra o Redis real
- * com o Worker oficial, então o layout das chaves é exatamente o do cliente.
+ * `getMetricsCounters` is the ONLY source error alerts use. It reads BullMQ's
+ * cumulative counters (`metrics:completed`/`metrics:failed`, field `count`), which
+ * are incremented as each job finishes and never decremented — so
+ * `removeOnComplete` cannot touch them. The tests below run against a real Redis
+ * with the official Worker, so the key layout is exactly the customer's.
  */
-describe("getMetricsCounters (fonte dos alertas de erro)", () => {
-  it("devolve os contadores acumulados de uma fila que coleta métricas", async () => {
+describe("getMetricsCounters (source of the error alerts)", () => {
+  it("returns the cumulative counters of a queue that collects metrics", async () => {
     const NAME = "counters-com-metrics";
     const fila = q(NAME);
     const w = new Worker(
       NAME,
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection, metrics: { maxDataPoints: 100 } },
@@ -787,15 +787,15 @@ describe("getMetricsCounters (fonte dos alertas de erro)", () => {
     expect(counters.collectedAt).toBeLessThanOrEqual(Date.now());
   });
 
-  it("devolve null (não zero) quando a fila NÃO coleta métricas", async () => {
-    // Sem `metrics` no Worker o BullMQ não cria os hashes. Zero seria uma fila
-    // perfeitamente saudável; null é "não sei", e o alerta fica inerte.
+  it("returns null (not zero) when the queue does NOT collect metrics", async () => {
+    // Without `metrics` on the Worker, BullMQ never creates the hashes. Zero would
+    // mean a perfectly healthy queue; null is "I don't know", and the alert stays inert.
     const NAME = "counters-sem-metrics";
     const fila = q(NAME);
     const w = new Worker(
       NAME,
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection },
@@ -814,30 +814,30 @@ describe("getMetricsCounters (fonte dos alertas de erro)", () => {
     expect(counters.failed).toBeNull();
   });
 
-  it("devolve null para uma fila que não existe", async () => {
-    const counters = await inspector.getMetricsCounters("fila-que-nunca-existiu");
+  it("returns null for a queue that does not exist", async () => {
+    const counters = await inspector.getMetricsCounters("queue-that-never-existed");
     expect(counters).toMatchObject({ completed: null, failed: null });
   });
 
   /**
-   * O cenário exato do bug: com poda agressiva o ZCOUNT dos zsets mente e o
-   * contador acumulado não. Este teste compara as DUAS fontes lado a lado na
-   * mesma fila, então ele falha se alguém religar o ZCOUNT nos alertas.
+   * The exact scenario of the bug: with aggressive pruning the zset ZCOUNT lies and
+   * the cumulative counter does not. This test compares BOTH sources side by side on
+   * the same queue, so it fails if anyone wires the ZCOUNT back into the alerts.
    */
-  it("está certo onde o ZCOUNT erraria: poda agressiva de concluídos", async () => {
+  it("is right where the ZCOUNT would be wrong: aggressive pruning of completed jobs", async () => {
     const NAME = "counters-com-poda";
     const fila = q(NAME);
     const w = new Worker(
       NAME,
       async (job: Job) => {
-        if (job.name === "bad") throw new Error("falhou");
+        if (job.name === "bad") throw new Error("failed");
         return 1;
       },
       { connection, metrics: { maxDataPoints: 100 } },
     );
     workers.push(w);
 
-    // 300 ok / 15 falhas = 4,8% de falha, mas só 50 concluídos sobrevivem.
+    // 300 ok / 15 failures = 4.8% failure rate, but only 50 completed jobs survive.
     for (let i = 0; i < 300; i++) await fila.add("ok", { i }, { removeOnComplete: { count: 50 }, attempts: 1 });
     for (let i = 0; i < 15; i++) await fila.add("bad", { i }, { removeOnComplete: { count: 50 }, attempts: 1 });
     await waitFor(async () => {
@@ -849,13 +849,13 @@ describe("getMetricsCounters (fonte dos alertas de erro)", () => {
     const counters = await inspector.getMetricsCounters(NAME);
     const zset = await inspector.getWindowCounts(NAME, 0);
 
-    // a verdade
+    // the truth
     expect(counters.completed).toBe(300);
     expect(counters.failed).toBe(15);
     const realRate = (counters.failed! / (counters.completed! + counters.failed!)) * 100;
     expect(realRate).toBeCloseTo(4.8, 1);
 
-    // o que o alerta via antes: a fila saudável acima disparando "taxa > 10%"
+    // what the alert used to see: the healthy queue above firing "rate > 10%"
     expect(zset.completed).toBe(50);
     expect(zset.failed).toBe(15);
     const zsetRate = (zset.failed / (zset.completed + zset.failed)) * 100;
@@ -864,9 +864,9 @@ describe("getMetricsCounters (fonte dos alertas de erro)", () => {
     expect(realRate).toBeLessThan(10);
   });
 
-  it("o contador já vale antes da virada do minuto, quando a lista :data ainda está vazia", async () => {
-    // Por isso lemos o hash e não `metrics:completed:data`: nos primeiros 60 s
-    // a lista está vazia e um alerta baseado nela não mediria nada.
+  it("the counter is already valid before the minute rolls over, while the :data list is still empty", async () => {
+    // This is why we read the hash and not `metrics:completed:data`: for the first
+    // 60 s the list is empty and an alert based on it would measure nothing.
     const NAME = "counters-primeiro-minuto";
     const fila = q(NAME);
     const w = new Worker(NAME, async () => 1, { connection, metrics: { maxDataPoints: 100 } });
@@ -878,7 +878,7 @@ describe("getMetricsCounters (fonte dos alertas de erro)", () => {
     const counters = await inspector.getMetricsCounters(NAME);
     expect(counters.completed).toBe(4);
     const dataLen = Number(await raw.llen(`bull:${NAME}:metrics:completed:data`));
-    expect(dataLen).toBe(0); // nenhum ponto por minuto ainda, e o contador já está certo
+    expect(dataLen).toBe(0); // no per-minute point yet, and the counter is already right
   });
 });
 
@@ -890,7 +890,7 @@ describe("job schedulers (repeatable jobs)", () => {
    */
   const NAME = "schedulers";
 
-  it("devolve every, pattern, tz, limit, template e a próxima execução", async () => {
+  it("returns every, pattern, tz, limit, template and the next run", async () => {
     const fila = q(NAME);
     await fila.upsertJobScheduler(
       "every-30s",
@@ -926,23 +926,23 @@ describe("job schedulers (repeatable jobs)", () => {
     expect(cron!.next).toBeGreaterThan(Date.now());
   });
 
-  it("a próxima execução casa com o job delayed que o scheduler produziu", async () => {
+  it("the next run matches the delayed job the scheduler produced", async () => {
     const raw2 = new Redis(URL);
     const delayed = await raw2.zrange(`bull:${NAME}:delayed`, 0, -1);
     await raw2.quit();
     const { schedulers } = await inspector.getSchedulers(NAME, { start: 0, end: -1 });
     const cron = schedulers.find((s) => s.key === "cron-daily")!;
-    // bullmq nomeia o job produzido de `repeat:${key}:${millis}`
+    // bullmq names the produced job `repeat:${key}:${millis}`
     expect(delayed).toContain(`repeat:cron-daily:${cron.next}`);
   });
 
-  it("pagina pelo start/end e ordena pela próxima execução", async () => {
+  it("pages by start/end and orders by next run", async () => {
     const fila = q(NAME);
     await fila.upsertJobScheduler("z-later", { pattern: "0 4 * * *" });
 
     const all = await inspector.getSchedulers(NAME, { start: 0, end: -1 });
     expect(all.total).toBe(3);
-    // ZRANGE por score: o mais próximo primeiro
+    // ZRANGE by score: the soonest one first
     const nexts = all.schedulers.map((s) => s.next ?? 0);
     expect([...nexts].sort((a, b) => a - b)).toEqual(nexts);
 
@@ -955,13 +955,13 @@ describe("job schedulers (repeatable jobs)", () => {
     expect(second.schedulers.map((s) => s.key)).toEqual(all.schedulers.slice(1).map((s) => s.key));
   });
 
-  it("conta os schedulers no queueStats (ZCARD, para o badge da aba)", async () => {
+  it("counts the schedulers in queueStats (a ZCARD, for the tab badge)", async () => {
     const stats = (await inspector.getQueueStats([NAME, "orders"]))!;
     expect(stats[NAME].schedulersCount).toBe(3);
     expect(stats.orders.schedulersCount).toBe(0);
   });
 
-  it("removeScheduler apaga o scheduler e o delayed que ele tinha enfileirado", async () => {
+  it("removeScheduler deletes the scheduler and the delayed job it had queued", async () => {
     const before = await inspector.getSchedulers(NAME, { start: 0, end: -1 });
     expect(before.schedulers.some((s) => s.key === "cron-daily")).toBe(true);
 
@@ -978,22 +978,22 @@ describe("job schedulers (repeatable jobs)", () => {
     expect(delayed.some((id) => id.startsWith("repeat:cron-daily:"))).toBe(false);
   });
 
-  it("removeScheduler de um id inexistente devolve removed: false", async () => {
-    expect(await inspector.removeScheduler(NAME, "nao-existe")).toEqual({ removed: false });
+  it("removeScheduler on a nonexistent id returns removed: false", async () => {
+    expect(await inspector.removeScheduler(NAME, "does-not-exist")).toEqual({ removed: false });
   });
 
-  it("uma fila sem schedulers devolve lista vazia, não erro", async () => {
+  it("a queue with no schedulers returns an empty list, not an error", async () => {
     expect(await inspector.getSchedulers("orders", { start: 0, end: -1 })).toEqual({ schedulers: [], total: 0 });
   });
 });
 
-describe("bulkJobAction (resultado parcial)", () => {
+describe("bulkJobAction (partial result)", () => {
   const NAME = "bulk-target";
 
-  it("retry: aplica nos ids válidos e devolve o motivo dos inválidos, sem abortar", async () => {
+  it("retry: applies to the valid ids and returns the reason for the invalid ones, without aborting", async () => {
     const queue = q(NAME);
     const worker = new Worker<unknown, void>(NAME, async () => {
-      throw new Error("sempre falha");
+      throw new Error("always fails");
     }, { connection });
     workers.push(worker);
     const ids: string[] = [];
@@ -1001,8 +1001,8 @@ describe("bulkJobAction (resultado parcial)", () => {
     await waitFor(async () => (await queue.getJobCounts("failed")).failed === 4);
     await worker.close();
 
-    // Um id que nunca existiu e um que já foi removido: os dois casos reais de
-    // "o operador selecionou 50 e 3 sumiram entre a listagem e o clique".
+    // An id that never existed and one that was already removed: the two real cases
+    // of "the operator selected 50 and 3 vanished between the listing and the click".
     await inspector.removeJob(NAME, ids[3]);
     const result = await inspector.bulkJobAction(NAME, "retry", [ids[0], ids[1], "9999", ids[3]]);
 
@@ -1012,11 +1012,11 @@ describe("bulkJobAction (resultado parcial)", () => {
     expect(result.failed).toHaveLength(2);
     expect(result.failed.map((f) => f.jobId).sort()).toEqual(["9999", ids[3]].sort());
     for (const f of result.failed) expect(f.reason).toMatch(/job_not_found/);
-    // E o efeito de verdade: os válidos voltaram para waiting pelos scripts do BullMQ.
+    // And the real effect: the valid ones went back to waiting through BullMQ's scripts.
     for (const id of result.ok) expect((await inspector.getJob(NAME, id))!.state).toBe("waiting");
   });
 
-  it("remove: um id em estado incompatível não impede os outros", async () => {
+  it("remove: an id in an incompatible state does not block the others", async () => {
     const queue = q("bulk-remove");
     const a = (await queue.add("one", {})).id!;
     const b = (await queue.add("two", {})).id!;
@@ -1026,7 +1026,7 @@ describe("bulkJobAction (resultado parcial)", () => {
     expect((await inspector.getQueueStats(["bulk-remove"]))["bulk-remove"].counts.waiting).toBe(0);
   });
 
-  it("promote: só delayed é promovível; o waiting cai em failed com o motivo do BullMQ", async () => {
+  it("promote: only delayed is promotable; the waiting one lands in failed with BullMQ's reason", async () => {
     const queue = q("bulk-promote");
     const delayed = (await queue.add("later", {}, { delay: 60_000 })).id!;
     const waiting = (await queue.add("now", {})).id!;
@@ -1037,7 +1037,7 @@ describe("bulkJobAction (resultado parcial)", () => {
     expect((await inspector.getJob("bulk-promote", delayed))!.state).toBe("waiting");
   });
 
-  it("deduplica ids repetidos em vez de gastar uma ida ao Redis para falhar na segunda", async () => {
+  it("deduplicates repeated ids instead of spending a round trip to Redis to fail on the second", async () => {
     const queue = q("bulk-dedupe");
     const id = (await queue.add("one", {})).id!;
     const result = await inspector.bulkJobAction("bulk-dedupe", "remove", [id, id, id]);
@@ -1046,7 +1046,7 @@ describe("bulkJobAction (resultado parcial)", () => {
     expect(result.failed).toEqual([]);
   });
 
-  it("uma lista vazia é um no-op, não um erro", async () => {
+  it("an empty list is a no-op, not an error", async () => {
     expect(await inspector.bulkJobAction("bulk-dedupe", "retry", [])).toEqual({
       action: "retry",
       ok: [],
@@ -1057,104 +1057,104 @@ describe("bulkJobAction (resultado parcial)", () => {
 });
 
 /**
- * `stalled` NÃO é um estado (confirmado contra bullmq 5.81.4): é um SET auxiliar
- * `${prefix}:${queue}:stalled` que só existe enquanto algo está travado, e
- * `getState()` de um job stallado devolve `active`.
+ * `stalled` is NOT a state (confirmed against bullmq 5.81.4): it is an auxiliary SET
+ * `${prefix}:${queue}:stalled` that only exists while something is hung, and
+ * `getState()` on a stalled job returns `active`.
  *
- * CAMINHO USADO PARA STALLAR DE VERDADE (não manipulação manual do SET):
- * um Worker com `lockDuration` e `stalledInterval` curtíssimos processa um job
- * que nunca termina; matamos o worker com `close(true)` (force), então o lock
- * expira sem ninguém renovar. Um SEGUNDO worker roda o StalledCheck, encontra o
- * job sem lock, o coloca em `stalled` e o devolve para `wait` incrementando
- * `stc`. É exatamente a sequência que acontece quando um pod morre.
+ * PATH USED TO STALL FOR REAL (not hand-editing the SET):
+ * a Worker with a very short `lockDuration` and `stalledInterval` processes a job
+ * that never finishes; we kill the worker with `close(true)` (force), so the lock
+ * expires with nobody renewing it. A SECOND worker runs the StalledCheck, finds the
+ * job without a lock, puts it in `stalled` and moves it back to `wait` incrementing
+ * `stc`. It is exactly the sequence that happens when a pod dies.
  */
-describe("stalled (SET auxiliar, não estado)", () => {
+describe("stalled (auxiliary SET, not a state)", () => {
   const NAME = "stalling";
 
-  it("stalledCount vê o SET e stalledCounter (`stc`) marca o job recuperado", async () => {
+  it("stalledCount sees the SET and stalledCounter (`stc`) marks the recovered job", async () => {
     const queue = q(NAME);
     const job = await queue.add("hang", { x: 1 }, { attempts: 1 });
 
-    // Worker 1: pega o job e nunca termina. lockDuration curto para o lock
-    // expirar assim que ele morrer; lockRenewTime alto para ele nunca renovar.
+    // Worker 1: takes the job and never finishes. Short lockDuration so the lock
+    // expires as soon as it dies; high lockRenewTime so it never renews.
     const dying = new Worker(NAME, () => new Promise<void>(() => undefined), {
       connection,
       lockDuration: 600,
       lockRenewTime: 600_000,
-      stalledInterval: 100_000, // o StalledCheck dele nunca roda; quem roda é o reaper
+      stalledInterval: 100_000, // its own StalledCheck never runs; the reaper's does
     });
     workers.push(dying);
     await new Promise<void>((resolve) => dying.once("active", () => resolve()));
-    // close(true) = force: não espera o job terminar e não devolve o lock.
+    // close(true) = force: does not wait for the job to finish and does not release the lock.
     await dying.close(true);
-    // Esperar o lock expirar de fato: o script só considera stallado o job cuja
-    // chave `:lock` já não existe.
+    // Wait for the lock to actually expire: the script only considers a job stalled
+    // once its `:lock` key is gone.
     await waitFor(async () => (await raw.exists(`bull:${NAME}:${job.id}:lock`)) === 0, 10_000);
 
-    // Worker 2 (reaper) só existe para rodar o StalledCheck. Chamamos
-    // `moveStalledJobsToWait()` na mão em vez de esperar o timer, porque assim o
-    // teste observa CADA passada do script (moveStalledJobsToWait-9.lua):
+    // Worker 2 (reaper) exists only to run the StalledCheck. We call
+    // `moveStalledJobsToWait()` by hand instead of waiting for the timer, because that
+    // way the test observes EVERY pass of the script (moveStalledJobsToWait-9.lua):
     //
-    //   1. `stalled-check` (SET ... PX) é um throttle: enquanto a chave existe,
-    //      o script retorna imediatamente. O worker que morreu já a criou no
-    //      startup, então a primeira chamada aqui é um no-op.
-    //   2. Com a chave apagada, a passada MARCA os ids de `active` no SET
-    //      `stalled` — e o job continua `active`.
-    //   3. A passada seguinte vê o job marcado E sem `:lock`, então incrementa
-    //      `stc`, devolve o job para `wait` e DELeta o SET.
+    //   1. `stalled-check` (SET ... PX) is a throttle: while the key exists, the
+    //      script returns immediately. The worker that died already created it at
+    //      startup, so the first call here is a no-op.
+    //   2. With the key deleted, the pass MARKS the ids from `active` in the `stalled`
+    //      SET — and the job stays `active`.
+    //   3. The next pass sees the job marked AND without a `:lock`, so it increments
+    //      `stc`, moves the job back to `wait` and DELetes the SET.
     //
-    // Ou seja: o SET é transitório e existe entre duas rodadas do check.
+    // In other words: the SET is transient and exists between two rounds of the check.
     const reaper = new Worker(NAME, async () => "ok", { connection, autorun: false, stalledInterval: 100_000 });
     workers.push(reaper);
-    // `moveStalledJobsToWait` é privado no tipo do Worker (é chamado pelo timer
-    // interno). Chamá-lo direto é o que torna este teste determinístico, então
-    // o cast é intencional e localizado.
+    // `moveStalledJobsToWait` is private on the Worker type (it is called by the
+    // internal timer). Calling it directly is what makes this test deterministic, so
+    // the cast is intentional and contained.
     const check = reaper as unknown as { moveStalledJobsToWait(): Promise<unknown> };
     const runCheck = async () => {
       await raw.del(`bull:${NAME}:stalled-check`);
       await check.moveStalledJobsToWait();
     };
 
-    // Passada que MARCA: o job entra no SET `stalled` e o SCARD do queueStats o vê.
+    // The MARKING pass: the job enters the `stalled` SET and queueStats' SCARD sees it.
     await runCheck();
     expect(await raw.smembers(`bull:${NAME}:stalled`)).toEqual([String(job.id)]);
     const marked = await inspector.getQueueStats([NAME]);
     expect(marked[NAME].stalledCount).toBe(1);
-    // E o job continua `active` para o BullMQ: ESTA é a razão de não existir
-    // uma aba "stalled". Não é um estado, é um sinalizador paralelo.
+    // And the job stays `active` as far as BullMQ is concerned: THIS is the reason
+    // there is no "stalled" tab. It is not a state, it is a parallel flag.
     expect((await inspector.getJob(NAME, job.id!))!.state).toBe("active");
-    // E ele NUNCA aparece em counts — a UI mostraria o número ao lado de active.
+    // And it NEVER shows up in counts — the UI shows the number next to active instead.
     expect(marked[NAME].counts.active).toBe(1);
 
-    // Passada que RECUPERA: devolve para `wait` e faz HINCRBY em `stc`.
+    // The RECOVERING pass: moves it back to `wait` and HINCRBYs `stc`.
     await runCheck();
 
-    // Agora o job voltou para `wait` e carrega `stc = 1`.
+    // Now the job is back in `wait` and carries `stc = 1`.
     const detail = await inspector.getJob(NAME, job.id!);
     expect(detail!.stalledCounter).toBe(1);
     expect(detail!.state).toBe("waiting");
     const page = await inspector.getJobs(NAME, "waiting", { start: 0, end: -1, order: "desc" });
     expect(page.jobs.find((j) => j.id === job.id)!.stalledCounter).toBe(1);
-    // O SET foi limpo pelo próprio script (DEL stalledKey) — é transitório.
+    // The SET was cleared by the script itself (DEL stalledKey) — it is transient.
     expect((await inspector.getQueueStats([NAME]))[NAME].stalledCount).toBe(0);
 
     await reaper.close(true);
   }, 30_000);
 
-  it("stalledCount reflete o SCARD do SET (um SCARD O(1) dentro do queueStats)", async () => {
+  it("stalledCount reflects the SET's SCARD (an O(1) SCARD inside queueStats)", async () => {
     const queue = q("stalled-scard");
     await queue.waitUntilReady();
     const key = "bull:stalled-scard:stalled";
     expect((await inspector.getQueueStats(["stalled-scard"]))["stalled-scard"].stalledCount).toBe(0);
-    // Escrita direta no SET só para provar a leitura: o caminho real está no
-    // teste acima, com worker morto de verdade.
+    // Writing to the SET directly just to prove the read: the real path is in the
+    // test above, with a worker actually killed.
     await raw.sadd(key, "1", "2", "3");
     expect((await inspector.getQueueStats(["stalled-scard"]))["stalled-scard"].stalledCount).toBe(3);
     await raw.del(key);
     expect((await inspector.getQueueStats(["stalled-scard"]))["stalled-scard"].stalledCount).toBe(0);
   });
 
-  it("stalledCounter é 0 num job normal, e `stalled` não é um JobState", async () => {
+  it("stalledCounter is 0 on a normal job, and `stalled` is not a JobState", async () => {
     const queue = q("no-stall");
     const id = (await queue.add("fine", {})).id!;
     const page = await inspector.getJobs("no-stall", "waiting", { start: 0, end: -1, order: "desc" });

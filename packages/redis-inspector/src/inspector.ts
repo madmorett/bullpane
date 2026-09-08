@@ -92,10 +92,10 @@ const SCAN_COUNT = 1000;
 /** Metric points returned by getQueueStats when withMetrics is set (one per minute). */
 const STATS_METRIC_POINTS = 60;
 /**
- * Quantas ações em lote correm ao mesmo tempo. Um `Promise.all` de 500
- * `job.retry()` dispara 500 EVALSHAs simultâneos e enfileira comandos na frente
- * do workload do cliente — o contrário do contrato de performance. Uma janela
- * pequena termina em tempo parecido e mantém o Redis respirando.
+ * How many bulk actions run at the same time. A `Promise.all` of 500 `job.retry()`
+ * fires 500 concurrent EVALSHAs and queues commands ahead of the customer's own
+ * workload — the opposite of the performance contract. A small window finishes in
+ * about the same time and keeps Redis breathing.
  */
 const BULK_CONCURRENCY = 8;
 /** Trailing window for QueueRates (success / failure %). */
@@ -464,8 +464,8 @@ export class RedisInspector implements Inspector {
       p + QUEUE_KEY.metricsFailed,
       // job schedulers: a ZCARD on `repeat` for the tab badge, O(1).
       p + QUEUE_KEY.repeat,
-      // stalled: um SCARD O(1). Não é estado (o BullMQ devolve `active` para um
-      // job stallado); é o único jeito de a UI dizer quantos dos `active` travaram.
+      // stalled: an O(1) SCARD. Not a state (BullMQ returns `active` for a stalled
+      // job); it is the only way for the UI to say how many of the `active` ones hung.
       p + QUEUE_KEY.stalled,
     ];
   }
@@ -960,18 +960,18 @@ export class RedisInspector implements Inspector {
   }
 
   /**
-   * Ação em lote. Reusa EXATAMENTE as ações unitárias acima (portanto a API
-   * oficial do bullmq e seus scripts atômicos), em janelas de BULK_CONCURRENCY.
+   * Bulk action. Reuses EXACTLY the single-job actions above (hence the official
+   * bullmq API and its atomic scripts), in windows of BULK_CONCURRENCY.
    *
-   * Resultado parcial é a regra: um id podado, em outro estado ou que falhe no
-   * script cai em `failed` com o motivo, e os demais seguem. Abortar no primeiro
-   * erro esconderia os 47 que deram certo — e o operador precisa saber quais 3
-   * dos 50 ficaram para trás. Só um Redis inacessível lança.
+   * Partial result is the rule: an id that was pruned, is in another state or fails
+   * inside the script lands in `failed` with the reason, and the rest go through.
+   * Aborting on the first error would hide the 47 that worked — and the operator
+   * needs to know which 3 of the 50 were left behind. Only an unreachable Redis throws.
    */
   async bulkJobAction(queueName: string, action: BulkJobAction, jobIds: string[]): Promise<BulkJobActionResult> {
     const ok: string[] = [];
     const failed: BulkJobFailure[] = [];
-    // Ids repetidos custariam uma ida ao Redis para dar "job_not_found" na segunda.
+    // Duplicate ids would cost a round trip to Redis just to say "job_not_found" on the second.
     const ids = [...new Set(jobIds)];
 
     const run = async (jobId: string): Promise<void> => {
@@ -1057,19 +1057,19 @@ function parseStats(reply: LuaReply, withMetrics: boolean, windowMinutes: number
   STATE_ORDER.forEach((state, i) => {
     counts[state] = asNumber(r[i]);
   });
-  // --- taxa de sucesso -----------------------------------------------------
-  // Duas fontes possíveis. As métricas do BullMQ são contadores por minuto
-  // gravados quando o job termina, então continuam corretas mesmo com
-  // removeOnComplete agressivo. Os zsets só enxergam o que ainda existe:
-  // com `removeOnComplete: { count: 50 }`, 10.000 ok + 100 falhas viram
-  // 50/(50+100) = 33%, quando o real é 99%. Preferimos métricas sempre.
+  // --- success rate --------------------------------------------------------
+  // Two possible sources. BullMQ's metrics are per-minute counters written as each
+  // job finishes, so they stay correct even with an aggressive removeOnComplete.
+  // The zsets only see what still exists: with `removeOnComplete: { count: 50 }`,
+  // 10,000 ok + 100 failures become 50/(50+100) = 33% when the real number is 99%.
+  // We always prefer metrics.
   const metricsCompleted = metricPoints(r[11] ?? []);
   const metricsFailed = metricPoints(r[12] ?? []);
   const prunesCompleted = optsPrunesCompleted(typeof r[16] === "string" ? r[16] : null);
 
-  // Os contadores acumulados existem assim que o Worker liga `metrics`; a lista
-  // :data só ganha o primeiro ponto na virada do minuto. Usar o hash faz a taxa
-  // ficar correta desde o primeiro job.
+  // The cumulative counters exist as soon as the Worker turns `metrics` on; the
+  // :data list only gains its first point when the minute rolls over. Reading the
+  // hash is what makes the rate correct from the very first job.
   const totalCompleted = toIntOrNull(typeof r[17] === "string" ? r[17] : null);
   const totalFailed = toIntOrNull(typeof r[18] === "string" ? r[18] : null);
   const hasMetrics = totalCompleted !== null || totalFailed !== null;
@@ -1078,8 +1078,8 @@ function parseStats(reply: LuaReply, withMetrics: boolean, windowMinutes: number
 
   let rates: QueueRates;
   if (hasMetrics) {
-    // Dentro da janela, quando há pontos por minuto suficientes; senão o
-    // acumulado desde que a coleta começou (fila nova, minuto ainda não virou).
+    // Inside the window when there are enough per-minute points; otherwise the
+    // cumulative total since collection started (new queue, minute has not rolled over).
     const points = Math.min(windowMinutes, Math.max(metricsCompleted.length, metricsFailed.length));
     const useWindow = points > 0;
     const completed = useWindow ? sum(metricsCompleted, points) : (totalCompleted ?? 0);
@@ -1103,8 +1103,8 @@ function parseStats(reply: LuaReply, withMetrics: boolean, windowMinutes: number
       failed,
       successPct: finished === 0 ? null : Math.round((completed / finished) * 1000) / 10,
       source: "zset",
-      // só é enviesado se a fila realmente poda concluídos E há falhas para
-      // desequilibrar a razão; sem falhas, 100% continua sendo 100%.
+      // only skewed if the queue really does prune completed jobs AND there are
+      // failures to unbalance the ratio; with no failures, 100% is still 100%.
       retentionSkewed: prunesCompleted && failed > 0,
     };
   }
@@ -1153,12 +1153,13 @@ function stripUndefined<T extends object>(o: T): Partial<T> {
 }
 
 /**
- * `removeOnComplete` vive no opts de cada job. Se a fila poda concluídos, a
- * razão calculada em cima dos zsets não é confiável: os falhados costumam ser
- * retidos por mais tempo que os concluídos.
+ * `removeOnComplete` lives in each job's opts. If the queue prunes completed jobs,
+ * the ratio computed on top of the zsets is not trustworthy: failed jobs are usually
+ * retained longer than completed ones.
  *
- * `true` só quando há poda de fato: `removeOnComplete: true` (apaga na hora),
- * `{ count: N }` ou `{ age: N }`. `false` (o padrão) guarda tudo e é confiável.
+ * `true` only when there is actual pruning: `removeOnComplete: true` (deletes right
+ * away), `{ count: N }` or `{ age: N }`. `false` (the default) keeps everything and
+ * is trustworthy.
  */
 export function optsPrunesCompleted(optsJson: string | null): boolean {
   if (!optsJson) return false;

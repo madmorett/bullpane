@@ -437,9 +437,9 @@ export function useJobAction(cid: string, queue: string) {
 }
 
 /**
- * Ações em lote. Uma chamada, resultado PARCIAL: `{ ok, failed }` com 200 mesmo
- * quando alguns ids não foram, porque o operador precisa saber quais 3 dos 50
- * ficaram para trás. O `onSuccess` invalida as mesmas queries da ação unitária.
+ * Bulk actions. One call, PARTIAL result: `{ ok, failed }` with a 200 even when
+ * some ids didn't make it, because the operator needs to know which 3 of the 50
+ * were left behind. The `onSuccess` invalidates the same queries as the single action.
  */
 export function useBulkJobAction(cid: string, queue: string) {
   const qc = useQueryClient();

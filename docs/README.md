@@ -1,36 +1,30 @@
-# Documentação
+# Documentation
 
-## Para entender o projeto
-
-| | |
-|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Como as peças se encaixam e o contrato de performance |
-| [API.md](API.md) | Todos os endpoints REST |
-| [PRO.md](PRO.md) | Formato da licença, como emitir, `DEMO_MODE` |
-
-## Para rodar
+## Understanding the project
 
 | | |
 |---|---|
-| [../deploy/README.md](../deploy/README.md) | EC2, ECS ou Docker Compose |
-| [PRODUCTION-TRIAL.md](PRODUCTION-TRIAL.md) | Apontar para uma produção movimentada com segurança |
-| [../deploy/ecs/RISCO-PRODUCAO.md](../deploy/ecs/RISCO-PRODUCAO.md) | O que o dashboard faz no seu Redis, medido comando a comando |
-| [DEMO.md](DEMO.md) | O simulador e a demo pública |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the pieces fit together, and the performance contract |
+| [API.md](API.md) | Every REST endpoint |
+| [PRO.md](PRO.md) | License format, how to issue one, `DEMO_MODE` |
 
-## Para o negócio
+## Running it
 
 | | |
 |---|---|
-| [LANCAMENTO.md](LANCAMENTO.md) | Contas necessárias, custos, pagamento, ordem de execução |
+| [../deploy/README.md](../deploy/README.md) | EC2, ECS or Docker Compose |
+| [PRODUCTION-TRIAL.md](PRODUCTION-TRIAL.md) | Pointing it at a busy production Redis safely |
+| [../deploy/ecs/REDIS-SAFETY.md](../deploy/ecs/REDIS-SAFETY.md) | What the dashboard does to your Redis, measured command by command |
+| [STRESS-TEST.md](STRESS-TEST.md) | The harness that proves it does not degrade the operation |
+| [DEMO.md](DEMO.md) | The simulator and the public demo |
 
-## notas/
+## Business
 
-Anotações e material de referência, não documentação:
+| | |
+|---|---|
+| [LAUNCH.md](LAUNCH.md) | Accounts needed, costs, payments, order of execution |
 
-- `pedido-folder-view.md` — pedido original da tela de pastas
-- `referencia-taskforce-queue-page.html` — DOM da página de fila do Taskforce, usado como referência para a aba de métricas
+## Customer configuration
 
-## Configuração de clientes
-
-Fica em `private/`, fora do git. Se você trabalha com uma instalação existente,
-comece por `private/monest/INSTALACAO-ATUAL.md`.
+Lives in `private/`, outside git: account ids, endpoints, signed licenses. The
+generic equivalent in these docs uses placeholders (`<ACCOUNT_ID>`, `<REGION>`).

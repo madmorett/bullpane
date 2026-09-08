@@ -1,16 +1,16 @@
 /**
- * As rotas de ação em lote, contra o Fastify de verdade (`app.inject`), porque
- * o que importa nelas não é o caminho felizv — é o contorno:
+ * The bulk action routes, against the real Fastify (`app.inject`), because what
+ * matters in them is not the happy path — it is the edges:
  *
- *  - o TETO de ids é recusado com 400 `validation` antes de qualquer ida ao
- *    Redis (sem isso alguém cola 100 mil ids e prende o Redis do cliente);
- *  - o RESULTADO PARCIAL volta com 200: um id inválido no meio de válidos não
- *    pode derrubar os outros nem esconder quais falharam;
- *  - o papel mínimo é `operator` (um viewer leva 403);
- *  - o `detail` da auditoria carrega CONTAGENS, nunca o payload dos jobs.
+ *  - the ids CAP is refused with 400 `validation` before any trip to Redis
+ *    (without that someone pastes 100 thousand ids and locks up the customer's Redis);
+ *  - the PARTIAL RESULT comes back with 200: one invalid id among valid ones must
+ *    not take the others down nor hide which ones failed;
+ *  - the minimum role is `operator` (a viewer gets 403);
+ *  - the audit `detail` carries COUNTS, never the job payload.
  *
- * O harness é o mesmo do auditHook.test.ts: db drizzle-shaped falso + inspector
- * falso, sem MySQL e sem Redis.
+ * The harness is the same as auditHook.test.ts: a fake drizzle-shaped db + fake
+ * inspector, no MySQL and no Redis.
  */
 import { describe, expect, it, vi } from "vitest";
 import { BULK_JOB_LIMIT } from "@bullpane/shared";
@@ -76,9 +76,9 @@ function tableName(table: unknown): string {
 }
 
 /**
- * Inspector falso cujo `bulkJobAction` imita o de verdade: ids que começam com
- * "ghost" falham, o resto passa. A implementação real é testada contra um Redis
- * de verdade em packages/redis-inspector; aqui interessa só o contrato HTTP.
+ * Fake inspector whose `bulkJobAction` mimics the real one: ids starting with
+ * "ghost" fail, the rest go through. The real implementation is tested against a
+ * real Redis in packages/redis-inspector; here only the HTTP contract matters.
  */
 function fakeInspector() {
   return {
@@ -116,8 +116,8 @@ describe("bulk job actions", () => {
       url: url("retry"),
       payload: { jobIds: ["1", "2", "ghost-9", "3"] },
     });
-    // 200 com falhas parciais é a decisão central: 3 de 50 que não foram é
-    // informação que o operador precisa, não motivo para derrubar os 47.
+    // 200 with partial failures is the central decision: 3 out of 50 that did not
+    // go through is information the operator needs, not a reason to drop the 47.
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.ok).toEqual(["1", "2", "3"]);
@@ -143,7 +143,7 @@ describe("bulk job actions", () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("validation");
     expect(JSON.stringify(res.json())).toContain(String(BULK_JOB_LIMIT));
-    // O teto existe para o Redis: se o inspector foi chamado, o teto não serviu.
+    // The cap exists for Redis' sake: if the inspector was called, the cap was useless.
     expect(w.inspector.bulkJobAction).not.toHaveBeenCalled();
     await w.app.close();
   });
@@ -174,9 +174,9 @@ describe("bulk job actions", () => {
 
   it("does not collide with the single-job routes (`bulk` is not a job id)", async () => {
     const w = await build();
-    // /jobs/:jobId/retry e /jobs/bulk/retry convivem: o segmento estático ganha
-    // do parâmetro no router do Fastify. Se a precedência invertesse, esta
-    // chamada cairia no handler unitário com jobId="bulk".
+    // /jobs/:jobId/retry and /jobs/bulk/retry coexist: the static segment wins
+    // over the parameter in Fastify's router. If that precedence flipped, this
+    // call would land on the single-job handler with jobId="bulk".
     const res = await w.app.inject({ method: "POST", url: url("retry"), payload: { jobIds: ["1"] } });
     expect(res.statusCode).toBe(200);
     expect(res.json().action).toBe("retry");
@@ -199,8 +199,8 @@ describe("bulk job actions", () => {
       expect(row.queueName).toBe("payments");
       expect(row.result).toBe("ok");
       expect(row.detail).toMatchObject({ requested: 3, ok: 2, failed: 1 });
-      // A asserção de privacidade: nem o payload que veio no corpo, nem os dados
-      // dos jobs, podem acabar numa tabela que o admin exporta como CSV.
+      // The privacy assertion: neither the payload that came in the body, nor the
+      // job data, may end up in a table the admin exports as CSV.
       const serialised = JSON.stringify(row);
       expect(serialised).not.toContain("123.456.789-00");
       expect(row.detail?.data).toBeUndefined();

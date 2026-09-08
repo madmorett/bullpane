@@ -264,11 +264,11 @@
   }
 
   /*
-   * Tooltip: fica sempre no DOM, só escondido. Com `opacity-0` sozinho ele
-   * continuava ocupando espaço de layout — um tooltip largo (874px) perto da
-   * borda direita esticava o documento e criava scroll horizontal em QUALQUER
-   * largura de tela, até em 2560px. `visibility: hidden` + `max-width` resolvem:
-   * invisível não participa do overflow, e o texto quebra em vez de crescer.
+   * Tooltip: it always stays in the DOM, just hidden. With `opacity-0` alone it
+   * still took up layout space — a wide tooltip (874px) near the right edge
+   * stretched the document and created horizontal scroll at ANY screen width,
+   * even at 2560px. `visibility: hidden` + `max-width` fix it: invisible does
+   * not take part in the overflow, and the text wraps instead of growing.
    */
   .tooltip {
     @apply pointer-events-none invisible absolute z-50 max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
