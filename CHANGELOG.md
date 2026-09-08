@@ -23,6 +23,10 @@ written from this file — when you add an entry here, mirror it there
 - The "Unlock Pro" button pointed at `bullpane.com/pro`, which is a 404.
   Pricing is a section on the home page, so every upsell now links to
   `bullpane.com/#pricing`.
+- The delete confirmation for a folder said its subfolders would be deleted
+  too. They are not: deleting a folder promotes its subfolders to the top
+  level, and only the folder's own queue assignments go away. The dialog now
+  says that, and a test pins the behaviour down.
 
 ## [0.1.0] — 2026-09-08
 
