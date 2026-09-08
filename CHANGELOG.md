@@ -4,12 +4,25 @@ Every user-visible change to Bullpane. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/).
 
-Docker images are published per tag: `ghcr.io/<owner>/bullpane:0.1.0`, `:0.1`,
+Docker images are published per tag: `ghcr.io/<owner>/bullpane:0.1.1`, `:0.1`,
 `:latest`, plus `:edge` for every push to `main`.
 
 The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
+
+## [0.1.1] — 2026-09-08
+
+### Fixed
+
+- **The published Docker image was the traffic simulator, not the dashboard.**
+  `0.1.0` (and `:latest`) shipped the load generator: the build did not select
+  the `runner` stage, so it took the Dockerfile's last one. A container started
+  from it would generate BullMQ traffic instead of serving the UI. **Do not run
+  `0.1.0`** — use `0.1.1`, which is otherwise identical.
+- The "Unlock Pro" button pointed at `bullpane.com/pro`, which is a 404.
+  Pricing is a section on the home page, so every upsell now links to
+  `bullpane.com/#pricing`.
 
 ## [0.1.0] — 2026-09-08
 

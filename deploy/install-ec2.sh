@@ -9,7 +9,7 @@
 # Brings up the app (port 3000) + MySQL, both in Docker, with automatic restart.
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.1.0}"
+IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.1.1}"
 APP_DIR="${APP_DIR:-/opt/bullpane}"
 LICENSE_KEY="${LICENSE_KEY:-}"
 READ_ONLY="${READ_ONLY:-false}"

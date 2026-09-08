@@ -1,6 +1,6 @@
 {
   "name": "bullpane",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A fast, self-hosted dashboard for BullMQ and BullMQ Pro. Free core, one-time Pro upgrade.",
   "license": "MIT",

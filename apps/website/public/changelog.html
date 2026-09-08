@@ -3,7 +3,19 @@
 <h1>Changelog</h1>
 <p class="updated">Last updated 8 September 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.0</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.1</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-1-1">0.1.1</h2>
+    <span class="release-date">8 September 2026</span>
+  </div>
+  <h3>Fixed</h3>
+  <ul>
+    <li><strong>The 0.1.0 image was the traffic simulator, not the dashboard.</strong> A container started from it generated BullMQ traffic instead of serving the UI. Use <code>0.1.1</code>; it is otherwise identical.</li>
+    <li>The &ldquo;Unlock Pro&rdquo; button led to a 404. It now opens the pricing section on this site.</li>
+  </ul>
+</article>
 
 <article class="release">
   <div class="release-head">

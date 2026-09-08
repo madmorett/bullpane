@@ -278,7 +278,7 @@ function FolderDetail({ folder, allFolders, canEdit, onDeleted }: { folder: Fold
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         title={`Delete "${folder.name}"`}
-        description={children.length > 0 ? "Subfolders are deleted too. Queues themselves are untouched." : "Queues themselves are untouched."}
+        description={children.length > 0 ? "Subfolders move up to the top level. Queues themselves are untouched." : "Queues themselves are untouched."}
         confirmText="Delete folder"
         danger
         loading={del.isPending}
