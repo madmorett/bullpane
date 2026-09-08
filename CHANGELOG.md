@@ -4,14 +4,17 @@ Every user-visible change to Bullpane. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/).
 
-Docker images are published per tag: `ghcr.io/<owner>/bullpane:1.2.3`, `:1.2`,
+Docker images are published per tag: `ghcr.io/<owner>/bullpane:0.0.1`, `:0.0`,
 `:latest`, plus `:edge` for every push to `main`.
 
 The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
-## [Unreleased]
+## [0.0.1] — 2026-09-08
+
+Everything below is the first tagged version. The releases before it were
+development milestones and were not published; this is the baseline.
 
 ### Added
 
@@ -60,16 +63,7 @@ written from this file — when you add an entry here, mirror it there
   queue search (`orders:groups:tenant-a`).
 - Waiting counts for a Pro group ignored prioritized jobs.
 
-### Security
-
-- Nothing yet.
-
-## [0.1.0] — 2026-09-06
-
-First release. Everything the open-source dashboards do, behind a login, plus the
-Pro features.
-
-### Added
+### Also in 0.0.1 — the dashboard itself
 
 - **Queues and jobs.** Every BullMQ state (waiting, active, delayed, prioritized,
   completed, failed, paused, waiting-children), per-minute completed/failed rates
@@ -84,7 +78,6 @@ Pro features.
   Redis.
 - **Job schedulers** (repeatable jobs) listed with their pattern, run count and
   next run.
-- **BullMQ Pro groups**, read-only.
 - **Redis health monitor:** memory, CPU, commands per second, latency, clients
   and keys, sampled on the server and shared across tabs.
 - **Command palette** (`⌘K` / `Ctrl+K`) over every queue on every connection.
@@ -93,5 +86,5 @@ Pro features.
 - **Read-only mode** (`BULLPANE_READ_ONLY=true`) that refuses every write, for
   pointing the dashboard at production before you trust it.
 
-[Unreleased]: https://github.com/madmorett/bullpane/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/madmorett/bullpane/releases/tag/v0.1.0
+[Unreleased]: https://github.com/madmorett/bullpane/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/madmorett/bullpane/releases/tag/v0.0.1

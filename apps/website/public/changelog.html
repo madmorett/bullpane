@@ -1,16 +1,16 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css"><title>Changelog — Bullpane</title><meta name="description" content="Every release of Bullpane, the self-hosted dashboard for BullMQ and BullMQ Pro: what was added, what changed and what was fixed."></head><body>
 <nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
 <h1>Changelog</h1>
-<p class="updated">Last updated 7 September 2026</p>
+<p class="updated">Last updated 8 September 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.0</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.0.1</code>, <code>:0.0</code>, <code>:latest</code>.</p>
 
 <article class="release">
   <div class="release-head">
-    <h2 id="unreleased">In development</h2>
-    <span class="badge-next">next release</span>
+    <h2 id="v0-0-1">0.0.1</h2>
+    <span class="release-date">8 September 2026</span>
   </div>
-  <p class="release-note">Running in production at Monest before it is tagged. Available today as <code>ghcr.io/madmorett/bullpane:edge</code>, which tracks the main branch and is not recommended for production.</p>
+  <p class="release-note">First tagged version. The releases before it were development milestones and were not published; this is the baseline.</p>
 
   <h3>Added</h3>
   <ul>
@@ -38,10 +38,9 @@
 
 <article class="release">
   <div class="release-head">
-    <h2 id="v0-1-0">0.1.0</h2>
-    <span class="release-date">6 September 2026</span>
+    <h2 id="v0-0-1-base">The dashboard itself</h2>
   </div>
-  <p class="release-note">First release. Everything the open-source dashboards do, behind a real login, plus the Pro features.</p>
+  <p class="release-note">Also part of 0.0.1: everything the open-source dashboards do, behind a real login, plus the Pro features.</p>
 
   <h3>Added</h3>
   <ul>
@@ -50,7 +49,6 @@
     <li><strong>Actions.</strong> Add, retry, promote, remove and discard jobs, in bulk if you like; pause, resume, clean, retry-all, drain and obliterate queues, with the destructive ones behind the admin role.</li>
     <li><strong>Search inside job data</strong>, bounded and resumable so a big state never blocks Redis.</li>
     <li><strong>Job schedulers</strong> listed with their pattern, run count and next run.</li>
-    <li><strong>BullMQ Pro groups</strong>, read-only.</li>
     <li><strong>Redis health monitor.</strong> Memory, CPU, commands per second, latency, clients and keys, sampled on the server and shared across tabs.</li>
     <li><strong>Command palette</strong> (<span class="kbd">⌘</span> <span class="kbd">K</span>) over every queue on every connection.</li>
     <li><strong>Pro.</strong> Alerts to Slack or any webhook, users and roles, folders, the flow graph, and an append-only audit log with CSV export.</li>
