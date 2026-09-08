@@ -21,7 +21,7 @@ export type ProFeature = (typeof PRO_FEATURES)[number];
  * Pro pricing (USD). A subscription, one installation per license key.
  * Yearly is 12 months for the price of ~8 (35% off).
  */
-export const PRO_PRICING = { monthlyUsd: 19, yearlyUsd: 149 } as const;
+export const PRO_PRICING = { monthlyUsd: 39, yearlyUsd: 390 } as const;
 export interface ProPricing {
   monthlyUsd: number;
   yearlyUsd: number;
@@ -177,6 +177,33 @@ export interface User {
   lastLoginAt: string | null;
 }
 
+/**
+ * The free edition has no login: `authPlugin` puts this synthetic admin on
+ * every request that arrives without a session, so the ~40 `requireRole`
+ * guards keep working untouched instead of each route learning about editions.
+ *
+ * The id is a literal, not a row in `users` — nothing can log in as it, and
+ * `users.count() === 0` still drives the Pro setup flow. Audit rows written
+ * under it are the honest answer to "who did this" on an install where
+ * anyone with the URL could have.
+ */
+export const ANONYMOUS_USER_ID = "anonymous";
+
+export function anonymousUser(): User {
+  return {
+    id: ANONYMOUS_USER_ID,
+    email: "",
+    name: "Anonymous",
+    role: "admin",
+    createdAt: new Date(0).toISOString(),
+    lastLoginAt: null,
+  };
+}
+
+export function isAnonymousUser(user: Pick<User, "id"> | null | undefined): boolean {
+  return user?.id === ANONYMOUS_USER_ID;
+}
+
 export const roleSchema = z.enum(ROLES);
 
 export const setupSchema = z.object({
@@ -222,6 +249,12 @@ export interface MeResponse {
 export interface SetupStatus {
   needsSetup: boolean;
   demo: boolean;
+  /**
+   * false on the free edition: there is no login at all, the UI goes straight
+   * to the dashboard as an anonymous admin. True once a license unlocks
+   * `users`, which is what makes accounts, roles and the login page exist.
+   */
+  authRequired: boolean;
 }
 
 // ---------------------------------------------------------------------------

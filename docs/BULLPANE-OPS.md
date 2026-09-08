@@ -33,7 +33,7 @@ Do not lose it: it is in `keys/` and backed up in `private/bullpane/`.
 
 ## Creem
 
-Two live products (monthly USD 19, yearly USD 149), each with the License Key
+Two live products (monthly USD 39, yearly USD 390), each with the License Key
 add-on enabled in the dashboard with activation limit 1 (the API cannot set it),
 default success URL `https://bullpane.com/thanks`, and a 100%-off discount code
 for internal testing. IDs and payment links in `private/bullpane/creem.json`.

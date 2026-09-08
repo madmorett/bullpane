@@ -4,10 +4,17 @@ import { requireAuth } from "../auth/guards";
 import { verifyPassword } from "../auth/password";
 import { SESSION_COOKIE, sessionCookieOptions, toUserDto } from "../auth/sessions";
 import { unauthenticated } from "../plugins/errors";
+import { assertFeature } from "../plugins/gates";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/auth/login", async (request, reply): Promise<MeResponse> => {
     const input = loginSchema.parse(request.body);
+    /**
+     * The free edition has no accounts, so there is nothing to log in to. This
+     * answers 402 with the upsell rather than 401 "wrong password", which is
+     * what someone poking at a free install would otherwise conclude.
+     */
+    assertFeature(app.ctx.edition.getEdition(), "users");
     const row = await app.ctx.users.findByEmail(input.email);
     const ok = row ? await verifyPassword(input.password, row.passwordHash) : false;
     if (!row || !ok) {
@@ -55,6 +62,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/auth/logout", { preHandler: [requireAuth] }, async (request, reply) => {
+    // Anonymous (free edition) has no session row and no cookie to clear;
+    // clearing anyway is harmless and keeps the response shape identical.
     if (request.sessionId) await app.ctx.sessions.destroy(request.sessionId);
     reply.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(app.ctx.config), signed: false });
     return { ok: true };

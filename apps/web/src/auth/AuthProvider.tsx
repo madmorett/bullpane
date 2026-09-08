@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   hasRole,
+  isAnonymousUser,
   type Edition,
   type LoginInput,
   type MeResponse,
@@ -30,6 +31,13 @@ export interface AuthContextValue {
   /** initial /auth/me + /setup/status round-trip still in flight */
   loading: boolean;
   needsSetup: boolean;
+  /**
+   * false on the free edition: no login page, no logout, the dashboard is
+   * open and `user` is the synthetic anonymous admin the server sends.
+   */
+  authRequired: boolean;
+  /** true when the current user is that anonymous admin (free edition) */
+  isAnonymous: boolean;
   refresh: () => Promise<void>;
   login: (input: LoginInput) => Promise<MeResponse>;
   setup: (input: SetupInput) => Promise<MeResponse>;
@@ -47,19 +55,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [edition, setEditionState] = useState<Edition | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [authRequired, setAuthRequired] = useState(true);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const qc = useQueryClient();
   const locationRef = useRef(location);
   locationRef.current = location;
+  const authRequiredRef = useRef(authRequired);
+  authRequiredRef.current = authRequired;
 
   const loadAnonymous = useCallback(async () => {
     const [status, pubEdition] = await Promise.allSettled([
       api.get<SetupStatus>("/setup/status", { silent: true }),
       api.get<Edition>("/edition", { silent: true }),
     ]);
-    if (status.status === "fulfilled") setNeedsSetup(!!status.value.needsSetup);
+    if (status.status === "fulfilled") {
+      setNeedsSetup(!!status.value.needsSetup);
+      setAuthRequired(status.value.authRequired !== false);
+    }
     if (pubEdition.status === "fulfilled") setEditionState(pubEdition.value);
   }, []);
 
@@ -69,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(me.user);
       setEditionState(me.edition);
       setNeedsSetup(false);
+      // On the free edition /auth/me answers with the anonymous admin instead
+      // of 401, so `users` is what tells the UI whether a login exists at all.
+      setAuthRequired(me.edition.features.users);
     } catch (e) {
       setUser(null);
       if (isApiError(e) && e.status === 401) await loadAnonymous();
@@ -78,6 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadAnonymous]);
 
+  // Read by the 401 handler below, which is registered once and must not be
+  // re-registered every time `refresh` changes identity.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -86,6 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setApiHandlers({
       onUnauthenticated: () => {
+        // A 401 on the free edition would mean the license was just unlocked
+        // mid-session (accounts now exist). Re-resolving is the honest move:
+        // it either finds the anonymous admin again or lands on /login.
+        if (!authRequiredRef.current) {
+          void refreshRef.current();
+          return;
+        }
         setUser(null);
         qc.clear();
         const path = locationRef.current.pathname;
@@ -137,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       edition,
       loading,
       needsSetup,
+      authRequired,
+      isAnonymous: isAnonymousUser(user),
       refresh,
       login,
       setup,
@@ -146,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: user?.role === "admin",
       isOperator: user ? hasRole(user.role, "operator") : false,
     }),
-    [user, edition, loading, needsSetup, refresh, login, setup, logout],
+    [user, edition, loading, needsSetup, authRequired, refresh, login, setup, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

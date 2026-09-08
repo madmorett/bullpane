@@ -1,7 +1,7 @@
 # Bullpane — production-ish. Bring your own Redis: you add connections
 # to your BullMQ Redis instances from the dashboard after first-run setup.
 #
-#   cp .env.example .env   # set SESSION_SECRET at least
+#   cp .env.example .env   # SESSION_SECRET only matters once you unlock Pro (login)
 #   docker compose up -d
 #   open http://localhost:3000
 #

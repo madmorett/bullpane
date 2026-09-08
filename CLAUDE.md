@@ -5,8 +5,9 @@ instructions (voice, chapters, YODA) when working here.
 
 ## What this is
 Self-hosted dashboard for BullMQ and BullMQ Pro, sold as **Bullpane** (bullpane.com).
-Metabase model: free edition does everything bull-board does; Pro (USD 19/month or
-149/year, one installation) unlocks Alerts, Users & roles, Folders, Flows, Audit log.
+Metabase model: free edition does everything bull-board does and has NO login at all;
+Pro (USD 39/month or 390/year, one installation) unlocks Alerts, Users & roles, Folders,
+Flows, Audit log and SSO.
 Pro keys are sold through Creem and activated via the license API in `apps/license-api`
 (Cloudflare Worker, api.bullpane.com) which signs 7-day Ed25519 leases; hand-signed
 offline keys still exist for air-gapped customers. A public live demo runs in

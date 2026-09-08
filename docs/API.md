@@ -8,6 +8,13 @@ Status codes: 400 validation (`error: "validation"`), 401 `unauthenticated`, 403
 502 `redis_unavailable` (connection failing), 423 `demo_locked` (blocked in DEMO_MODE).
 
 Role column: minimum role. `*` = no auth (setup/login only).
+
+**On the free edition every role is satisfied.** There is no login: requests without a
+session get a synthetic anonymous admin, so the whole table behaves as `*` until a
+license unlocks `users`. `/auth/login` and `/setup` then answer **402 `pro_required`**
+instead of 401 — there are no passwords to be wrong about. `SetupStatus.authRequired`
+is how a client tells the two worlds apart. See "The free edition has no login" in
+`ARCHITECTURE.md`.
 Pro column: the feature that gates the route (402 in free edition).
 
 | Method | Path | Role | Pro | Body / Query → Response |

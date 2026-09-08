@@ -6,7 +6,13 @@ import { useAuth } from "./AuthProvider";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-/** Wraps the authenticated app. Sends to /setup or /login as appropriate. */
+/**
+ * Wraps the authenticated app. Sends to /setup or /login as appropriate.
+ *
+ * On the free edition the server puts an anonymous admin on every request, so
+ * `user` is always set and this never redirects — the dashboard is open. The
+ * gate returns the moment a license unlocks `users`.
+ */
 export function RequireAuth() {
   const { user, loading, needsSetup } = useAuth();
   const location = useLocation();
@@ -18,11 +24,14 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
-/** For /login and /setup: already logged in users go home. */
+/**
+ * For /login and /setup: already logged in users go home — and so does anyone
+ * on the free edition, where those pages have nothing to offer.
+ */
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, authRequired } = useAuth();
   if (loading) return <FullPageLoading />;
-  if (user) return <Navigate to="/" replace />;
+  if (user || !authRequired) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 

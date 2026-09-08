@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bullpane — the self-hosted BullMQ dashboard you can put in front of production</title>
-<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and BullMQ Pro groups behind a real login, in one container next to your stack. Free core; Pro adds alerts, roles, folders, flow graphs and an audit log.">
+<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and BullMQ Pro groups in one container next to your stack. The free edition needs no login at all; Pro adds login, roles, alerts, folders, flow graphs and an audit log.">
 <meta property="og:title" content="Bullpane — self-hosted BullMQ dashboard">
-<meta property="og:description" content="Everything bull-board does, faster and behind a login. Pro adds alerts, users & roles, folders, flows and an audit log. USD 19/month or 149/year per installation.">
+<meta property="og:description" content="Everything bull-board does, faster. Free needs no login at all. Pro adds login, users & roles, alerts, folders, flows and an audit log. USD 39/month or 390/year per installation.">
 <meta property="og:url" content="https://bullpane.com/">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d12'/%3E%3Cpath d='M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z' fill='%23f5a524'/%3E%3C/svg%3E">
@@ -35,7 +35,7 @@
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Self-hosted · BullMQ &amp; BullMQ Pro</span>
     <h1>The BullMQ dashboard you can <em>put in front of production.</em></h1>
-    <p class="lead">One container next to your stack. Queues, jobs, failures, progress, logs, flows and Pro groups, behind a real login. No <code>KEYS</code>, one round trip per screen, payloads truncated inside Redis before they travel.</p>
+    <p class="lead">One container next to your stack. Queues, jobs, failures, progress, logs, flows and Pro groups — the free edition needs no account and no login, just start it and open it. No <code>KEYS</code>, one round trip per screen, payloads truncated inside Redis before they travel.</p>
     <div class="cta">
       <a class="btn primary" href="#install">Install the free edition</a>
       <a class="btn" href="#pricing">See Pro pricing</a>
@@ -85,13 +85,14 @@ docker run -d --name bullpane -p 3000:3000 \
         <tbody>
           <tr><td>Job data stays in your network</td><td><i class="pill yes">✓</i></td><td><i class="pill no">–</i><small>payloads go to their cloud</small></td><td class="hl"><i class="pill yes">✓</i></td></tr>
           <tr><td>Login</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
+          <tr><td>Login</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Users &amp; roles</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Search inside job data</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
           <tr><td>BullMQ Pro groups, per-group concurrency &amp; rate limits</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill yes">✓</i></td></tr>
           <tr><td>Alerts to Slack / webhook</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Audit log in your own database</td><td><i class="pill no">–</i></td><td><i class="pill no">–</i><small>lives in their account</small></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
           <tr><td>Flow graph</td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td><td class="hl"><i class="pill pro">Pro</i></td></tr>
-          <tr class="price-row"><td>Price</td><td>Free</td><td>Monthly, per connection</td><td class="hl">Free · Pro <b>$19/mo</b> per installation</td></tr>
+          <tr class="price-row"><td>Price</td><td>Free</td><td>Monthly, per connection</td><td class="hl">Free · Pro <b>$39/mo</b> per installation</td></tr>
         </tbody>
       </table>
     </div>
@@ -230,7 +231,7 @@ docker run -d --name bullpane -p 3000:3000 \
           <li>Unlimited connections and queues</li>
           <li>Jobs, search, bulk actions</li>
           <li>BullMQ Pro groups, with per-group settings</li>
-          <li>Single admin login</li>
+          <li>No login required — open it and use it</li>
           <li>Read-only mode</li>
         </ul>
         <div class="spacer"></div>
@@ -238,7 +239,7 @@ docker run -d --name bullpane -p 3000:3000 \
       </div>
       <div class="card plan pro">
         <h3>Pro · monthly</h3>
-        <div class="price">$19 <small>/ month</small></div>
+        <div class="price">$39 <small>/ month</small></div>
         <ul>
           <li>Everything in Free</li>
           <li>Alerts to Slack / webhook</li>
@@ -252,7 +253,7 @@ docker run -d --name bullpane -p 3000:3000 \
       </div>
       <div class="card plan pro">
         <h3>Pro · yearly</h3>
-        <div class="price">$149 <small>/ year</small></div>
+        <div class="price">$390 <small>/ year</small></div>
         <span class="save">Save 35% — 12 months for the price of 8</span>
         <ul>
           <li>Everything in Pro monthly</li>

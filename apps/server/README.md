@@ -12,7 +12,7 @@ The route contract is `docs/API.md`; the DTOs and zod schemas come from
 
 ```bash
 # from the repo root
-cp .env.example .env            # set SESSION_SECRET (32+ random chars)
+cp .env.example .env            # SESSION_SECRET is only needed once you unlock Pro
 docker compose up mysql -d      # or any MySQL 8 reachable at DATABASE_URL
 pnpm --filter @bullpane/server dev   # tsx watch, reads ../../.env
 ```
@@ -53,7 +53,7 @@ Every variable in `/.env.example` is read in `src/config.ts`; nothing else touch
 |---|---|---|
 | `PORT` | `3000` | |
 | `HOST` | `0.0.0.0` | |
-| `SESSION_SECRET` | — | **Required** unless `DEMO_MODE=true` (then a random one is generated with a loud warning: every restart logs everyone out). Signs the `bullpane_session` cookie. |
+| `SESSION_SECRET` | random per process | Signs the `bullpane_session` cookie. Optional: the free edition has no login, so a first run must not be blocked by it. **Set a fixed 32+ character secret before unlocking Pro** — otherwise every restart logs everyone out. |
 | `PUBLIC_URL` | `http://localhost:3000` | Used in Slack/webhook links (`/c/:connectionId/q/:queue`). `https://` makes the cookie `Secure`. |
 | `DATABASE_URL` | `mysql://bullpane:bullpane@localhost:3306/bullpane` | |
 | `BULLPANE_LICENSE_KEY` | empty | Pro license. A key saved via `PUT /api/license` (settings table) wins over the env var. |

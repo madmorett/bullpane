@@ -5,11 +5,22 @@ import { splitStatements } from "../db/migrate";
 import { pageToRange } from "../routes/jobs";
 
 describe("loadConfig", () => {
-  it("requires SESSION_SECRET outside demo mode", () => {
-    expect(() => loadConfig({}, { warn: () => undefined })).toThrow(/SESSION_SECRET/);
+  it("boots without SESSION_SECRET, warning instead of dying", () => {
+    // The free edition has no login: a first run must not be blocked by a
+    // secret that signs cookies nobody will ever be issued.
+    const warnings: string[] = [];
+    const cfg = loadConfig({}, { warn: (m) => warnings.push(m) });
+    expect(cfg.sessionSecret.length).toBeGreaterThanOrEqual(32);
+    expect(warnings.join(" ")).toMatch(/SESSION_SECRET/);
   });
 
-  it("generates a secret in demo mode with a loud warning", () => {
+  it("generates a different secret each time, so it cannot be a shipped default", () => {
+    const a = loadConfig({}, { warn: () => undefined }).sessionSecret;
+    const b = loadConfig({}, { warn: () => undefined }).sessionSecret;
+    expect(a).not.toBe(b);
+  });
+
+  it("generates a secret in demo mode with a warning", () => {
     const warnings: string[] = [];
     const cfg = loadConfig({ DEMO_MODE: "true" }, { warn: (m) => warnings.push(m) });
     expect(cfg.demoMode).toBe(true);

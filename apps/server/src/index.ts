@@ -36,10 +36,27 @@ async function main(): Promise<void> {
   // returns early unless alerts are unlocked, and rows must be pruned either way.
   app.ctx.audit.startRetention(config.auditRetentionDays);
 
+  /**
+   * The free edition has no login, so an install reachable from outside the
+   * host is an open dashboard: anyone who can load the URL can retry, promote
+   * and delete jobs. HOST stays 0.0.0.0 because the product ships as a
+   * container (loopback would make it unreachable), so the honest thing is to
+   * say so loudly at boot instead of quietly changing the bind.
+   */
+  const openInstance = !edition.features.users && !config.demoMode;
+  if (openInstance && config.host !== "127.0.0.1" && config.host !== "localhost") {
+    log.warn(
+      { host: config.host, port: config.port },
+      "no authentication: anyone who can reach this address can retry, promote and delete jobs. " +
+        "Keep it on a private network, or set HOST=127.0.0.1, or unlock users and roles with a Pro license.",
+    );
+  }
+
   const banner = [
     "",
     "  Bullpane " + app.ctx.version,
     `  edition : ${edition.tier}${edition.demo ? " (demo)" : ""}${edition.license ? ` — licensed to ${edition.license.licensee}` : ""}`,
+    `  auth    : ${edition.features.users ? "login required" : "OPEN — no login (free edition)"}`,
     `  url     : ${config.publicUrl}  (listening on ${config.host}:${config.port})`,
     `  web ui  : ${config.webDist}`,
     `  mysql   : ${redactUrl(config.databaseUrl)}`,

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ChevronRight, KeyRound, LogOut, Menu, Search, ScrollText, Shield } from "lucide-react";
+import { ChevronRight, KeyRound, LogOut, Menu, Search, ScrollText, Shield, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { modKeyLabel } from "@/lib/useHotkey";
 import { useConnections } from "@/api/hooks";
 import { useAuth } from "@/auth/AuthProvider";
+import { openUpsell } from "@/edition/upsellStore";
 import { Button } from "@/components/ui/Button";
 import { Kbd } from "@/components/ui/Kbd";
 import { Badge } from "@/components/ui/Badge";
@@ -112,8 +113,28 @@ export function TopBar({ onOpenSwitcher, onToggleSidebar }: { onOpenSwitcher: ()
   );
 }
 
+/**
+ * Free edition: there are no accounts, so the slot where the account menu
+ * lives says what that means instead. This is the upgrade trigger — someone
+ * evaluating the dashboard should learn that anyone with the URL can retry and
+ * delete jobs from the UI itself, not from the pricing page.
+ */
+function OpenInstanceBadge() {
+  return (
+    <button
+      type="button"
+      onClick={() => openUpsell("users")}
+      className="flex h-7 items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 text-xs text-warning hover:bg-warning/20"
+      title="Anyone who can reach this URL can retry, promote and delete jobs. Pro adds login, roles and the audit log."
+    >
+      <ShieldAlert className="size-3.5" aria-hidden />
+      <span className="hidden md:inline">No login</span>
+    </button>
+  );
+}
+
 function UserMenu() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, authRequired } = useAuth();
   const { demo, has } = useEdition();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -132,6 +153,7 @@ function UserMenu() {
     };
   }, [open]);
 
+  if (!authRequired) return <OpenInstanceBadge />;
   if (!user) return null;
   const initials = user.name
     .split(/\s+/)

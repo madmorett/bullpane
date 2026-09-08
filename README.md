@@ -5,11 +5,16 @@
 A fast, self-hosted dashboard for [BullMQ](https://bullmq.io) and BullMQ Pro.
 
 You point it at the Redis your workers already use and get queues, jobs, failures,
-progress, logs, flows and Pro groups in a UI that is pleasant to look at, behind a
-real login. bull-board has no auth and a UI from 2016; Taskforce.sh is hosted, so
+progress, logs, flows and Pro groups in a UI that is pleasant to look at. The free
+edition asks for nothing: no account, no login, no first-run wizard — start the
+container, open it, use it. bull-board has a UI from 2016; Taskforce.sh is hosted, so
 your job payloads leave your network, and the pricing page needs a translator. This
-one runs in a single container next to your stack, is free for the core, and a
-USD 19/month or 149/year unlocks the team features for one installation, unlimited users.
+one runs in a single container next to your stack, is free for the core, and
+USD 39/month or 390/year unlocks the team features for one installation, unlimited users.
+
+**The free edition has no authentication at all.** Anyone who can reach the URL can
+retry, promote and delete jobs, and the dashboard says so in its own header. Keep it
+on a private network, or unlock login, roles and the audit log with Pro.
 
 Designed for production Redis: no `KEYS`, one round trip per screen, payloads
 truncated *inside* Redis before they travel. A dashboard that slows down the
@@ -17,19 +22,19 @@ workload it watches is worse than no dashboard.
 
 ## Free vs Pro
 
-| Capability | Free | Pro (USD 19/mo or 149/yr) |
+| Capability | Free | Pro (USD 39/mo or 390/yr) |
 |---|---|---|
 | Unlimited connections & queues | yes | yes |
 | Job list / detail / progress / logs / search in data | yes | yes |
 | Add · retry · promote · remove · clean · drain · pause | yes | yes |
 | BullMQ Pro groups & batches view | yes | yes |
 | Per-minute completed/failed metrics | yes | yes |
-| Single admin login | yes | yes |
+| Login, users & roles (admin / operator / viewer) | – (open, no login) | yes |
 | Alerts per queue or per folder (waiting, failures, failure %) → Slack / webhook | – | yes |
-| Users & roles (admin / operator / viewer) | – | yes |
 | Folders to organise queues across connections | – | yes |
 | Flow graph (detected from BullMQ flows + manual edges) | – | yes |
 | **Audit log**: who paused / cleaned / drained what, when, from which IP — persisted, filterable, CSV export | – | yes |
+| SSO (SAML 2.0 / OIDC) | – | yes |
 
 Pro features are visible in the free edition with a lock icon, not hidden. The
 license is a key from bullpane.com verified once a day against api.bullpane.com (7-day offline grace), or a hand-signed offline token for air-gapped installs. See

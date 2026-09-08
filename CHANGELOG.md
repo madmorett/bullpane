@@ -11,6 +11,29 @@ The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
+## [Unreleased]
+
+### Changed
+
+- **The free edition no longer has a login.** Start the container, open it, use it
+  — no account, no first-run wizard, no password. Every role check is satisfied by
+  a synthetic anonymous admin, so nothing in the dashboard is behind a form. This
+  is deliberate: authentication is what Pro adds, and an install that anyone on the
+  network can drain is worth knowing about before it matters.
+
+  The dashboard says so in its own header (a "No login" badge where the account
+  menu would be), and the server warns at boot when an open instance is bound to
+  all interfaces. `HOST` still defaults to `0.0.0.0`, since the product ships as a
+  container.
+
+  Nothing changes for a licensed install: unlocking `users` brings back the login
+  page, sessions and 401s on the next request, with no restart. Audit rows written
+  while the instance was open carry the IP and `anonymous` — the honest answer for
+  a dashboard anyone could have reached.
+- **Pro is now USD 39/month or USD 390/year** (was 19/149), still one installation
+  with unlimited users. SSO joins alerts, users & roles, folders, flows and the
+  audit log as a Pro feature.
+
 ## [0.0.1] — 2026-09-08
 
 Everything below is the first tagged version. The releases before it were

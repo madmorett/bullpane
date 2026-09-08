@@ -1,8 +1,12 @@
 # Pro edition, licensing and demo mode
 
 The Pro edition is the same binary as the free edition. A license key unlocks
-`alerts`, `users`, `folders`, `flows` and `audit` (see the editions table in
-`ARCHITECTURE.md`). USD 19/month or 149/year, per installation, unlimited users.
+`alerts`, `users`, `folders`, `flows`, `audit` and `sso` (see the editions table in
+`ARCHITECTURE.md`). USD 39/month or 390/year, per installation, unlimited users.
+
+`users` carries more weight than the others: the free edition has **no login at all**,
+so unlocking it is what makes accounts, the login page, sessions and 401s exist. See
+"The free edition has no login" in `ARCHITECTURE.md`.
 Sold on bullpane.com through Creem (merchant of record).
 
 `audit` is the one feature whose data is collected in every edition: the

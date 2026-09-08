@@ -2,7 +2,7 @@
 
 Bullpane is a self-hosted dashboard for BullMQ and BullMQ Pro. It follows the
 Metabase model: a free edition that does everything the open-source dashboards do, and a
-Pro subscription (USD 19/month or 149/year, one installation) that unlocks team features.
+Pro subscription (USD 39/month or 390/year, one installation) that unlocks team features.
 
 ```
 bullpane/
@@ -198,16 +198,15 @@ docs/API.md, "Hidden queues".
 
 ## Editions
 
-| Capability | Free | Pro (USD 19/mo or 149/yr) |
+| Capability | Free | Pro (USD 39/mo or 390/yr) |
 |---|---|---|
 | Unlimited connections & queues | ✓ | ✓ |
 | Job list / detail / search in data | ✓ | ✓ |
 | Add · retry · promote · remove · clean · drain · pause | ✓ | ✓ |
 | Bulk retry / promote / remove on a selection (incl. search results) | ✓ | ✓ |
 | BullMQ Pro groups & batches view | ✓ | ✓ |
-| Single admin login | ✓ | ✓ |
+| Login, users & roles (admin / operator / viewer) | – (open, no login) | ✓ |
 | Alerts per queue or per folder (waiting, failures, failure %) → Slack / webhook | – | ✓ |
-| Users & roles (admin / operator / viewer) | – | ✓ |
 | Folders to organise queues (default: one per connection) | – | ✓ |
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what to which queue, persisted + CSV export | – | ✓ |
@@ -216,6 +215,28 @@ docs/API.md, "Hidden queues".
 Gating is one function on the server (`requireFeature(feature)`) returning HTTP 402
 `{ error: "pro_required", feature }`, and one hook on the web (`useEdition()`), so the UI
 shows the locked feature with a lock icon and an upsell instead of hiding it.
+
+### The free edition has no login
+
+There is no account, no first-run wizard and no login page until a license unlocks
+`users`. `authPlugin` (`auth/plugin.ts`) puts a synthetic **anonymous admin** on every
+request that arrives without a valid session, so the ~40 `requireRole` preHandlers keep
+working untouched — a route added later cannot forget the rule, because it never learns
+about editions in the first place. `/auth/login` and `/setup` answer 402 rather than
+401, since "wrong password" would be a lie about an install that has no passwords.
+
+The gate is the `users` feature and not `tier`, because "accounts and roles exist" is
+precisely what it means. Flipping a license therefore takes effect on the *next
+request*: paste a key and the 401s come back with no restart, drop it and the dashboard
+opens again. `openFreeEdition.test.ts` pins both directions.
+
+Two consequences worth stating plainly. Audit rows on a free install have no actor —
+they carry the IP and `anonymous`, which is the honest answer on a dashboard anyone
+could have reached. And an open instance bound to `0.0.0.0` is an open instance on
+whatever network can see it: the server logs a warning at boot and the UI replaces the
+account menu with a "No login" badge that opens the upsell. `HOST` still defaults to
+`0.0.0.0` because the product ships as a container, where loopback would make it
+unreachable.
 
 ## SSO: the IdP proves identity, it does not create accounts
 
@@ -389,15 +410,16 @@ Two more consequences worth knowing:
 
 ### Why Pro and not Free
 
-Audit is gated as Pro, and the argument is that it is *only meaningful with more than one
-person*. On a single-admin install — the free edition has exactly one user — every row
-says "it was me", which is a diary, not an audit trail. The value appears the moment there
-are several logins with different roles, and that is already Pro (`users`). Anyone who
-needs to answer "who paused this?" has a team by definition, and a team on a USD 19/month
-licence is not a hard sell.
+Audit is gated as Pro, and the argument is that it is *only meaningful when the actor has
+a name*. The free edition has no login at all, so every row it writes is `anonymous` plus
+an IP — a log of what happened, never of who did it. "Who paused this?" is not a question
+the free edition can answer for anyone, at any price; it becomes answerable the moment
+`users` unlocks accounts and roles, which is the same feature that makes the trail worth
+reading. Anyone who needs that answer has a team by definition, and a team on a
+USD 39/month licence is not a hard sell.
 
 The counter-argument is real: a solo operator with a regulated customer may need the trail
-for an external auditor even with one login. Two things blunt it. First, gating does not
+for an external auditor even with nobody else touching the dashboard. Two things blunt it. First, gating does not
 stop the recording — the hook writes rows in every edition; only reading and exporting are
 gated, so upgrading later reveals history that was already captured instead of starting
 from zero. Second, the page is shown locked with the upsell rather than hidden, so the

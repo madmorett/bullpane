@@ -121,18 +121,23 @@ export function loadConfig(rawEnv: NodeJS.ProcessEnv = process.env, opts: LoadCo
   const env = withLegacyEnv(rawEnv, warn);
   const demoMode = bool(env, "DEMO_MODE", false);
 
+  /**
+   * Not required to boot. The free edition has no login, so a first run must
+   * not die asking for a secret that signs cookies nobody will ever get —
+   * "start the container and open it" is the whole promise.
+   *
+   * It cannot be demanded lazily either: the licence may live in MySQL, which
+   * is not read yet at config time, so the edition is unknown here. A generated
+   * secret is therefore the default, with a warning that says exactly what it
+   * costs (every restart logs everyone out) for the installs where it matters.
+   */
   let sessionSecret = optional(env, "SESSION_SECRET");
   if (!sessionSecret) {
-    if (!demoMode) {
-      throw new Error(
-        "SESSION_SECRET is required (32+ random chars). Set it in .env or the environment. " +
-          "Only DEMO_MODE=true may run without one.",
-      );
-    }
     sessionSecret = randomBytes(32).toString("base64url");
     warn(
-      "!!! SESSION_SECRET is not set. DEMO_MODE generated a random one: every restart logs everyone out. " +
-        "Never run like this outside the playground.",
+      "SESSION_SECRET is not set; a random one was generated for this process. " +
+        "The free edition has no login, so this is harmless — but set a fixed 32+ character secret " +
+        "before unlocking Pro, or every restart will log everyone out.",
     );
   } else if (sessionSecret.length < 32) {
     warn("SESSION_SECRET is shorter than 32 characters. Use a longer random string.");
