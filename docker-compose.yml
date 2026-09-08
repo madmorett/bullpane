@@ -26,7 +26,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
       # Empty = free edition. Paste your Pro key here or in Settings → License.
       BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
-      BULLPANE_CHECKOUT_URL: ${BULLPANE_CHECKOUT_URL:-https://bullpane.com/pro}
+      BULLPANE_CHECKOUT_URL: ${BULLPANE_CHECKOUT_URL:-https://bullpane.com/#pricing}
       BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
       BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
       BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}

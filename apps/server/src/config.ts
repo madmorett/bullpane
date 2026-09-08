@@ -64,7 +64,8 @@ export interface Config {
 }
 
 export const DEFAULT_DATABASE_URL = "mysql://bullpane:bullpane@localhost:3306/bullpane";
-export const DEFAULT_CHECKOUT_URL = "https://bullpane.com/pricing";
+// Pricing is a section on the home page, not a route: /pricing and /pro both 404.
+export const DEFAULT_CHECKOUT_URL = "https://bullpane.com/#pricing";
 export const DEFAULT_LICENSE_API_URL = "https://api.bullpane.com";
 
 function str(env: NodeJS.ProcessEnv, key: string, fallback: string): string {

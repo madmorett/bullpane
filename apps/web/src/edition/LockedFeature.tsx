@@ -49,8 +49,8 @@ export function LockedFeature({ feature }: { feature: ProFeature }) {
           </Link>
         </div>
         <p className="mt-3 text-xs text-fg-subtle">
-          One key unlocks Alerts, Users &amp; roles, Folders, Flows and the Audit log for one installation. ${pricing.monthlyUsd}/month or
-          ${pricing.yearlyUsd}/year, unlimited users, cancel any time.
+          One key unlocks login with Users &amp; roles, Alerts, Folders, Flows, the Audit log and SSO for one installation.
+          ${pricing.monthlyUsd}/month or ${pricing.yearlyUsd}/year, unlimited users, cancel any time.
         </p>
       </div>
 

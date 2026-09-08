@@ -235,8 +235,8 @@ export function LicenseTab() {
         title="Remove license"
         description={
           online
-            ? "The installation goes back to the free edition and the key is released so it can be activated on another server. Alerts, folders, flow edges and extra users are kept in the database but become inaccessible until a key is activated again."
-            : "The installation goes back to the free edition. Alerts, folders, flow edges and extra users are kept in the database but become inaccessible until a key is activated again."
+            ? "The installation goes back to the free edition, which has NO LOGIN: anyone who can reach this URL will be able to retry, promote and delete jobs. The key is released so it can be activated on another server. Alerts, folders, flow edges and your user accounts are kept in the database but become inaccessible until a key is activated again."
+            : "The installation goes back to the free edition, which has NO LOGIN: anyone who can reach this URL will be able to retry, promote and delete jobs. Alerts, folders, flow edges and your user accounts are kept in the database but become inaccessible until a key is activated again."
         }
         confirmText="Remove license"
         danger

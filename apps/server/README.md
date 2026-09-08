@@ -57,7 +57,7 @@ Every variable in `/.env.example` is read in `src/config.ts`; nothing else touch
 | `PUBLIC_URL` | `http://localhost:3000` | Used in Slack/webhook links (`/c/:connectionId/q/:queue`). `https://` makes the cookie `Secure`. |
 | `DATABASE_URL` | `mysql://bullpane:bullpane@localhost:3306/bullpane` | |
 | `BULLPANE_LICENSE_KEY` | empty | Pro license. A key saved via `PUT /api/license` (settings table) wins over the env var. |
-| `BULLPANE_CHECKOUT_URL` | `https://bullpane.com/pro` | Target of the "Unlock Pro" button. |
+| `BULLPANE_CHECKOUT_URL` | `https://bullpane.com/#pricing` | Target of the "Unlock Pro" button. Pricing is a section on the home page, not a route. |
 | `DEMO_MODE` | `false` | See above. |
 | `DEMO_REDIS_URL` | `redis://localhost:6379` | |
 | `DEMO_ADMIN_EMAIL` | `demo@bullpane.com` | |
