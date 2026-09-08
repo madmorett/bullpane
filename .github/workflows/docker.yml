@@ -1,4 +1,5 @@
-# Builds the Bullpane image and pushes it to GitHub Container Registry.
+# Builds the Bullpane dashboard image (Dockerfile target `runner`) and pushes it
+# to GitHub Container Registry.
 #   main            → ghcr.io/<owner>/bullpane:edge
 #   tag v1.2.3      → ghcr.io/<owner>/bullpane:1.2.3, :1.2, :latest
 # Make the package public once (GitHub → Packages → bullpane → Package settings →
@@ -41,6 +42,9 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          # Dockerfile's last stage is `simulator`; without this the published
+          # image is the traffic generator instead of the dashboard.
+          target: runner
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
