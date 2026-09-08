@@ -4,14 +4,14 @@ Every user-visible change to Bullpane. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/).
 
-Docker images are published per tag: `ghcr.io/<owner>/bullpane:0.0.1`, `:0.0`,
+Docker images are published per tag: `ghcr.io/<owner>/bullpane:0.1.0`, `:0.1`,
 `:latest`, plus `:edge` for every push to `main`.
 
 The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
-## [Unreleased]
+## [0.1.0] — 2026-09-08
 
 ### Changed
 
