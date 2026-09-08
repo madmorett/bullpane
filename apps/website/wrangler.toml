@@ -2,6 +2,8 @@
 name = "bullpane-website"
 compatibility_date = "2025-06-01"
 workers_dev = false
+# versioned preview URLs (wrangler versions upload) without exposing production on workers.dev
+preview_urls = true
 
 routes = [
   { pattern = "bullpane.com", custom_domain = true },
