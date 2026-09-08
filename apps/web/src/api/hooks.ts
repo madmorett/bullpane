@@ -11,6 +11,7 @@ import type { z } from "zod";
 import type {
   AddJobInput,
   Alert,
+  AttentionThresholds,
   BulkJobAction,
   BulkJobActionResult,
   AuditAction,
@@ -179,6 +180,7 @@ export const qk = {
   users: ["users"] as const,
   ssoProviders: ["sso", "providers"] as const,
   ssoSettings: ["sso", "settings"] as const,
+  attentionThresholds: ["settings", "attention"] as const,
   ssoLoginOptions: ["sso", "login-options"] as const,
   audit: (p: AuditFilters & { limit?: number }) => ["audit", p] as const,
   auditActors: ["audit", "actors"] as const,
@@ -662,6 +664,31 @@ export function useSetQueueHidden(cid: string) {
       qc.invalidateQueries({ queryKey: qk.overview(cid) });
       qc.invalidateQueries({ queryKey: qk.connections });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Attention thresholds
+// ---------------------------------------------------------------------------
+
+/**
+ * Read by every role: the Overview cannot decide what to flag without them.
+ * `staleTime` is generous because they change about once a quarter, and the
+ * mutation below seeds the cache directly so the page reacts on save.
+ */
+export function useAttentionThresholds() {
+  return useQuery({
+    queryKey: qk.attentionThresholds,
+    queryFn: () => api.get<AttentionThresholds>("/settings/attention"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUpdateAttentionThresholds() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AttentionThresholds) => api.put<AttentionThresholds>("/settings/attention", input),
+    onSuccess: (data) => qc.setQueryData(qk.attentionThresholds, data),
   });
 }
 

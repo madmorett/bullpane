@@ -957,6 +957,45 @@ export const setFolderQueuesSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Attention thresholds
+// ---------------------------------------------------------------------------
+
+/**
+ * When the Overview flags a queue as needing attention.
+ *
+ * These are NOT alerts. An alert is a persisted, scoped rule that notifies a
+ * channel; these two numbers only decide whether a queue gets a card at the top
+ * of the Overview. They exist because the hard-coded rules lied on real
+ * workloads: a queue that always sits at 5k waiting is healthy, and a queue that
+ * never passes 10 is broken at 200 — the same constant cannot serve both.
+ *
+ * Global on purpose. Per-connection thresholds are the obvious next step, but
+ * one pair of numbers already removes the false positives people actually hit,
+ * and it needs no migration.
+ */
+export const attentionThresholdsSchema = z.object({
+  /**
+   * Waiting (+ prioritized) jobs above which a queue is flagged, regardless of
+   * whether a worker is draining it. The existing "backlog, no worker" rule is
+   * separate and still fires at any depth: this one catches the queue that HAS a
+   * worker and is losing to the producer anyway.
+   *
+   * 0 disables the rule, which is why the minimum is 0 and not 1.
+   */
+  waitingAbove: z.number().int().min(0).max(10_000_000).default(0),
+  /**
+   * Failed jobs in the list above which a queue is flagged. Distinct from the
+   * `failing` reason, which reads the rate window: this one is the pile that is
+   * already there and nobody cleaned up.
+   */
+  failedAbove: z.number().int().min(0).max(10_000_000).default(0),
+});
+export type AttentionThresholds = z.infer<typeof attentionThresholdsSchema>;
+
+/** Both rules off: the Overview behaves exactly as it did before they existed. */
+export const DEFAULT_ATTENTION_THRESHOLDS: AttentionThresholds = { waitingAbove: 0, failedAbove: 0 };
+
+// ---------------------------------------------------------------------------
 // Alerts (Pro)
 // ---------------------------------------------------------------------------
 
@@ -1137,6 +1176,7 @@ export const AUDIT_ACTIONS = [
   "sso.provider_create",
   "sso.provider_update",
   "sso.provider_delete",
+  "attention.thresholds_update",
   // auth
   "auth.login",
   "auth.login_failed",
@@ -1186,6 +1226,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "sso.provider_create": "added an SSO provider",
   "sso.provider_update": "edited an SSO provider",
   "sso.provider_delete": "deleted an SSO provider",
+  "attention.thresholds_update": "changed the attention thresholds",
   "auth.login": "signed in",
   "auth.login_failed": "failed to sign in",
   "auth.logout": "signed out",

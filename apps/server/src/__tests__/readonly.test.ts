@@ -62,6 +62,14 @@ describe("read-only mode", () => {
       ["POST", "/api/users"],
       ["PUT", "/api/license"],
       ["POST", "/api/setup"],
+      // Settings → Attention deliberately skips `blockInDemo`, so this hook is
+      // the ONLY thing refusing it during a production trial.
+      ["PUT", "/api/settings/attention"],
+      // SSO admin CRUD is a configuration write; only the IdP callback is exempt
+      // (covered in "still lets people log in and out").
+      ["POST", "/api/sso/providers"],
+      ["PATCH", "/api/sso/providers/p"],
+      ["DELETE", "/api/sso/providers/p"],
     ];
     for (const [method, url] of writes) {
       const err = await run(method, url);

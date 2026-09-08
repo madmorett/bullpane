@@ -1,3 +1,4 @@
+import { DEFAULT_ATTENTION_THRESHOLDS, type AttentionThresholds } from "@bullpane/shared";
 import type { QueueEntry } from "./groupQueues";
 
 /**
@@ -14,10 +15,14 @@ import type { QueueEntry } from "./groupQueues";
  *   2. paused    — nothing is draining it
  *   3. backlog   — waiting jobs but no active ones and no worker finishing anything,
  *                  which is what a stopped/absent worker looks like from Redis
- *   4. failed    — a non-empty failed list even though the window was quiet, so a
- *                  pile of dead jobs from before the window is still visible
+ *   4. waiting   — waiting jobs over the configured threshold EVEN WITH a worker
+ *                  draining them: the producer is winning. Off by default, because
+ *                  there is no depth that is wrong for every workload.
+ *   5. failed    — a non-empty failed list even though the window was quiet, so a
+ *                  pile of dead jobs from before the window is still visible. When
+ *                  a threshold is configured it replaces "non-empty" as the bar.
  */
-export type AttentionReason = "failing" | "paused" | "backlog" | "failed";
+export type AttentionReason = "failing" | "paused" | "backlog" | "waiting" | "failed";
 
 export interface AttentionItem {
   entry: QueueEntry;
@@ -30,13 +35,14 @@ export const REASON_LABEL: Record<AttentionReason, string> = {
   failing: "failing now",
   paused: "paused",
   backlog: "backlog, no worker",
+  waiting: "backlog over threshold",
   failed: "failed jobs",
 };
 
 /** waiting jobs above this with nothing active is treated as a stuck queue */
 const BACKLOG_MIN = 1;
 
-export function attentionReasons(entry: QueueEntry): AttentionReason[] {
+export function attentionReasons(entry: QueueEntry, thresholds: AttentionThresholds = DEFAULT_ATTENTION_THRESHOLDS): AttentionReason[] {
   const q = entry.queue;
   const c = q.counts;
   const reasons: AttentionReason[] = [];
@@ -50,21 +56,48 @@ export function attentionReasons(entry: QueueEntry): AttentionReason[] {
   const waiting = c.waiting + c.prioritized;
   // A backlog only matters when nothing is chewing through it. `active > 0` or a
   // queue that finished work in the window has a live worker, so waiting is normal.
-  if (waiting >= BACKLOG_MIN && c.active === 0 && finishedInWindow === 0 && !q.isPaused) reasons.push("backlog");
+  const stuck = waiting >= BACKLOG_MIN && c.active === 0 && finishedInWindow === 0 && !q.isPaused;
+  if (stuck) reasons.push("backlog");
 
-  if (reasons.length === 0 && c.failed > 0) reasons.push("failed");
+  // The depth rule is the other half: a queue WITH a worker can still be losing
+  // to its producer. Only flagged when the admin set a number, and never stacked
+  // on top of "backlog, no worker" — two chips for one pile reads as two problems.
+  if (!stuck && thresholds.waitingAbove > 0 && waiting > thresholds.waitingAbove) reasons.push("waiting");
+
+  // A configured threshold replaces the "any failed job at all" bar; without one
+  // the original behaviour stands, so upgrading changes nothing until it is set.
+  if (thresholds.failedAbove > 0) {
+    if (c.failed > thresholds.failedAbove) reasons.push("failed");
+  } else if (reasons.length === 0 && c.failed > 0) {
+    reasons.push("failed");
+  }
 
   return reasons;
+}
+
+/**
+ * Magnitude only breaks ties inside a tier — it never promotes one.
+ *
+ * The tiers are 50k apart and job counts routinely run into the millions, so an
+ * unclamped `+ waiting` let a deep-but-healthy queue outrank a stuck one. Log
+ * scale keeps "worse within the tier" working (10 waiting < 10k waiting) while
+ * staying under the gap for any count Redis can hold.
+ */
+function magnitude(n: number): number {
+  return n > 0 ? Math.min(Math.log10(n + 1) * 1_000, 9_999) : 0;
 }
 
 export function scoreAttention(entry: QueueEntry, reasons: AttentionReason[]): number {
   const q = entry.queue;
   const c = q.counts;
   let score = 0;
-  if (reasons.includes("failing")) score += 1_000_000 + (q.rates?.failed ?? 0);
-  if (reasons.includes("paused")) score += 500_000 + c.waiting + c.active;
-  if (reasons.includes("backlog")) score += 100_000 + (c.waiting + c.prioritized);
-  if (reasons.includes("failed")) score += c.failed;
+  if (reasons.includes("failing")) score += 1_000_000 + magnitude(q.rates?.failed ?? 0);
+  if (reasons.includes("paused")) score += 500_000 + magnitude(c.waiting + c.active);
+  if (reasons.includes("backlog")) score += 100_000 + magnitude(c.waiting + c.prioritized);
+  // below "no worker" (a stuck queue is worse than a deep one) and above a
+  // stale failed pile, which nobody is losing throughput to right now.
+  if (reasons.includes("waiting")) score += 50_000 + magnitude(c.waiting + c.prioritized);
+  if (reasons.includes("failed")) score += magnitude(c.failed);
   return score;
 }
 
@@ -82,16 +115,20 @@ export interface AttentionSplit {
  * caller and lives in the table below, which is sortable by failed.
  */
 /**
- * 8, não 12: com 10 conexões, 12 cards ocupavam a tela inteira e empurravam os
- * grupos por conexão para fora da dobra — o usuário via só uma parede de filas
- * com problema, sem contexto. 8 cabe em duas fileiras e deixa os grupos visíveis.
+ * 8, not 12: with 10 connections, 12 cards took up the whole screen and pushed the
+ * per-connection groups below the fold — the user saw only a wall of broken queues,
+ * with no context. 8 fits in two rows and keeps the groups visible.
  */
-export function splitByAttention(entries: QueueEntry[], max = 8): AttentionSplit & { hidden: number } {
+export function splitByAttention(
+  entries: QueueEntry[],
+  thresholds: AttentionThresholds = DEFAULT_ATTENTION_THRESHOLDS,
+  max = 8,
+): AttentionSplit & { hidden: number } {
   const flagged: AttentionItem[] = [];
   const rest: QueueEntry[] = [];
 
   for (const entry of entries) {
-    const reasons = attentionReasons(entry);
+    const reasons = attentionReasons(entry, thresholds);
     if (reasons.length > 0) flagged.push({ entry, reasons, score: scoreAttention(entry, reasons) });
     else rest.push(entry);
   }

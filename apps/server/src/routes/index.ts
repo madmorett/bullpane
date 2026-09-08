@@ -18,6 +18,7 @@ import { healthRoutes } from "./health";
 import { jobRoutes } from "./jobs";
 import { licenseRoutes } from "./license";
 import { queueRoutes } from "./queues";
+import { settingsRoutes } from "./settings";
 import { setupRoutes } from "./setup";
 import { ssoRoutes } from "./sso";
 import { userRoutes } from "./users";
@@ -53,4 +54,5 @@ export async function apiPlugin(app: FastifyInstance): Promise<void> {
   await app.register(alertRoutes);
   await app.register(userRoutes);
   await app.register(auditRoutes);
+  await app.register(settingsRoutes);
 }

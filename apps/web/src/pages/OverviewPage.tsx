@@ -6,7 +6,7 @@ import { formatNumber } from "@/lib/format";
 import { groupQueues, matchesFilter, totals, type QueueEntry } from "@/lib/groupQueues";
 import { splitByAttention } from "@/lib/queueAttention";
 import { useTableState } from "@/lib/useTableState";
-import { useConnectionOverviews, useFolders } from "@/api/hooks";
+import { useAttentionThresholds, useConnectionOverviews, useFolders } from "@/api/hooks";
 import { useAuth } from "@/auth/AuthProvider";
 import { useEdition } from "@/edition/useEdition";
 import { Page, PageHeader } from "@/components/layout/AppShell";
@@ -32,6 +32,7 @@ export function OverviewPage() {
   const { isAdmin, isOperator } = useAuth();
   const { has } = useEdition();
   const { connections, entries, isLoading } = useConnectionOverviews();
+  const thresholds = useAttentionThresholds();
   const foldersEnabled = has("folders");
   const folders = useFolders(foldersEnabled);
   const navigate = useNavigate();
@@ -77,7 +78,7 @@ export function OverviewPage() {
   /** the fleet layout: attention cards on top, the rest folded per connection */
   const dense = connectionCount > CARD_WALL_LIMIT;
 
-  const split = useMemo(() => splitByAttention(visible), [visible]);
+  const split = useMemo(() => splitByAttention(visible, thresholds.data), [visible, thresholds.data]);
   const restSections = useMemo(
     () => groupQueues(split.rest, foldersEnabled ? folders.data : undefined),
     [split.rest, foldersEnabled, folders.data],
@@ -139,13 +140,23 @@ export function OverviewPage() {
           <QueueCardSkeleton />
         ) : visible.length === 0 ? (
           <p className="py-6 text-center text-xs text-fg-subtle">{filter ? "No queue matches the filter" : "No queues discovered yet"}</p>
-        ) : dense ? (
-          <>
-            <QueueAttentionSection items={split.attention} hidden={split.hidden} showConnection filtered={!!filter} />
-            <CollapsibleQueueGroups sections={restSections} showConnection defaultOpen={false} />
-          </>
         ) : (
-          <QueueCardGrid sections={allSections} showConnection onHide={onHide} />
+          <>
+            {/*
+              Always first, at every fleet size. It used to appear only past
+              CARD_WALL_LIMIT, which meant the single-connection install — the
+              common one — had no place that answered "is anything wrong?".
+              With one connection the flagged queues also stay in the grid below;
+              that repetition is deliberate, the grid is the inventory and this
+              is the triage.
+            */}
+            <QueueAttentionSection items={split.attention} hidden={split.hidden} showConnection={dense} filtered={!!filter} />
+            {dense ? (
+              <CollapsibleQueueGroups sections={restSections} showConnection defaultOpen={false} />
+            ) : (
+              <QueueCardGrid sections={allSections} showConnection onHide={onHide} />
+            )}
+          </>
         )}
 
         <div className="card overflow-hidden">

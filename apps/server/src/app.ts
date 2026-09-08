@@ -22,6 +22,7 @@ import { AuditService } from "./services/audit";
 import { ConnectionsService } from "./services/connections";
 import { EditionService } from "./services/edition";
 import { HttpLicenseClient } from "./services/license-client";
+import { AttentionService } from "./services/attention";
 import { DrizzleSettingsStore } from "./services/settings-store";
 import { FlowsService } from "./services/flows";
 import { FoldersService } from "./services/folders";
@@ -77,6 +78,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   const flows = new FlowsService(db, connections);
   const alerts = new AlertsService(db, connections, folders);
   const audit = new AuditService(db, app.log);
+  const attention = new AttentionService(new DrizzleSettingsStore(db));
   const alertsEngine = new AlertsEngine({ config, alerts, connections, folders, edition, log: app.log });
 
   const ctx: AppContext = {
@@ -93,6 +95,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     alerts,
     alertsEngine,
     audit,
+    attention,
     sso,
     version,
   };

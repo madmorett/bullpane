@@ -33,7 +33,7 @@ export function QueueAttentionSection({
         <CheckCircle2 className="size-4 shrink-0 text-state-completed" aria-hidden />
         <p className="text-xs text-fg-muted">
           {filtered ? "Nothing matching the filter needs attention" : "No queue needs attention"}
-          <span className="text-fg-subtle"> — nothing failing, paused or backed up without a worker.</span>
+          <span className="text-fg-subtle"> — nothing failing, paused or over the thresholds.</span>
         </p>
       </section>
     );
@@ -72,6 +72,7 @@ const REASON_TONE: Record<AttentionReason, string> = {
   failing: "border-state-failed/40 bg-state-failed/10 text-state-failed",
   paused: "border-state-paused/40 bg-state-paused/10 text-state-paused",
   backlog: "border-warning/40 bg-warning/10 text-warning",
+  waiting: "border-warning/40 bg-warning/10 text-warning",
   failed: "border-state-failed/30 bg-state-failed/5 text-state-failed",
 };
 
