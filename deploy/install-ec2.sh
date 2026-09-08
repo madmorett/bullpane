@@ -9,7 +9,7 @@
 # Brings up the app (port 3000) + MySQL, both in Docker, with automatic restart.
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.0.1}"
+IMAGE="${IMAGE:-ghcr.io/madmorett/bullpane:0.1.0}"
 APP_DIR="${APP_DIR:-/opt/bullpane}"
 LICENSE_KEY="${LICENSE_KEY:-}"
 READ_ONLY="${READ_ONLY:-false}"
@@ -30,7 +30,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 echo "    $(docker --version), compose $(docker compose version --short)"
 
-echo "==> 2/4 Configuração em $APP_DIR"
+echo "==> 2/4 Configuration in $APP_DIR"
 mkdir -p "$APP_DIR" && cd "$APP_DIR"
 
 if [ ! -f .env ]; then
@@ -90,11 +90,11 @@ volumes:
   mysql-data:
 YMLEOF
 
-echo "==> 3/4 Puxando a imagem e subindo"
+echo "==> 3/4 Pulling the image and starting"
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 
-echo "==> 4/4 Aguardando"
+echo "==> 4/4 Waiting for it to come up"
 for i in $(seq 1 60); do
   curl -sf http://localhost:3000/api/health >/dev/null 2>&1 && break
   sleep 5
@@ -104,15 +104,17 @@ IP=$(hostname -I | awk '{print $1}')
 echo
 echo "====================================================================="
 if curl -sf http://localhost:3000/api/health >/dev/null 2>&1; then
-  echo " NO AR em http://$IP:3000"
+  echo " UP at http://$IP:3000"
   echo
   echo " health : $(curl -s http://localhost:3000/api/health)"
-  echo " edição : $(curl -s http://localhost:3000/api/edition | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["tier"], "| licenciado para:", (d.get("license") or {}).get("licensee","-"))' 2>/dev/null || echo '?')"
+  echo " edition: $(curl -s http://localhost:3000/api/edition | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["tier"], "| licensed to:", (d.get("license") or {}).get("licensee","-"))' 2>/dev/null || echo '?')"
   echo
-  echo " If it says 'free', BULLPANE_LICENSE_KEY did not reach it: edit $APP_DIR/.env"
-  echo " e rode: docker compose --env-file .env up -d"
+  echo " The free edition has NO LOGIN: anyone who can reach this address can"
+  echo " retry, promote and delete jobs. Keep it behind a security group, or set"
+  echo " BULLPANE_LICENSE_KEY in $APP_DIR/.env and run:"
+  echo "   docker compose --env-file .env up -d"
 else
-  echo " NÃO SUBIU. Logs:"
+  echo " DID NOT START. Logs:"
   echo "   cd $APP_DIR && docker compose --env-file .env logs --tail 50"
 fi
 echo "====================================================================="
