@@ -16,8 +16,9 @@
     <p class="lead">The license key is in the receipt email from Creem, our payment partner. Activating it takes under a minute.</p>
     <ol class="steps">
       <li><div><strong>Copy the key.</strong> It looks like <span class="kbd">BULLPANE-XXXX-XXXX-XXXX</span>. It is in the receipt email; the sender is Creem.</div></li>
-      <li><div><strong>Open your Bullpane, Settings → License.</strong> You need the admin account.</div></li>
-      <li><div><strong>Paste and click Activate.</strong> Alerts, Users &amp; roles, Folders, Flows and the Audit log unlock immediately. No restart.</div></li>
+      <li><div><strong>Open your Bullpane, Settings → License.</strong> On the free edition there is no login yet, so just open it.</div></li>
+      <li><div><strong>Paste and click Activate.</strong> Alerts, Folders, Flows, the Audit log and SSO unlock immediately. No restart.</div></li>
+      <li><div><strong>Create your admin account.</strong> Activating turns the login on, so Bullpane asks you to set up the first admin — then invite the rest of the team in Settings → Users. Set a fixed <span class="kbd">SESSION_SECRET</span> before this if you have not, or every restart signs everyone out.</div></li>
     </ol>
     <p class="lead" style="margin-top:28px;font-size:15px">Running from Docker without a UI handy? Set <span class="kbd">BULLPANE_LICENSE_KEY</span> in the environment instead; it activates a few seconds after boot.<br>One key runs one installation. Moving servers: remove the key on the old one first. Anything odd: <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
     <div class="cta" style="margin-top:24px"><a class="btn primary" href="/">Back to bullpane.com</a></div>

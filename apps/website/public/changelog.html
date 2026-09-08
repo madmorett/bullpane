@@ -7,6 +7,21 @@
 
 <article class="release">
   <div class="release-head">
+    <h2 id="unreleased">Unreleased</h2>
+    <span class="release-date">in development</span>
+  </div>
+  <p class="release-note">The free edition no longer has a login. Start the container, open it, use it — no account, no first-run wizard, no <code>SESSION_SECRET</code>. Authentication is what Pro adds.</p>
+  <h3>Changed</h3>
+  <ul>
+    <li><strong>No login on the free edition.</strong> Every screen is open, so an evaluator meets the product before they meet a form. The dashboard says what that means: a &ldquo;No login&rdquo; badge where the account menu would be, and a warning at boot when an open instance is reachable from outside the host.</li>
+    <li><strong>Pro turns the login on.</strong> Activating a key brings back accounts, roles and sessions on the next request, with no restart, and asks you to create the first admin. A lapsed licence reopens the dashboard the same way.</li>
+    <li><strong>Audit rows written while open</strong> carry the IP and <code>anonymous</code> — the honest answer for a dashboard anyone could have reached. Nothing is lost: the history is already there when you upgrade.</li>
+    <li><strong>Pro is now USD 39/month or USD 390/year</strong>, still one installation with unlimited users.</li>
+  </ul>
+</article>
+
+<article class="release">
+  <div class="release-head">
     <h2 id="v0-0-1">0.0.1</h2>
     <span class="release-date">8 September 2026</span>
   </div>

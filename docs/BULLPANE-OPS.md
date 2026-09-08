@@ -37,6 +37,15 @@ Two live products (monthly USD 39, yearly USD 390), each with the License Key
 add-on enabled in the dashboard with activation limit 1 (the API cannot set it),
 default success URL `https://bullpane.com/thanks`, and a 100%-off discount code
 for internal testing. IDs and payment links in `private/bullpane/creem.json`.
+
+Prices are editable in place: `PATCH /v1/products/{id}` with `{"price": <cents>}`
+(and `description`), which is how 19/149 became 39/390 on 2026-09-08 while there
+were no subscribers. The product ids and payment links survive a price change, so
+nothing on the website needs updating — it links to the product urls. **With paying
+subscribers this is the wrong move**: patching the price of a product people are
+already billed on decides their fate for them. Create new products, archive the old
+ones, and let existing subscriptions run at the price they signed up for.
+`price_history` in `creem.json` records what changed and when.
 The Polar objects created before we learned Polar cannot pay out to Brazil are
 left unpublished; `private/bullpane/polar.json` is history only.
 
