@@ -15,6 +15,7 @@ import type { EditionService } from "./services/edition";
 import type { FlowsService } from "./services/flows";
 import type { FoldersService } from "./services/folders";
 import type { HealthService } from "./services/health";
+import type { SsoService } from "./services/sso";
 import type { UsersService } from "./services/users";
 
 export interface AppContext {
@@ -31,6 +32,7 @@ export interface AppContext {
   alerts: AlertsService;
   alertsEngine: AlertsEngine;
   audit: AuditService;
+  sso: SsoService;
   /** package.json version */
   version: string;
 }

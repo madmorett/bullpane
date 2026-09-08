@@ -9,6 +9,7 @@ import { blockWrites } from "../plugins/gates";
 import { alertRoutes } from "./alerts";
 import { auditRoutes } from "./audit";
 import { authRoutes } from "./auth";
+import { authSsoRoutes } from "./auth-sso";
 import { connectionRoutes } from "./connections";
 import { flowRoutes } from "./flows";
 import { folderRoutes } from "./folders";
@@ -18,6 +19,7 @@ import { jobRoutes } from "./jobs";
 import { licenseRoutes } from "./license";
 import { queueRoutes } from "./queues";
 import { setupRoutes } from "./setup";
+import { ssoRoutes } from "./sso";
 import { userRoutes } from "./users";
 
 export async function apiPlugin(app: FastifyInstance): Promise<void> {
@@ -39,6 +41,8 @@ export async function apiPlugin(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes);
   await app.register(setupRoutes);
   await app.register(authRoutes);
+  await app.register(authSsoRoutes);
+  await app.register(ssoRoutes);
   await app.register(licenseRoutes);
   await app.register(connectionRoutes);
   await app.register(queueRoutes);

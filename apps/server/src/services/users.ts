@@ -40,7 +40,8 @@ export class UsersService {
       email,
       name: input.name,
       role: input.role,
-      passwordHash: await hashPassword(input.password),
+      // NULL when the admin creates an SSO-only account (no password given).
+      passwordHash: input.password === undefined ? null : await hashPassword(input.password),
       createdAt: new Date(),
       lastLoginAt: null,
     });

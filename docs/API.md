@@ -323,3 +323,38 @@ transient reading between two rounds of the check, and `stalledCounter` is the
 permanent one. The UI shows the count as a warning on the `active` tab
 ("N of these are stalled (worker lost the lock)") and the counter as a badge on
 the job row — and deliberately does **not** add a "stalled" tab.
+
+## SSO (Pro)
+
+Two groups of routes with deliberately different gating.
+
+**Admin CRUD** — `requireFeature("sso")` then `requireRole("admin")`, so the free
+edition gets `402 { error: "pro_required", feature: "sso" }` and a non-admin gets 403:
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/sso/providers` | Secrets stripped. `hasSecret: true/false`, plus the `callbackUrl` and (SAML) `entityId` the admin must enter at the IdP. |
+| POST | `/api/sso/providers` | `{ kind: "oidc" \| "saml", name, config }`. OIDC requires `clientSecret`; it is encrypted at rest and never returned. |
+| PATCH | `/api/sso/providers/:id` | `config` merges into the stored one, so the issuer can be fixed without re-typing the secret. Omit `clientSecret` to keep it; an empty string is refused (400) rather than silently clearing a working secret. `kind` is immutable. |
+| DELETE | `/api/sso/providers/:id` | 409 when it is the last enabled provider and `requireSso` is on. |
+| POST | `/api/sso/providers/:id/test` | Discovery only, performs no login. A failure is `200 { ok: false, message }` — a bad issuer is information for the form, not a server error. |
+| GET | `/api/sso/settings` · PUT | `{ requireSso: boolean }`. Turning it on with no enabled provider is 409. |
+| GET | `/api/sso/metadata` | SAML SP metadata XML, so the IdP can be configured by file upload. |
+
+**The login flow** — unauthenticated by necessity, and **not** wrapped in
+`requireFeature()`: the check is inside the handler so an expired license degrades to
+"SSO is off, use your password" instead of a 402 JSON page mid-redirect.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/auth/sso/options` | What the login page may know before anybody is authenticated: `{ providers: [{id, kind, name}], requireSso, passwordEscapeHatch }`. Carries no issuer, no client id. Empty list on the free edition. |
+| GET | `/api/auth/sso/:id/start` | 302 to the IdP. Sets a signed, single-use, `httpOnly` flow cookie holding `state`, `nonce` and the PKCE verifier. `?next=` accepts a local path only. |
+| GET/POST | `/api/auth/sso/:id/callback` | One route, two bindings: OIDC returns `GET ?code&state`, SAML posts `SAMLResponse`+`RelayState`. On success, the **same** session cookie and TTL as a password login, with `sessions.auth_method = 'sso'`. |
+
+Every refusal is a `302` to `/login?sso_error=<one sentence>` — the user is in a
+browser mid-redirect. The detail goes to the log and the audit trail
+(`auth.sso_login`, `auth.sso_denied`), never to the URL.
+
+Users: `POST /api/users` now takes `password` as **optional**. Omitted → NULL
+`password_hash` → an SSO-only account that cannot sign in with a password at all,
+not even through the admin escape hatch.

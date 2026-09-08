@@ -2,7 +2,7 @@
  * Drizzle schema. Mirrors migrations/*.sql — the SQL files are the source of
  * truth for the database; this file is the typed view the server codes against.
  */
-import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role } from "@bullpane/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role, SsoKind } from "@bullpane/shared";
 import {
   boolean,
   datetime,
@@ -27,7 +27,11 @@ export const users = mysqlTable(
     id: id(),
     email: varchar("email", { length: 255 }).notNull(),
     name: varchar("name", { length: 80 }).notNull(),
-    passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    /**
+     * NULL for an account that only signs in through SSO. `verifyPassword`
+     * refuses a NULL hash, so such a user cannot use the password form at all.
+     */
+    passwordHash: varchar("password_hash", { length: 255 }),
     role: mysqlEnum("role", ["admin", "operator", "viewer"]).notNull().default("viewer"),
     createdAt: createdAt(),
     lastLoginAt: datetime("last_login_at", { mode: "date", fsp: 3 }),
@@ -44,8 +48,30 @@ export const sessions = mysqlTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: datetime("expires_at", { mode: "date", fsp: 3 }).notNull(),
     createdAt: createdAt(),
+    /** How this session was authenticated. Drives the audit wording. */
+    authMethod: mysqlEnum("auth_method", ["password", "sso"]).notNull().default("password"),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId), index("sessions_expires_at_idx").on(t.expiresAt)],
+);
+
+/**
+ * SSO providers — see migrations/0005_sso.sql for why `config` is JSON and why
+ * the secret is encrypted rather than hashed.
+ */
+export const ssoProviders = mysqlTable(
+  "sso_providers",
+  {
+    id: id(),
+    kind: varchar("kind", { length: 10 }).$type<SsoKind>().notNull(),
+    name: varchar("name", { length: 60 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    config: json("config").$type<Record<string, unknown>>().notNull(),
+    /** AES-256-GCM, keyed off SESSION_SECRET. NULL for SAML. Never leaves the server. */
+    secretEnc: text("secret_enc"),
+    createdAt: createdAt(),
+    updatedAt: datetime("updated_at", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (t) => [index("sso_providers_enabled_idx").on(t.enabled)],
 );
 
 export const connections = mysqlTable("connections", {
@@ -193,6 +219,7 @@ export const settings = mysqlTable("settings", {
 
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
+export type SsoProviderRow = typeof ssoProviders.$inferSelect;
 export type ConnectionRow = typeof connections.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type FolderQueueRow = typeof folderQueues.$inferSelect;

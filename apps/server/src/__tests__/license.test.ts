@@ -1,8 +1,12 @@
 import { generateKeyPairSync } from "node:crypto";
-import { PRO_PRICING, type LicensePayload } from "@bullpane/shared";
+import { PRO_FEATURES, PRO_PRICING, type LicensePayload, type ProFeature } from "@bullpane/shared";
 import { describe, expect, it } from "vitest";
 import { isOfflineToken, type LicenseVerification, signLicense, verifyLicenseKey } from "../license";
 import { buildEdition, type OnlineState, type ResolvedLicense } from "../services/edition";
+
+function allFeatures(enabled: boolean): Record<ProFeature, boolean> {
+  return Object.fromEntries(PRO_FEATURES.map((f) => [f, enabled])) as Record<ProFeature, boolean>;
+}
 
 function keypair() {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -83,7 +87,8 @@ describe("buildEdition", () => {
     const e = buildEdition(config, null);
     expect(e.tier).toBe("free");
     expect(e.demo).toBe(false);
-    expect(e.features).toEqual({ alerts: false, users: false, folders: false, flows: false, audit: false });
+    // Derived from PRO_FEATURES so adding a Pro feature does not break this test.
+    expect(e.features).toEqual(allFeatures(false));
     expect(e.license).toBeNull();
     expect(e.pricing).toEqual(PRO_PRICING);
     expect(e.checkoutUrl).toBe("https://example.test/pro");
@@ -92,7 +97,7 @@ describe("buildEdition", () => {
   it("is pro with a valid offline license", () => {
     const e = buildEdition(config, offline({ valid: true, payload: basePayload, reason: null }));
     expect(e.tier).toBe("pro");
-    expect(e.features).toEqual({ alerts: true, users: true, folders: true, flows: true, audit: true });
+    expect(e.features).toEqual(allFeatures(true));
     expect(e.license).toMatchObject({
       licensee: "Acme Corp",
       email: "ops@acme.test",

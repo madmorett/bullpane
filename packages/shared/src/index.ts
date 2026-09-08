@@ -14,7 +14,7 @@ import { z } from "zod";
 
 export type Tier = "free" | "pro";
 
-export const PRO_FEATURES = ["alerts", "users", "folders", "flows", "audit"] as const;
+export const PRO_FEATURES = ["alerts", "users", "folders", "flows", "audit", "sso"] as const;
 export type ProFeature = (typeof PRO_FEATURES)[number];
 
 /**
@@ -196,7 +196,14 @@ export const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(80),
   role: roleSchema,
-  password: z.string().min(8).max(200),
+  /**
+   * Omit to create an SSO-only account: the row gets a NULL password hash and
+   * that person can ONLY sign in through the identity provider (verifyPassword
+   * refuses a null hash, so the escape hatch does not apply to them either).
+   * Inventing a password for an SSO user would mean a credential nobody
+   * rotates, which is precisely what SSO is bought to remove.
+   */
+  password: z.string().min(8).max(200).optional(),
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
@@ -215,6 +222,154 @@ export interface MeResponse {
 export interface SetupStatus {
   needsSetup: boolean;
   demo: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// SSO (Pro)
+// ---------------------------------------------------------------------------
+
+/**
+ * Single sign-on, configured by the customer's admin in the UI (not by env
+ * vars): a self-hosted install has no vendor to file a ticket with, so the
+ * whole provider lives in MySQL and can be fixed from the browser.
+ *
+ * There is deliberately NO just-in-time provisioning. The IdP proves who
+ * somebody is; it does not decide that they get a Bullpane account, nor which
+ * role. Login resolves the asserted email against an existing `users` row and
+ * refuses when there is none (audit action `auth.sso_denied`). Consequence the
+ * admin must know: inviting the person in Users & roles is still step one.
+ */
+export const SSO_KINDS = ["oidc", "saml"] as const;
+export type SsoKind = (typeof SSO_KINDS)[number];
+
+/**
+ * OIDC. `issuer` is the only endpoint the admin types: everything else comes
+ * from `${issuer}/.well-known/openid-configuration` at login time, so a
+ * provider that rotates its endpoints or keys keeps working. PKCE is always on
+ * and not configurable — there is no reason to offer the weaker flow.
+ */
+export const ssoOidcConfigSchema = z.object({
+  issuer: z.string().url(),
+  clientId: z.string().min(1).max(255),
+  /**
+   * Write-only. Present when creating or replacing the secret, absent when the
+   * admin edits the name and leaves the secret alone. Never returned by the API.
+   */
+  clientSecret: z.string().min(1).max(500).optional(),
+  /** Defaults to the OIDC minimum that yields an email. */
+  scopes: z.array(z.string().min(1).max(60)).max(20).optional(),
+  /**
+   * Which claim carries the email. Overridable because some IdPs (notably
+   * older ADFS/Entra setups) put it in `upn` or `preferred_username`.
+   */
+  emailClaim: z.string().min(1).max(60).optional(),
+});
+export type SsoOidcConfig = z.infer<typeof ssoOidcConfigSchema>;
+
+/**
+ * SAML 2.0. The IdP's signing certificate is mandatory and there is no
+ * "skip signature validation" option: an unsigned assertion is a login form
+ * that anybody on the internet can fill in.
+ */
+export const ssoSamlConfigSchema = z.object({
+  entryPoint: z.string().url(),
+  issuer: z.string().min(1).max(255),
+  /** IdP signing certificate, PEM or bare base64. */
+  idpCert: z.string().min(1).max(10000),
+  emailAttribute: z.string().min(1).max(200).optional(),
+});
+export type SsoSamlConfig = z.infer<typeof ssoSamlConfigSchema>;
+
+export const DEFAULT_OIDC_SCOPES = ["openid", "email", "profile"] as const;
+export const DEFAULT_OIDC_EMAIL_CLAIM = "email";
+/** The SAML attribute IdPs most often use for email, when the admin sets none. */
+export const DEFAULT_SAML_EMAIL_ATTRIBUTE = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
+
+export const createSsoProviderSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("oidc"),
+    name: z.string().min(1).max(60),
+    enabled: z.boolean().optional(),
+    config: ssoOidcConfigSchema.extend({ clientSecret: z.string().min(1).max(500) }),
+  }),
+  z.object({
+    kind: z.literal("saml"),
+    name: z.string().min(1).max(60),
+    enabled: z.boolean().optional(),
+    config: ssoSamlConfigSchema,
+  }),
+]);
+export type CreateSsoProviderInput = z.infer<typeof createSsoProviderSchema>;
+
+/** `kind` is immutable: changing protocol means a different provider. */
+export const updateSsoProviderSchema = z.object({
+  name: z.string().min(1).max(60).optional(),
+  enabled: z.boolean().optional(),
+  config: z.union([ssoOidcConfigSchema.partial(), ssoSamlConfigSchema.partial()]).optional(),
+});
+export type UpdateSsoProviderInput = z.infer<typeof updateSsoProviderSchema>;
+
+/**
+ * A provider as the admin API returns it. The client secret is never here —
+ * `hasSecret` is how the UI knows whether to render "replace secret" instead of
+ * "set secret".
+ */
+export interface SsoProvider {
+  id: string;
+  kind: SsoKind;
+  name: string;
+  enabled: boolean;
+  /** Secrets stripped. Same shape as the input config minus write-only fields. */
+  config: Record<string, unknown>;
+  hasSecret: boolean;
+  /** Where the admin must point the IdP. Derived from PUBLIC_URL, not stored. */
+  callbackUrl: string;
+  /** SAML only: the SP entity id to enter at the IdP. */
+  entityId: string | null;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
+/**
+ * What the *login page* is allowed to know, before anybody is authenticated:
+ * enough to draw the buttons, and nothing else. Unauthenticated endpoint, so it
+ * carries no issuer, no client id and no hint about the customer's IdP.
+ */
+export interface SsoLoginOption {
+  id: string;
+  kind: SsoKind;
+  name: string;
+}
+
+export interface SsoLoginOptions {
+  providers: SsoLoginOption[];
+  /**
+   * true when the admin turned on "require SSO". The password form is hidden,
+   * but see `passwordEscapeHatch`: it is never fully gone.
+   */
+  requireSso: boolean;
+  /**
+   * Whether a password login can still succeed despite `requireSso`, and for
+   * whom. An IdP misconfigured on a self-hosted install would otherwise lock
+   * the customer out of their own dashboard with nobody to call.
+   *  - "admins": admin accounts may still use a password (the default)
+   *  - "all": BULLPANE_ALLOW_PASSWORD_LOGIN=true overrides the toggle entirely
+   *  - "none": only reachable when requireSso is false, i.e. nothing to escape
+   */
+  passwordEscapeHatch: "admins" | "all" | "none";
+}
+
+export const ssoSettingsSchema = z.object({
+  requireSso: z.boolean(),
+});
+export type SsoSettings = z.infer<typeof ssoSettingsSchema>;
+
+/** Result of "test connection" — discovery only, no login performed. */
+export interface SsoTestResult {
+  ok: boolean;
+  message: string;
+  /** OIDC: the endpoints discovery resolved, so the admin can eyeball them. */
+  details?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -917,10 +1072,20 @@ export const AUDIT_ACTIONS = [
   "alert.delete",
   "license.set",
   "license.remove",
+  "sso.provider_create",
+  "sso.provider_update",
+  "sso.provider_delete",
   // auth
   "auth.login",
   "auth.login_failed",
   "auth.logout",
+  "auth.sso_login",
+  /**
+   * The IdP authenticated somebody Bullpane has no user row for. Not a failure
+   * of the IdP and not an attack: it is the expected outcome of the
+   * pre-provisioned model, and the admin needs to see it to know who to invite.
+   */
+  "auth.sso_denied",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -956,9 +1121,14 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "alert.delete": "deleted an alert",
   "license.set": "applied a license key",
   "license.remove": "removed the license key",
+  "sso.provider_create": "added an SSO provider",
+  "sso.provider_update": "edited an SSO provider",
+  "sso.provider_delete": "deleted an SSO provider",
   "auth.login": "signed in",
   "auth.login_failed": "failed to sign in",
   "auth.logout": "signed out",
+  "auth.sso_login": "signed in with SSO",
+  "auth.sso_denied": "was refused by SSO (no account)",
 };
 
 /**
@@ -980,6 +1150,11 @@ export const AUDIT_HIGH_RISK_ACTIONS: readonly AuditAction[] = [
   "license.set",
   "license.remove",
   "auth.login_failed",
+  // Changing who the IdP is changes who can get in, which is the same stake as
+  // editing a user.
+  "sso.provider_create",
+  "sso.provider_update",
+  "sso.provider_delete",
 ];
 
 export interface AuditEntry {

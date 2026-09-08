@@ -29,11 +29,27 @@ export async function blockInDemo(request: FastifyRequest, _reply: FastifyReply)
  */
 const WRITE_ALLOWLIST = new Set(["/api/auth/login", "/api/auth/logout"]);
 
+/**
+ * The SAML assertion comes back as an HTTP-POST from the IdP, so signing in is
+ * a POST whose path contains a provider id. Read-only mode is about not
+ * touching the customer's queues — it was never meant to stop people logging
+ * in, and blocking this would make SSO unusable on exactly the installs
+ * (production, watched carefully) most likely to enable it.
+ *
+ * Narrow on purpose: only the callback. The admin CRUD under /api/sso/* stays
+ * blocked, because that IS a configuration write.
+ */
+const SSO_CALLBACK = /^\/api\/auth\/sso\/[A-Za-z0-9_-]+\/callback$/;
+
+export function isLoginWrite(pathOnly: string): boolean {
+  return WRITE_ALLOWLIST.has(pathOnly) || SSO_CALLBACK.test(pathOnly);
+}
+
 export async function blockWrites(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   if (!request.server.ctx.config.readOnly) return;
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
   const pathOnly = request.url.split("?")[0] ?? request.url;
-  if (WRITE_ALLOWLIST.has(pathOnly)) return;
+  if (isLoginWrite(pathOnly)) return;
   throw readOnlyLocked();
 }

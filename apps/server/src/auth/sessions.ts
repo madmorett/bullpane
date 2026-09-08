@@ -39,10 +39,15 @@ export function sessionCookieOptions(config: Pick<Config, "publicUrl">, expiresA
 export class SessionService {
   constructor(private readonly db: Db) {}
 
-  async create(userId: string, now = new Date()): Promise<{ id: string; expiresAt: Date }> {
+  /**
+   * `authMethod` records HOW this session was authenticated. Same cookie, same
+   * TTL, same table as a password login — deliberately one session path, so SSO
+   * cannot drift into a second, less-reviewed way of being logged in.
+   */
+  async create(userId: string, now = new Date(), authMethod: "password" | "sso" = "password"): Promise<{ id: string; expiresAt: Date }> {
     const id = randomBytes(32).toString("base64url");
     const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-    await this.db.insert(sessions).values({ id, userId, expiresAt, createdAt: now });
+    await this.db.insert(sessions).values({ id, userId, expiresAt, createdAt: now, authMethod });
     return { id, expiresAt };
   }
 

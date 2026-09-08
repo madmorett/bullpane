@@ -12,7 +12,7 @@ import { Page, PageHeader } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
-import { Input, Select } from "@/components/ui/Input";
+import { Input, Select, Switch } from "@/components/ui/Input";
 import { Table, TableMessage, Td, Th } from "@/components/ui/Table";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import { Spinner } from "@/components/ui/Spinner";
@@ -164,12 +164,27 @@ function generatePassword(): string {
 
 function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreateUser();
+  const { has } = useEdition();
+  const ssoAvailable = has("sso");
   const [form, setForm] = useState({ name: "", email: "", role: "viewer" as Role, password: generatePassword() });
+  /**
+   * With SSO configured, a temporary password for somebody who will only ever
+   * click "Sign in with ..." is a credential nobody rotates. An SSO-only
+   * account has no password hash at all, so it CANNOT use the password form —
+   * not even through the admin escape hatch.
+   */
+  const [ssoOnly, setSsoOnly] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = () => {
-    const parsed = createUserSchema.safeParse({ ...form, name: form.name.trim(), email: form.email.trim() });
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      ...(ssoOnly ? {} : { password: form.password }),
+    };
+    const parsed = createUserSchema.safeParse(payload);
     if (!parsed.success) {
       const next: Record<string, string> = {};
       for (const i of parsed.error.issues) next[String(i.path[0])] = i.message;
@@ -178,7 +193,10 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
     }
     create.mutate(parsed.data, {
       onSuccess: (u) => {
-        toast.success(`${u.name} invited`, "Share the temporary password with them over a secure channel.");
+        toast.success(
+          `${u.name} invited`,
+          ssoOnly ? "They can now sign in with SSO using that email." : "Share the temporary password with them over a secure channel.",
+        );
         onClose();
       },
       onError: (e) => toast.error(errorMessage(e)),
@@ -191,7 +209,11 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
       onClose={onClose}
       size="sm"
       title="Invite user"
-      description="There is no email delivery: copy the temporary password and share it yourself."
+      description={
+        ssoOnly
+          ? "The account is created without a password; they sign in through your identity provider."
+          : "There is no email delivery: copy the temporary password and share it yourself."
+      }
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -213,12 +235,26 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
         <Input label="Name" autoFocus value={form.name} onChange={set("name")} error={errors.name} />
         <Input label="Email" type="email" value={form.email} onChange={set("email")} error={errors.email} />
         <Select label="Role" value={form.role} onChange={set("role")} options={ROLES.map((r) => ({ value: r, label: r }))} hint={ROLE_HELP[form.role]} />
-        <div className="flex items-end gap-2">
-          <Input label="Temporary password" mono value={form.password} onChange={set("password")} error={errors.password} wrapperClassName="flex-1" autoComplete="off" spellCheck={false} />
-          <Button size="icon" variant="ghost" aria-label="Generate password" title="Generate" onClick={() => setForm((f) => ({ ...f, password: generatePassword() }))}>
-            <RefreshCw />
-          </Button>
-        </div>
+        {ssoAvailable && (
+          <Switch
+            checked={ssoOnly}
+            onChange={setSsoOnly}
+            label="SSO only (no password)"
+          />
+        )}
+        {ssoOnly ? (
+          <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+            This account will have no password and can only sign in through an identity provider. Make sure the email matches the one
+            your IdP sends.
+          </p>
+        ) : (
+          <div className="flex items-end gap-2">
+            <Input label="Temporary password" mono value={form.password} onChange={set("password")} error={errors.password} wrapperClassName="flex-1" autoComplete="off" spellCheck={false} />
+            <Button size="icon" variant="ghost" aria-label="Generate password" title="Generate" onClick={() => setForm((f) => ({ ...f, password: generatePassword() }))}>
+              <RefreshCw />
+            </Button>
+          </div>
+        )}
       </form>
     </Dialog>
   );

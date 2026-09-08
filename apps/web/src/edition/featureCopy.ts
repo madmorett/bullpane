@@ -52,6 +52,15 @@ export const FEATURE_COPY: Record<ProFeature, FeatureCopy> = {
       "Auto-layout graph with live counts and paused state per queue",
     ],
   },
+  sso: {
+    title: "SSO",
+    tagline: "Your identity provider decides who is who. Configured in this UI, not in a YAML file.",
+    bullets: [
+      "OIDC (Google Workspace, Entra ID, Okta, Keycloak, Authentik) and SAML 2.0",
+      "Accounts stay pre-provisioned: the IdP proves identity, you still assign the role",
+      "Require SSO for the team while admins keep a password way in",
+    ],
+  },
 };
 
 export const FEATURE_ROUTE: Record<ProFeature, string> = {
@@ -60,4 +69,6 @@ export const FEATURE_ROUTE: Record<ProFeature, string> = {
   folders: "/folders",
   flows: "/flows",
   audit: "/audit",
+  // SSO has no page of its own: it is a tab inside Settings.
+  sso: "/settings/sso",
 };

@@ -24,6 +24,19 @@ export interface Config {
   licenseRefreshHours: number;
   demoMode: boolean;
   /**
+   * BULLPANE_ALLOW_PASSWORD_LOGIN=true overrides the admin's "require SSO"
+   * toggle and lets EVERY account sign in with a password again.
+   *
+   * This exists because the failure mode it prevents is unrecoverable: on a
+   * self-hosted install there is no vendor who can log in and fix a misconfigured
+   * IdP. Without an env-level way back in, one wrong issuer URL locks the
+   * customer out of their own dashboard permanently. Even with the toggle on,
+   * ADMIN accounts keep password access by default (see SsoLoginOptions
+   * .passwordEscapeHatch); this flag widens that to everyone, which is why it is
+   * an env var an operator must set on the box and not a checkbox in the UI.
+   */
+  allowPasswordLogin: boolean;
+  /**
    * BULLPANE_READ_ONLY=true blocks every mutating route (job/queue actions, connection,
    * user, folder, alert and license writes) with 423. Reads are untouched.
    * Meant for pointing the dashboard at production before you trust it.
@@ -138,6 +151,7 @@ export function loadConfig(rawEnv: NodeJS.ProcessEnv = process.env, opts: LoadCo
     licenseApiUrl: str(env, "BULLPANE_LICENSE_API_URL", DEFAULT_LICENSE_API_URL).replace(/\/+$/, ""),
     licenseRefreshHours: int(env, "BULLPANE_LICENSE_REFRESH_HOURS", 24, 1),
     demoMode,
+    allowPasswordLogin: bool(env, "BULLPANE_ALLOW_PASSWORD_LOGIN", false),
     readOnly: bool(env, "BULLPANE_READ_ONLY", false),
     demoRedisUrl: str(env, "DEMO_REDIS_URL", "redis://localhost:6379"),
     demoAdminEmail: str(env, "DEMO_ADMIN_EMAIL", "demo@bullpane.com"),

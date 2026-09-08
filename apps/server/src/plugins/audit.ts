@@ -145,6 +145,23 @@ export function isUnaudited(method: string, routePattern: string | undefined): b
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/**
+ * The exception to "reads are never audited".
+ *
+ * The OIDC callback is a GET — the IdP redirects the browser back with ?code —
+ * and it is the moment somebody becomes logged in. Excluding it would mean the
+ * trail records password logins but not SSO logins, and (worse) not the
+ * refusals: `auth.sso_denied` is how an admin finds out who is trying to get in
+ * and needs inviting. The SAML callback is a POST and would be audited anyway,
+ * so without this the trail's contents would depend on which protocol the
+ * customer chose.
+ *
+ * This is safe against the flood the READ_METHODS rule exists to prevent: it is
+ * one route, reached once per sign-in, never polled. Matched on the route
+ * PATTERN, so no queue or provider name can fake its way in here.
+ */
+const AUDITED_READS = new Set(["GET /api/auth/sso/:id/callback"]);
+
 /** First hop of x-forwarded-for, else the socket address. */
 function clientIp(request: FastifyRequest): string | null {
   const fwd = request.headers["x-forwarded-for"];
@@ -171,11 +188,14 @@ export function registerAuditHook(app: FastifyInstance): void {
   });
 
   app.addHook("onResponse", async (request: FastifyRequest, reply: FastifyReply) => {
-    // Reads are never audited: the UI polls, and a table of GETs hides the
-    // twelve rows that matter under a million that do not.
-    if (READ_METHODS.has(request.method.toUpperCase())) return;
-
     const pattern = request.routeOptions?.url;
+    // Reads are never audited: the UI polls, and a table of GETs hides the
+    // twelve rows that matter under a million that do not. The one exception is
+    // the SSO callback — see AUDITED_READS.
+    if (READ_METHODS.has(request.method.toUpperCase()) && !AUDITED_READS.has(`${request.method.toUpperCase()} ${pattern ?? ""}`)) {
+      return;
+    }
+
     if (isUnaudited(request.method, pattern)) return;
 
     const patch = request.auditPatch ?? {};

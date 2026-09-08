@@ -24,8 +24,26 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       request.log.info({ email: input.email }, "login failed");
       throw unauthenticated("Email or password is incorrect");
     }
+    /**
+     * "Require SSO" is enforced AFTER the password is verified, on purpose:
+     * checking it first would tell an unauthenticated caller which accounts
+     * exist and what role they have. The password must be right before the
+     * policy is even discussed.
+     *
+     * The escape hatch (see Config.allowPasswordLogin): admins always keep
+     * password access, and BULLPANE_ALLOW_PASSWORD_LOGIN=true widens that to
+     * everyone. Without it, one wrong issuer URL locks a self-hosted customer
+     * out of their own dashboard with nobody to call.
+     */
+    if (row.role !== "admin" && !app.ctx.config.allowPasswordLogin && (await app.ctx.sso.requireSso())) {
+      request.auditTarget({ action: "auth.login_failed" });
+      request.auditDetail({ email: input.email, reason: "sso_required" });
+      request.log.info({ email: input.email }, "password login refused: sso required");
+      throw unauthenticated("This installation requires signing in through your identity provider.");
+    }
+
     const now = new Date();
-    const session = await app.ctx.sessions.create(row.id, now);
+    const session = await app.ctx.sessions.create(row.id, now, "password");
     await app.ctx.users.touchLogin(row.id, now);
     reply.setCookie(SESSION_COOKIE, session.id, sessionCookieOptions(app.ctx.config, session.expiresAt));
     // The audit hook reads the actor from `request.user`, which the session

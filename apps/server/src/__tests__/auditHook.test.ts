@@ -107,7 +107,7 @@ async function build(role: "admin" | "operator" | "viewer" = "admin") {
   vi.spyOn(app.ctx.edition, "getEdition").mockReturnValue({
     tier: "pro",
     demo: false,
-    features: { alerts: true, users: true, folders: true, flows: true, audit: true },
+    features: { alerts: true, users: true, folders: true, flows: true, audit: true, sso: true },
     license: null,
     pricing: { monthlyUsd: 19, yearlyUsd: 149 },
     checkoutUrl: "",
