@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/madmorett/bullpane/security/advisories/new
+    about: Report privately, never as a public issue. See SECURITY.md.
+  - name: Pro licensing and billing
+    url: https://bullpane.com
+    about: Questions about Pro keys, invoices or renewals.

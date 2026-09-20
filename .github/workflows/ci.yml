@@ -1,0 +1,54 @@
+# Runs on every PR and every push to main. This is the gate CONTRIBUTING.md
+# points at: "pnpm typecheck and pnpm test must pass before you open a PR".
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+# A contributor who pushes twice in a row should not queue two full runs; the
+# newest commit is the only one whose result matters.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # packages/redis-inspector spawns a throwaway `redis-server` on :6399 for its tests.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq redis-server >/dev/null
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      # typecheck does not catch a broken Vite build (missing asset, bad import
+      # in a lazy chunk), and a broken build only shows up at release time.
+      - run: pnpm build
+
+  # The Dockerfile is how nearly everyone actually runs Bullpane, so a PR that
+  # breaks it must fail here rather than at publish time. Build only, no push.
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          # The Dockerfile's last stage is `simulator`; `runner` is the dashboard.
+          target: runner
+          push: false
+          # amd64 only: this is a smoke test, and multi-arch is the release job's job.
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

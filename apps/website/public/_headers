@@ -1,0 +1,7 @@
+/shots/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/styles.css
+  Cache-Control: public, max-age=86400, stale-while-revalidate=86400
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

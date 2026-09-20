@@ -1,0 +1,395 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Design tokens. Dark is the default; light follows the OS setting.   */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+
+  --bg: #0b0d10;
+  --surface: #12151a;
+  --surface-2: #191d24;
+  --surface-3: #222730;
+  --border: #252a33;
+  --border-strong: #353c48;
+
+  --fg: #e6e8eb;
+  --fg-muted: #9aa3ad;
+  --fg-subtle: #6b7480;
+
+  --accent: #5b8def;
+  --accent-hover: #7aa2f5;
+  --accent-fg: #ffffff;
+
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --info: #58a6ff;
+  --violet: #a371f7;
+  --teal: #39c5bb;
+  --pro: #c084fc;
+
+  /* Job-state palette (bull-board convention): completed green, active blue,
+     waiting amber, delayed purple, failed red, everything else muted gray.
+     Consumed through src/lib/stateColors.ts — do not reference these directly. */
+  --state-completed: #3fb950;
+  --state-active: #58a6ff;
+  --state-waiting: #e3b341;
+  --state-delayed: #a371f7;
+  --state-failed: #f85149;
+  --state-prioritized: #8b949e;
+  --state-paused: #8b949e;
+  --state-waiting-children: #8b949e;
+  --state-unknown: #6b7480;
+
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f1f3f5;
+    --surface-3: #e7eaee;
+    --border: #e1e4e8;
+    --border-strong: #c9cfd6;
+
+    --fg: #1b1f24;
+    --fg-muted: #57606a;
+    --fg-subtle: #8b949e;
+
+    --accent: #2f6feb;
+    --accent-hover: #1f5fd6;
+    --accent-fg: #ffffff;
+
+    --success: #1a7f37;
+    --warning: #9a6700;
+    --danger: #cf222e;
+    --info: #0969da;
+    --violet: #8250df;
+    --teal: #0f8a83;
+    --pro: #8250df;
+
+    --state-completed: #1a7f37;
+    --state-active: #0969da;
+    --state-waiting: #9a6700;
+    --state-delayed: #8250df;
+    --state-failed: #cf222e;
+    --state-prioritized: #6e7781;
+    --state-paused: #6e7781;
+    --state-waiting-children: #6e7781;
+    --state-unknown: #8b949e;
+
+    --shadow: 0 8px 30px rgba(15, 23, 42, 0.14);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-violet: var(--violet);
+  --color-teal: var(--teal);
+  --color-pro: var(--pro);
+
+  --color-state-completed: var(--state-completed);
+  --color-state-active: var(--state-active);
+  --color-state-waiting: var(--state-waiting);
+  --color-state-delayed: var(--state-delayed);
+  --color-state-failed: var(--state-failed);
+  --color-state-prioritized: var(--state-prioritized);
+  --color-state-paused: var(--state-paused);
+  --color-state-waiting-children: var(--state-waiting-children);
+  --color-state-unknown: var(--state-unknown);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                 */
+/* ------------------------------------------------------------------ */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  * {
+    border-color: var(--border);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+  a {
+    color: inherit;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  dialog::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+  }
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Components                                                           */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .control {
+    @apply h-8 w-full rounded-md border border-border bg-bg px-2.5 text-[13px] text-fg placeholder:text-fg-subtle outline-none transition-colors;
+  }
+  .control:hover:not(:disabled) {
+    border-color: var(--border-strong);
+  }
+  .control:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  .control:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .control[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+  textarea.control {
+    @apply h-auto min-h-20 resize-y py-1.5 leading-relaxed;
+  }
+  select.control {
+    @apply cursor-pointer appearance-none pr-8;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa3ad' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+  }
+
+  .card {
+    @apply rounded-lg border border-border bg-surface;
+  }
+
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+  .data-table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .data-table thead th {
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-border bg-surface px-3 py-2 text-left text-[11px] font-medium tracking-wide text-fg-subtle uppercase;
+  }
+  .data-table tbody td {
+    @apply border-b border-border/70 px-3 py-1.5 align-middle;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .data-table tbody tr.row-click {
+    @apply cursor-pointer;
+  }
+  .data-table tbody tr.row-click:hover td,
+  .data-table tbody tr.row-click:focus-visible td {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  }
+  .data-table.dense tbody td {
+    @apply py-1;
+  }
+  .num {
+    @apply tabular-nums;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * `min-w-0` is load-bearing: a flex item defaults to min-width:auto, so it
+   * refuses to shrink below its content and the child's `truncate` never gets
+   * to fire. In a 256px sidebar rail a long queue name then widened the row
+   * and produced horizontal scroll. Same class of bug as the tooltip below.
+   */
+  .nav-item {
+    @apply flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-[13px] text-fg-muted transition-colors;
+  }
+  .nav-item:hover {
+    @apply bg-surface-2 text-fg;
+  }
+  .nav-item[aria-current="page"],
+  .nav-item.active {
+    @apply bg-surface-3 text-fg;
+  }
+
+  /*
+   * Tooltip: it always stays in the DOM, just hidden. With `opacity-0` alone it
+   * still took up layout space — a wide tooltip (874px) near the right edge
+   * stretched the document and created horizontal scroll at ANY screen width,
+   * even at 2560px. `visibility: hidden` + `max-width` fix it: invisible does
+   * not take part in the overflow, and the text wraps instead of growing.
+   */
+  .tooltip {
+    @apply pointer-events-none invisible absolute z-50 max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
+    text-wrap: pretty;
+  }
+  .has-tooltip:hover .tooltip,
+  .has-tooltip:focus-within .tooltip {
+    @apply visible opacity-100;
+  }
+
+  .status-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
+  .status-dot.pulse {
+    box-shadow: 0 0 0 0 currentColor;
+    animation: pulse-dot 2s infinite;
+  }
+
+  .dialog {
+    @apply m-auto max-h-[90vh] w-[min(100%,var(--dialog-w,32rem))] rounded-xl border border-border bg-surface p-0 text-fg;
+    box-shadow: var(--shadow);
+  }
+  .dialog[open] {
+    animation: dialog-in 140ms ease-out;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded bg-surface-3;
+  }
+
+  /* Search-hit highlight inside data previews */
+  mark {
+    color: inherit;
+    background: color-mix(in srgb, var(--state-waiting) 35%, transparent);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  /* Coloured count chip; colours come from inline CSS vars set by stateColors.ts */
+  .state-chip {
+    @apply inline-flex h-5 items-center gap-1 rounded px-1.5 text-[11px] leading-none font-medium whitespace-nowrap;
+    color: var(--chip-fg);
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+  }
+  .state-chip.muted {
+    color: var(--fg-muted);
+    background: var(--surface-2);
+    border-color: var(--border);
+  }
+
+  .queue-card {
+    @apply relative flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 transition-colors;
+  }
+  .queue-card:hover,
+  .queue-card:focus-within {
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  .sort-header {
+    @apply inline-flex cursor-pointer items-center gap-1 select-none rounded -mx-1 px-1 hover:text-fg;
+  }
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast-in {
+  animation: toast-in 160ms ease-out;
+}
+
+/* React Flow theme bridge */
+.react-flow {
+  --xy-background-color: var(--bg);
+  --xy-background-pattern-color: var(--border);
+  --xy-edge-stroke: var(--fg-subtle);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--fg-muted);
+  --xy-controls-button-background-color: var(--surface-2);
+  --xy-controls-button-background-color-hover: var(--surface-3);
+  --xy-controls-button-color: var(--fg-muted);
+  --xy-controls-button-color-hover: var(--fg);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg) 60%, transparent);
+  --xy-minimap-node-background-color: var(--surface-3);
+  --xy-attribution-background-color: transparent;
+}

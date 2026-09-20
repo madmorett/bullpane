@@ -1,0 +1,16 @@
+{
+  "name": "@bullpane/website",
+  "version": "0.0.1",
+  "private": true,
+  "description": "bullpane.com — static marketing site served as Cloudflare Worker assets.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "echo 'static site'",
+    "build": "echo 'static site'",
+    "test": "echo 'no tests'"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.0"
+  }
+}

@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bullpane — the self-hosted BullMQ dashboard you can put in front of production</title>
+<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and BullMQ Pro groups in one container next to your stack. The free edition needs no login at all; Pro adds login, roles, alerts, folders, flow graphs and an audit log.">
+<meta property="og:title" content="Bullpane — self-hosted BullMQ dashboard">
+<meta property="og:description" content="Everything bull-board does, faster. Free needs no login at all. Pro adds login, users & roles, alerts, folders, flows and an audit log. USD 39/month or 390/year per installation.">
+<meta property="og:url" content="https://bullpane.com/">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://bullpane.com/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d12'/%3E%3Cpath d='M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z' fill='%23f5a524'/%3E%3C/svg%3E">
+<meta property="og:image" content="https://bullpane.com/shots/overview.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Morett_the_best">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Bullpane", "applicationCategory": "DeveloperApplication", "operatingSystem": "Docker, Linux", "description": "Self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and Pro groups in one container. Free edition with no login; Pro adds users and roles, SSO, alerts, folders, flow graph and an audit log.", "url": "https://bullpane.com/", "image": "https://bullpane.com/shots/overview.jpg", "softwareVersion": "0.1.0", "license": "https://opensource.org/licenses/MIT", "author": {"@type": "Person", "name": "Matheus Morett", "url": "https://www.linkedin.com/in/matheusmorett/"}, "offers": [{"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD", "url": "https://bullpane.com/#install"}, {"@type": "Offer", "name": "Pro monthly", "price": "39", "priceCurrency": "USD", "url": "https://bullpane.com/#pricing", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "39", "priceCurrency": "USD", "billingDuration": "P1M", "unitText": "per installation per month"}}, {"@type": "Offer", "name": "Pro yearly", "price": "390", "priceCurrency": "USD", "url": "https://bullpane.com/#pricing", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "390", "priceCurrency": "USD", "billingDuration": "P1Y", "unitText": "per installation per year"}}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How does the license work?", "acceptedAnswer": {"@type": "Answer", "text": "You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one and paste it on the new one. Lost access to the old server? Write to hello@bullpane.com and we free it."}}, {"@type": "Question", "name": "What if my server cannot reach the internet?", "acceptedAnswer": {"@type": "Answer", "text": "After a successful check the installation keeps Pro for seven days without any contact, and shows a \"grace period\" badge so you know. Air-gapped for real? Write to hello@bullpane.com for an offline key that never phones home."}}, {"@type": "Question", "name": "Does anything about my queues leave my network?", "acceptedAnswer": {"@type": "Answer", "text": "No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all."}}, {"@type": "Question", "name": "Does it work with BullMQ Pro?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Groups are first-class in both editions: status per group, waiting and prioritized jobs, active jobs against the group's concurrency, per-group rate limits and when a limited group resumes, validated against bullmq-pro 7.48. Batch size is a worker option BullMQ never writes to Redis, so the setup panel says \"not observable\" rather than guessing. Bullpane reads the same keys your workers use; it does not bundle or redistribute BullMQ Pro."}}, {"@type": "Question", "name": "Does it work with BullMQ 6?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, on Redis. BullMQ 6 kept the Redis key layout of 5, so the same reads and the official write API work unchanged; the inspector’s test suite runs against 6.3 workers. The BullMQ 6 PostgreSQL backend is not supported yet: it is a different storage model and needs its own reader. If you run BullMQ on Postgres, write to me — how many people ask is how that gets prioritised."}}, {"@type": "Question", "name": "Can it hurt my production Redis?", "acceptedAnswer": {"@type": "Answer", "text": "That was the design constraint. No KEYS, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with BULLPANE_READ_ONLY=true if you want to watch before you trust it."}}, {"@type": "Question", "name": "What happens when I cancel?", "acceptedAnswer": {"@type": "Answer", "text": "The installation goes back to the free edition. Alerts, folders, users and the audit log stay in your database and become accessible again the moment a key is activated."}}, {"@type": "Question", "name": "Which database does it need?", "acceptedAnswer": {"@type": "Answer", "text": "MySQL 8 (or MariaDB) for users, sessions, alerts and the audit log. Redis is only ever read, and written through the official BullMQ API for job actions."}}]}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="logo" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>
+      Bullpane
+    </a>
+    <div class="nav-links">
+      <a href="#features">See it</a>
+      <a href="#pro">Pro</a>
+      <a href="#pricing" class="keep">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="/changelog">Changelog</a>
+      <a href="#install" class="btn sm keep">Install</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Self-hosted · BullMQ &amp; BullMQ Pro · v0.1.0</span>
+    <h1>The BullMQ dashboard you can <em>put in front of production.</em></h1>
+    <p class="lead">One container next to your stack. Queues, jobs, failures, progress, logs, flows and Pro groups, safe to point at production from day one. The free edition needs no account and no login: start it and open it.</p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install the free edition</a>
+      <a class="btn" href="#pricing">See Pro pricing</a>
+      <span class="note">MIT. Pro features are shown locked, never hidden.</span>
+    </div>
+    <ul class="proof" aria-label="Facts">
+      <li>100M+ jobs/day watched in production</li>
+      <li>No performance issues on your Redis</li>
+      <li>One container: Bullpane + MySQL</li>
+    </ul>
+
+    <figure class="hero-shot frame">
+      <div class="bar"><em>/</em><b>overview · prod-redis-01</b></div>
+      <img src="/shots/overview.jpg" width="2160" height="1350" alt="Bullpane overview: every connection and queue with counts, success rate and a sparkline, grouped in folders" fetchpriority="high">
+    </figure>
+
+    <div class="terminal" id="install">
+      <div class="bar"><em>$</em><b>install</b></div>
+<pre><span class="c"># 1. run it next to the Redis your workers already use</span>
+docker run -d --name bullpane -p 3000:3000 \
+  -e DATABASE_URL=<span class="k">mysql://user:pass@mysql:3306/bullpane</span> \
+  ghcr.io/madmorett/bullpane:latest
+
+<span class="c"># 2. open http://localhost:3000 and add a Redis connection. No account, no login.</span>
+<span class="c"># 3. that's the whole install. Pro is a key you paste in Settings → License.</span>
+<span class="g">✓</span> works with Redis, Redis Cluster, Valkey · BullMQ 4, 5 and 6 · BullMQ Pro</pre>
+    </div>
+
+    <p class="builtby">
+      Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>, CTO at Monest. Every feature here shipped because we needed it first.
+      <a class="talk" href="#talk">Questions? Talk to me →</a>
+    </p>
+  </div>
+</header>
+
+<section id="why">
+  <div class="wrap">
+    <span class="kicker">01 / Compare</span>
+    <h2>Bullpane vs bull-board vs Taskforce.sh</h2>
+    <p class="sub">bull-board is free but its UI is from 2016 and it stops at the basics. Taskforce.sh is the hosted dashboard from the BullMQ authors: polished, but your job data leaves your network and you pay per connection. Bullpane is the third option: self-hosted, safe on production, priced per installation — free to run, and Pro when you need it behind a login.</p>
+    <div class="legend"><span><i class="pill yes">✓</i> Included</span><span><i class="pill pro">Pro</i> Included in Bullpane Pro</span><span><i class="pill no">–</i> Not available</span></div>
+    <div class="table-wrap compare">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th class="hl"><b>Bullpane</b><small>self-hosted</small></th>
+            <th><b>bull-board</b><small>open source</small></th>
+            <th><b>Taskforce.sh</b><small>hosted SaaS</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Job data stays in your network</td><td class="hl"><i class="pill yes">✓</i></td><td><i class="pill yes">✓</i></td><td><i class="pill no">–</i><small>payloads go to their cloud</small></td></tr>
+          <tr><td>Login</td><td class="hl"><i class="pill pro">Pro</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr><td>Users &amp; roles</td><td class="hl"><i class="pill pro">Pro</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr><td>Search inside job data</td><td class="hl"><i class="pill yes">✓</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr><td>BullMQ Pro groups, per-group concurrency &amp; rate limits</td><td class="hl"><i class="pill yes">✓</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr><td>Alerts to Slack / webhook</td><td class="hl"><i class="pill pro">Pro</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr><td>Audit log in your own database</td><td class="hl"><i class="pill pro">Pro</i></td><td><i class="pill no">–</i></td><td><i class="pill no">–</i><small>lives in their account</small></td></tr>
+          <tr><td>Flow graph</td><td class="hl"><i class="pill pro">Pro</i></td><td><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
+          <tr class="price-row"><td>Price</td><td class="hl">Free · Pro <s>$49</s> <b>$39/mo</b> per installation</td><td>Free</td><td>Monthly, per connection</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="showcase reel-section">
+  <div class="wrap">
+    <span class="kicker">02 / The dashboard</span>
+    <h2>Everything you wished bull-board showed you</h2>
+    <p class="sub">Real screenshots, running against a BullMQ Pro queue and a busy demo. No mockups. If it is on this page, it is on the screen.</p>
+  </div>
+  <div class="reel" aria-label="Screens of the dashboard">
+    <div class="track">
+    <figure class="frame">
+      <div class="bar"><em>⌘K</em></div>
+      <img src="/shots/cmdk.jpg" width="1776" height="960" loading="lazy" alt="Any queue in one keystroke">
+      <figcaption><h3>Any queue in one keystroke</h3><p>Waiting and failed counts in the result, so you know which one is on fire before you open it.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge?state=failed</em></div>
+      <img src="/shots/queue-failed.jpg" width="1776" height="960" loading="lazy" alt="Retry, remove, promote. One job or two hundred.">
+      <figcaption><h3>Retry, remove, promote. One job or two hundred.</h3><p>The failure reason sits in the row. No click, no modal.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge/j/5440</em></div>
+      <img src="/shots/job.jpg" width="1776" height="960" loading="lazy" alt="Jobs you can actually read">
+      <figcaption><h3>Jobs you can actually read</h3><p>Timeline, data as a tree, options, return value, stack trace, logs, and who touched it.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/pro.grouped-tenants/groups</em></div>
+      <img src="/shots/groups.jpg" width="1776" height="960" loading="lazy" alt="BullMQ Pro groups, with every per-group setting">
+      <figcaption><h3>BullMQ Pro groups, with every per-group setting</h3><p>Waiting, limited, maxed, paused. Concurrency cap, rate limit, and exactly when a limited group resumes.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge/metrics</em></div>
+      <img src="/shots/metrics.jpg" width="1776" height="960" loading="lazy" alt="Metrics from BullMQ's own counters">
+      <figcaption><h3>Metrics from BullMQ's own counters</h3><p>Throughput, rate and success per minute, from the counters your workers already write.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/…/setup</em></div>
+      <img src="/shots/queue-setup-pro.jpg" width="1776" height="960" loading="lazy" alt="How the queue is configured, without opening the code">
+      <figcaption><h3>How the queue is configured, without opening the code</h3><p>Library and version, workers connected, concurrency, rate limit. When Redis cannot tell, it says so.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/health</em></div>
+      <img src="/shots/health.jpg" width="1776" height="960" loading="lazy" alt="Redis health, one INFO every three seconds">
+      <figcaption><h3>Redis health, one INFO every three seconds</h3><p>Memory, CPU, commands per second, latency, clients, keys. Ten tabs cost your Redis as much as one.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/schedulers</em></div>
+      <img src="/shots/schedulers.jpg" width="1776" height="960" loading="lazy" alt="Every scheduler, across every queue">
+      <figcaption><h3>Every scheduler, across every queue</h3><p>What fires next, in the next hour or the next week, and what is overdue.</p></figcaption>
+    </figure>
+    <figure class="frame">
+      <div class="bar"><em>⌘K</em></div>
+      <img src="/shots/cmdk.jpg" width="1776" height="960" loading="lazy" alt="Any queue in one keystroke">
+      <figcaption><h3>Any queue in one keystroke</h3><p>Waiting and failed counts in the result, so you know which one is on fire before you open it.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge?state=failed</em></div>
+      <img src="/shots/queue-failed.jpg" width="1776" height="960" loading="lazy" alt="Retry, remove, promote. One job or two hundred.">
+      <figcaption><h3>Retry, remove, promote. One job or two hundred.</h3><p>The failure reason sits in the row. No click, no modal.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge/j/5440</em></div>
+      <img src="/shots/job.jpg" width="1776" height="960" loading="lazy" alt="Jobs you can actually read">
+      <figcaption><h3>Jobs you can actually read</h3><p>Timeline, data as a tree, options, return value, stack trace, logs, and who touched it.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/pro.grouped-tenants/groups</em></div>
+      <img src="/shots/groups.jpg" width="1776" height="960" loading="lazy" alt="BullMQ Pro groups, with every per-group setting">
+      <figcaption><h3>BullMQ Pro groups, with every per-group setting</h3><p>Waiting, limited, maxed, paused. Concurrency cap, rate limit, and exactly when a limited group resumes.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/payments.charge/metrics</em></div>
+      <img src="/shots/metrics.jpg" width="1776" height="960" loading="lazy" alt="Metrics from BullMQ's own counters">
+      <figcaption><h3>Metrics from BullMQ's own counters</h3><p>Throughput, rate and success per minute, from the counters your workers already write.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/q/…/setup</em></div>
+      <img src="/shots/queue-setup-pro.jpg" width="1776" height="960" loading="lazy" alt="How the queue is configured, without opening the code">
+      <figcaption><h3>How the queue is configured, without opening the code</h3><p>Library and version, workers connected, concurrency, rate limit. When Redis cannot tell, it says so.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/health</em></div>
+      <img src="/shots/health.jpg" width="1776" height="960" loading="lazy" alt="Redis health, one INFO every three seconds">
+      <figcaption><h3>Redis health, one INFO every three seconds</h3><p>Memory, CPU, commands per second, latency, clients, keys. Ten tabs cost your Redis as much as one.</p></figcaption>
+    </figure>
+<figure class="frame">
+      <div class="bar"><em>/schedulers</em></div>
+      <img src="/shots/schedulers.jpg" width="1776" height="960" loading="lazy" alt="Every scheduler, across every queue">
+      <figcaption><h3>Every scheduler, across every queue</h3><p>What fires next, in the next hour or the next week, and what is overdue.</p></figcaption>
+    </figure>
+    </div>
+  </div>
+  <div class="wrap">
+    <ul class="facts">
+      <li><b>Every state, every queue, every connection.</b> Waiting, active, delayed, prioritized, completed, failed, paused, waiting-children.</li>
+      <li><b>Search inside job data</b>, bounded and resumable, so a big state never blocks Redis.</li>
+      <li><b>Bulk actions</b> on a selection: retry, promote, remove. Drain and obliterate behind the admin role.</li>
+      <li><b>Flow tree per job</b>: the real parent and child instances, bounded so 50k children return a slice, not 50k nodes.</li>
+      <li><b>Delayed jobs say when they run</b>, correct after a backoff retry too.</li>
+      <li><b>Read-only mode</b> for the first days on a production Redis you do not trust yet.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="pro" class="showcase">
+  <div class="wrap">
+    <span class="kicker">03 / Pro</span>
+    <h2>Pro: the features a team needs</h2>
+    <p class="sub">One key unlocks everything below for one installation, unlimited users. Verified with bullpane.com once a day, keeps working for seven days offline. Pro features are always shown locked in the free edition, never hidden.</p>
+
+    <div class="show flip">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Alerts that watch BullMQ's metrics, not a screenshot</h3>
+        <p>Backlog alerts from live counts. Failure and failure-rate alerts from BullMQ's metrics counters over a window you choose, with a minimum sample so a quiet minute cannot trip them.</p>
+        <p>The engine says <em>warming up</em> until it has real history and <em>no metrics</em> when a worker was created without them, instead of firing on a number it cannot stand behind. Slack or any webhook, cooldown per alert, every delivery logged.</p>
+      </div>
+      <figure class="frame"><div class="bar"><em>/alerts</em><b>alerts</b></div><img src="/shots/alerts.jpg" width="1776" height="720" loading="lazy" alt="Alerts page: one alert firing on SMS backlog, two warming up, and the delivery events below"></figure>
+    </div>
+
+    <div class="show">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Who did what, including the refused attempts</h3>
+        <p>Every mutating action: who, what, on which queue or job, result, IP. Append-only, in your own MySQL. A discard the role did not allow shows up as <em>refused</em>, which is the row you will actually want one day.</p>
+        <p>Filter by person, action, connection, queue or date. Export CSV for the auditor. Job payloads are never stored.</p>
+      </div>
+      <figure class="frame"><div class="bar"><em>/audit</em><b>audit log</b></div><img src="/shots/audit.jpg" width="1776" height="1278" loading="lazy" alt="Audit log listing retries, a refused discard, a queue clean and user invites with actor, target, result and IP"></figure>
+    </div>
+
+    <div class="show flip">
+      <div class="copy">
+        <span class="tag pro-tag">Pro</span>
+        <h3>Roles enforced on every API call</h3>
+        <p><b>Viewer</b> sees everything and changes nothing. <b>Operator</b> runs the queues, alerts and folders. <b>Admin</b> is the only role that can drain, obliterate, manage users or touch the license. Not a UI convention: the server checks.</p>
+      </div>
+      <figure class="frame"><div class="bar"><em>/users</em><b>users & roles</b></div><img src="/shots/users.jpg" width="1776" height="600" loading="lazy" alt="Users page with admin, operator and viewer roles and what each one can do"></figure>
+    </div>
+
+    <div class="trio">
+      <figure class="frame small">
+        <img src="/shots/folder.jpg" width="1776" height="870" loading="lazy" alt="Folder dashboard for Payments with aggregate counts and the queues inside">
+        <figcaption><span class="tag pro-tag">Pro</span><h4>Folders</h4><p>Hundreds of queues across connections, grouped by team or product, with totals, success rate and alerts per folder.</p></figcaption>
+      </figure>
+      <figure class="frame small">
+        <img src="/shots/flows.jpg" width="1776" height="960" loading="lazy" alt="Flow graph of queues detected from BullMQ parent references">
+        <figcaption><span class="tag pro-tag">Pro</span><h4>Flow graph</h4><p>Detected from the parent references your BullMQ flows already leave in Redis, plus manual edges for the hops your code does by hand.</p></figcaption>
+      </figure>
+      <figure class="frame small">
+        <img src="/shots/schedulers.jpg" width="1776" height="780" loading="lazy" alt="Schedulers tab listing repeatable jobs with interval, run count and next run">
+        <figcaption><span class="tag free-tag">Free</span><h4>Job schedulers</h4><p>Every repeatable job with its pattern, how many times it ran, next run, and a Remove button that goes through the official API.</p></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <span class="kicker">04 / Pricing</span>
+    <h2>Pricing</h2>
+    <p class="sub">Per installation, not per connection, not per seat. Taxes and invoices are handled by Creem, our merchant of record. <a href="/refunds" style="color:var(--green);border-bottom:1px solid rgba(62,207,142,.4)">14-day refund</a> on your first payment, and the free edition never expires.</p>
+    <p class="launch"><span class="launch-tag">Launch price</span><span>The first 100 installations pay <b>$39</b> instead of $49 a month, or <b>$390</b> instead of $490 a year. The price you sign up at is the price you keep for as long as you stay subscribed.</span></p>
+    <div class="pricing">
+      <div class="card plan">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+        <ul>
+          <li>Unlimited connections and queues</li>
+          <li>Jobs, search, bulk actions</li>
+          <li>BullMQ Pro groups, with per-group settings</li>
+          <li>No login required — open it and use it</li>
+          <li>Read-only mode</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn" href="#install">Install</a>
+      </div>
+      <div class="card plan pro">
+        <h3>Pro · monthly</h3>
+        <div class="price"><s>$49</s> $39 <small>/ month</small></div>
+        <span class="save">Launch price · locked in while you stay subscribed</span>
+        <ul>
+          <li>Everything in Free</li>
+          <li>Alerts to Slack / webhook</li>
+          <li>Users &amp; roles</li>
+          <li>Folders and flow graph</li>
+          <li>Audit log with CSV export</li>
+          <li>SSO (OIDC &amp; SAML 2.0)</li>
+          <li>Unlimited users, one installation</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn pro" href="https://creem.io/product/prod_1MIOAspTe6CHBfGwxpaYYE" rel="noopener">Get Pro monthly</a>
+        <span class="ask">Questions before buying? <a href="mailto:hello@bullpane.com">hello@bullpane.com</a></span>
+      </div>
+      <div class="card plan pro">
+        <h3>Pro · yearly</h3>
+        <div class="price"><s>$490</s> $390 <small>/ year</small></div>
+        <span class="save">Launch price · 12 months for the price of 10</span>
+        <ul>
+          <li>Everything in Pro monthly</li>
+          <li>One invoice a year for procurement</li>
+          <li>Cancel any time, data stays</li>
+        </ul>
+        <div class="spacer"></div>
+        <a class="btn pro" href="https://creem.io/product/prod_7RnATtB5hqVii5RqDvfy4j" rel="noopener">Get Pro yearly</a>
+        <span class="ask">Need an invoice first, or an offline key? <a href="mailto:hello@bullpane.com">Write to me</a>.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="talk" class="talk">
+  <div class="wrap">
+    <span class="kicker">05 / Support</span>
+    <h2>Talk to the person who built it</h2>
+    <p class="sub">Bullpane is built and supported by one engineer who runs it against his own production queues every day. There is no ticket queue and no tier-one script. You write, I read it, you get an answer from the person who wrote the code.</p>
+    <div class="talk-grid">
+      <a class="talk-card mail" href="mailto:hello@bullpane.com">
+        <span class="talk-label">Email · bugs, questions, "does it work with X?"</span>
+        <span class="talk-big">hello@bullpane.com</span>
+        <span class="talk-note">Usually answered the same working day, from Curitiba.</span>
+      </a>
+      <a class="talk-card" href="https://github.com/madmorett/bullpane/issues" rel="noopener">
+        <span class="talk-label">GitHub</span>
+        <span class="talk-mid">Open an issue</span>
+        <span class="talk-note">Public bugs and feature requests. The repo is MIT.</span>
+      </a>
+      <a class="talk-card" href="https://x.com/Morett_the_best" rel="noopener">
+        <span class="talk-label">X</span>
+        <span class="talk-mid">@Morett_the_best</span>
+        <span class="talk-note">Quick questions and what is shipping next.</span>
+      </a>
+      <a class="talk-card" href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">
+        <span class="talk-label">LinkedIn</span>
+        <span class="talk-mid">Matheus Morett</span>
+        <span class="talk-note">CTO at Monest. Procurement and partnership conversations.</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="faq">
+  <div class="wrap">
+    <span class="kicker">06 / FAQ</span>
+    <h2>Questions</h2>
+    <details><summary>How does the license work?</summary><p>You get a key on the receipt. Paste it in Settings → License. The server activates it once against bullpane.com and re-checks it daily. One key runs one installation; to move servers, remove the key on the old one and paste it on the new one. Lost access to the old server? Write to hello@bullpane.com and we free it.</p></details>
+    <details><summary>What if my server cannot reach the internet?</summary><p>After a successful check the installation keeps Pro for seven days without any contact, and shows a "grace period" badge so you know. Air-gapped for real? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> for an offline key that never phones home.</p></details>
+    <details><summary>Does anything about my queues leave my network?</summary><p>No. The only thing the server ever sends to bullpane.com is the license key, a label for the installation (hostname) and the activation id. Job data, Redis URLs and queue names stay with you. The free edition sends nothing at all.</p></details>
+    <details><summary>Does it work with BullMQ Pro?</summary><p>Yes. Groups are first-class in both editions: status per group, waiting and prioritized jobs, active jobs against the group's concurrency, per-group rate limits and when a limited group resumes, validated against bullmq-pro 7.48. Batch size is a worker option BullMQ never writes to Redis, so the setup panel says "not observable" rather than guessing. Bullpane reads the same keys your workers use; it does not bundle or redistribute BullMQ Pro.</p></details>
+    <details><summary>Does it work with BullMQ 6?</summary><p>Yes, on Redis. BullMQ 6 kept the Redis key layout of 5, so the same reads and the official write API work unchanged; the inspector&rsquo;s test suite runs against 6.3 workers. The BullMQ 6 <strong>PostgreSQL backend is not supported yet</strong>: it is a different storage model and needs its own reader. If you run BullMQ on Postgres, <a href="mailto:hello@bullpane.com">write to me</a> &mdash; how many people ask is how that gets prioritised.</p></details>
+    <details><summary>Can it hurt my production Redis?</summary><p>That was the design constraint. No <code>KEYS</code>, no unbounded scans, one Lua round trip per queue, payloads truncated inside Redis, discovery cached. Start with <code>BULLPANE_READ_ONLY=true</code> if you want to watch before you trust it.</p></details>
+    <details><summary>What happens when I cancel?</summary><p>The installation goes back to the free edition. Alerts, folders, users and the audit log stay in your database and become accessible again the moment a key is activated.</p></details>
+    <details><summary>Which database does it need?</summary><p>MySQL 8 (or MariaDB) for users, sessions, alerts and the audit log. Redis is only ever read, and written through the official BullMQ API for job actions.</p></details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-row">
+      <div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>, CTO at Monest.</div>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>
+        <a href="https://x.com/Morett_the_best" rel="noopener">X</a>
+        <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">LinkedIn</a>
+        <a href="https://github.com/madmorett/bullpane" rel="noopener">GitHub</a>
+        <a href="/changelog">Changelog</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/refunds">Refunds</a>
+        <a href="/llms.txt" title="Product summary for AI assistants">llms.txt</a>
+      </nav>
+    </div>
+    <div class="foot-row sib">From the same author, for the same queues: <a href="https://github.com/madmorett/bullmq-outbox" rel="noopener">bullmq-outbox</a> keeps jobs when Redis is out of memory or down · <a href="https://github.com/madmorett/bullmq-fanout" rel="noopener">bullmq-fanout</a> publishes one event to many queues.</div>
+  </div>
+</footer>
+<script>document.getElementById("y").textContent = new Date().getFullYear();</script>
+</body>
+</html>

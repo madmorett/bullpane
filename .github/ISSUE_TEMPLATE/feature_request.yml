@@ -1,0 +1,31 @@
+name: Feature request
+description: Something Bullpane should do and does not.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The operational problem, not the solution. What were you looking at when you needed this?
+      placeholder: I run 40 queues and cannot tell which schedulers fire overnight without opening each queue.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you expect Bullpane to show or do?
+    validations:
+      required: true
+  - type: input
+    id: scale
+    attributes:
+      label: Your scale
+      description: Helps judge whether a read is affordable. Roughly how many queues, and jobs per day?
+      placeholder: "~40 queues, ~2M jobs/day"
+  - type: checkboxes
+    id: edition
+    attributes:
+      label: Edition
+      options:
+        - label: I am using the free edition
+        - label: I am using (or evaluating) Pro

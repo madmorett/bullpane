@@ -1,0 +1,16 @@
+# bullpane.com — static site. No code, only assets.
+name = "bullpane-website"
+compatibility_date = "2025-06-01"
+workers_dev = false
+# versioned preview URLs (wrangler versions upload) without exposing production on workers.dev
+preview_urls = true
+
+routes = [
+  { pattern = "bullpane.com", custom_domain = true },
+  { pattern = "www.bullpane.com", custom_domain = true }
+]
+
+[assets]
+directory = "./public"
+not_found_handling = "404-page"
+html_handling = "auto-trailing-slash"

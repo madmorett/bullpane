@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thanks — activate Bullpane Pro</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a></div></nav>
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span> Bullpane Pro</span>
+    <h1>Thanks. Your key is <em>on its way.</em></h1>
+    <p class="lead">The license key is in the receipt email from Creem, our payment partner. Activating it takes under a minute.</p>
+    <ol class="steps">
+      <li><div><strong>Copy the key.</strong> It looks like <span class="kbd">BULLPANE-XXXX-XXXX-XXXX</span>. It is in the receipt email; the sender is Creem.</div></li>
+      <li><div><strong>Open your Bullpane, Settings → License.</strong> On the free edition there is no login yet, so just open it.</div></li>
+      <li><div><strong>Paste and click Activate.</strong> Alerts, Folders, Flows, the Audit log and SSO unlock immediately. No restart.</div></li>
+      <li><div><strong>Create your admin account.</strong> Activating turns the login on, so Bullpane asks you to set up the first admin — then invite the rest of the team in Settings → Users. Set a fixed <span class="kbd">SESSION_SECRET</span> before this if you have not, or every restart signs everyone out.</div></li>
+    </ol>
+    <p class="lead" style="margin-top:28px;font-size:15px">Running from Docker without a UI handy? Set <span class="kbd">BULLPANE_LICENSE_KEY</span> in the environment instead; it activates a few seconds after boot.<br>One key runs one installation. Moving servers: remove the key on the old one first. Anything odd: <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
+    <div class="cta" style="margin-top:24px"><a class="btn primary" href="/">Back to bullpane.com</a></div>
+  </div>
+</header>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane</div><div style="display:flex;gap:18px"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body>
+</html>

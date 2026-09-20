@@ -1,0 +1,26 @@
+# Override: use your own MySQL / RDS instead of the bundled container.
+#
+#   # in .env:
+#   DATABASE_URL=mysql://bullpane:password@your-instance.eu-west-1.rds.amazonaws.com:3306/bullpane
+#
+#   docker compose -f docker-compose.company.yml -f docker-compose.external-db.yml up -d --build
+#
+# The schema is created on first boot, so the user needs CREATE TABLE on that
+# database (or pre-create an empty `bullpane` database and grant on it). The bundled
+# mysql service is scaled to zero and never starts.
+#
+# RDS checklist:
+#   - the security group must allow 3306 from wherever this container runs
+#   - for TLS, append ?ssl={"rejectUnauthorized":true} to DATABASE_URL
+#   - a db.t4g.micro is plenty: this stores users and settings, not job data
+services:
+  app:
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to your MySQL/RDS instance}
+    depends_on: !reset []
+
+  mysql:
+    # Never start the bundled database in this mode.
+    deploy:
+      replicas: 0
+    profiles: ["unused"]

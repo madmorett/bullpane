@@ -1,0 +1,60 @@
+# Bullpane — production-ish. Bring your own Redis: you add connections
+# to your BullMQ Redis instances from the dashboard after first-run setup.
+#
+#   cp .env.example .env   # SESSION_SECRET only matters once you unlock Pro (login)
+#   docker compose up -d
+#   open http://localhost:3000
+#
+# External MySQL instead of the bundled one: set DATABASE_URL in .env to your
+# instance (mysql://user:pass@host:3306/db), delete the `mysql` service below
+# and the `depends_on` block on `app`.
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    image: bullpane:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:-mysql://bullpane:bullpane@mysql:3306/bullpane}
+      # Random 32+ char string; signs the session cookie. Do not ship the placeholder.
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      # Empty = free edition. Paste your Pro key here or in Settings → License.
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
+      BULLPANE_CHECKOUT_URL: ${BULLPANE_CHECKOUT_URL:-https://bullpane.com/#pricing}
+      BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
+      BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
+      BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}
+      BULLPANE_JOB_PREVIEW_BYTES: ${BULLPANE_JOB_PREVIEW_BYTES:-2048}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: --mysql-native-password=ON --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
+      MYSQL_PASSWORD: bullpane
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      # Exposed so `pnpm dev` on the host can reach it; drop in production.
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  mysql-data:

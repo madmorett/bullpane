@@ -1,0 +1,54 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta property="og:title" content="Privacy Policy — Bullpane"><meta property="og:type" content="website"><meta property="og:url" content="https://bullpane.com/privacy"><meta property="og:image" content="https://bullpane.com/shots/overview.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="What Bullpane collects, what it never collects, and who processes your data."><link rel="canonical" href="https://bullpane.com/privacy"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css"><title>Privacy Policy — Bullpane</title><meta name="description" content="What Bullpane collects, what it never collects, and who processes your data."></head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated 7 September 2026</p>
+
+<p class="lead-sm">Short version: the software runs on your servers, and we never see your queues, your jobs or your job data. The only personal data we hold is what you give us when you buy or write to us.</p>
+
+<div class="callout">
+  <h3>What Bullpane never sends anywhere</h3>
+  <p>Your job payloads, queue names, Redis addresses, Redis credentials, database contents, user list, audit log and alert history stay on your infrastructure. There is no telemetry, no analytics and no crash reporting in the software. The free edition makes no outbound connection to us at all.</p>
+</div>
+
+<h2>1. Data the software sends to us (Pro only)</h2>
+<p>A Pro installation contacts api.bullpane.com to activate its key and about once a day to revalidate it. Each request contains:</p>
+<ul>
+  <li>the license key;</li>
+  <li>the activation identifier issued when the key was activated;</li>
+  <li>a label for the installation: its hostname and the <code>PUBLIC_URL</code> you configured;</li>
+  <li>the Bullpane version.</li>
+</ul>
+<p>Our server also records the request's IP address in its standard logs. We use the label so you can recognise your own installations and so support can find them; we use the rest to check that a key is valid and used on one installation. Legal basis: performance of the contract you entered when you bought a license.</p>
+
+<h2>2. Data you give us directly</h2>
+<ul>
+  <li><strong>Purchase.</strong> Your name, email, billing address and tax identifiers go to <strong>Creem</strong> (Armitage Labs OÜ, Estonia), the merchant of record, who processes the payment and issues the invoice. We never see or store your card details. We can see the order and customer email in the Creem dashboard.</li>
+  <li><strong>Email.</strong> If you write to hello@bullpane.com we keep the message and your address so we can answer and refer back to it.</li>
+</ul>
+
+<h2>3. The website</h2>
+<p>bullpane.com is a static site hosted on Cloudflare. It sets no cookies, runs no analytics and embeds no third-party trackers. Cloudflare processes request metadata, including IP addresses, to serve and protect the site.</p>
+
+<h2>4. Who processes data on our behalf</h2>
+<ul>
+  <li><strong>Creem</strong> (Armitage Labs OÜ, Estonia) — payments, invoicing, tax, customer records, license key issuance.</li>
+  <li><strong>Cloudflare, Inc.</strong> (USA) — hosting of the website and the license API, and its request logs.</li>
+</ul>
+<p>We do not sell personal data and we do not share it for advertising.</p>
+
+<h2>5. How long we keep it</h2>
+<p>License activation records are kept while the subscription is active and for twelve months after it ends, so a returning customer can be helped. Support email is kept for two years. Purchase and invoice records are kept as long as tax law requires. Cloudflare request logs are short-lived and governed by Cloudflare's own retention.</p>
+
+<h2>6. Your rights</h2>
+<p>You can ask for a copy of the personal data we hold about you, ask us to correct it, or ask us to delete it. Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>. We answer within 30 days. Deleting the data tied to an active license means the license stops working, so we will say so before doing it. Invoice records we are legally required to keep are the exception. If you are in the EU or UK you may also complain to your local data protection authority; if you are in Brazil, to the ANPD.</p>
+
+<h2>7. Children</h2>
+<p>Bullpane is a tool for professional software operations and is not directed at anyone under 16.</p>
+
+<h2>8. Changes</h2>
+<p>If this policy changes materially we update the date at the top and email Pro customers.</p>
+
+<h2>9. Contact</h2>
+<p>Matheus Morett · <a href="mailto:hello@bullpane.com">hello@bullpane.com</a></p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

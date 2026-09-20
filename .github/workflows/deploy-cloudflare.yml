@@ -1,0 +1,36 @@
+# Deploys the license API and the website when their folders change on main.
+# Needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+# Worker secrets (LICENSE_PRIVATE_KEY_PEM, CREEM_API_KEY) are set once
+# with `wrangler secret put` and survive deploys.
+name: Deploy Cloudflare
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/license-api/**"
+      - "apps/website/**"
+      - "packages/shared/**"
+      - ".github/workflows/deploy-cloudflare.yml"
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bullpane/license-api test
+      - run: pnpm --filter @bullpane/license-api exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: pnpm --filter @bullpane/website exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

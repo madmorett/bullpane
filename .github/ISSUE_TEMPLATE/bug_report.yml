@@ -1,0 +1,62 @@
+# Mirrors the "Reporting bugs" section of CONTRIBUTING.md so the information
+# arrives with the issue instead of costing a round trip.
+name: Bug report
+description: Something in the dashboard does not match what Redis actually holds.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste job payloads containing real customer data.** Redact before pasting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What the dashboard showed, and what you expected instead.
+      placeholder: The queue page showed 0 waiting, but `LLEN bull:orders:wait` returns 12.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the queue page for `orders`
+        2. Click Waiting
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: bullpane-version
+    attributes:
+      label: Bullpane version
+      description: The version in Settings → About, or the Docker image tag.
+      placeholder: "0.1.0 / ghcr.io/madmorett/bullpane:edge"
+    validations:
+      required: true
+  - type: input
+    id: bullmq-version
+    attributes:
+      label: BullMQ version
+      placeholder: "bullmq 6.3.4 / 5.81.4 (or @taskforcesh/bullmq-pro 7.48.0)"
+    validations:
+      required: true
+  - type: input
+    id: redis-version
+    attributes:
+      label: Redis version, and cluster yes/no
+      placeholder: "Redis 7.2.4, standalone"
+    validations:
+      required: true
+  - type: textarea
+    id: queue-meta
+    attributes:
+      label: The queue's meta hash
+      description: "Output of `HGETALL bull:<queue>:meta`. This is settings only — it holds no job data."
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs
+      description: Relevant lines from the Bullpane server. Redact Redis URLs — they carry passwords.
+      render: text

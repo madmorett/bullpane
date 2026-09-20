@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta property="og:title" content="Changelog — Bullpane"><meta property="og:type" content="website"><meta property="og:url" content="https://bullpane.com/changelog"><meta property="og:image" content="https://bullpane.com/shots/overview.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="Every release of Bullpane, the self-hosted dashboard for BullMQ and BullMQ Pro: what was added, what changed and what was fixed."><link rel="canonical" href="https://bullpane.com/changelog"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css"><title>Changelog — Bullpane</title><meta name="description" content="Every release of Bullpane, the self-hosted dashboard for BullMQ and BullMQ Pro: what was added, what changed and what was fixed."></head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Changelog</h1>
+<p class="updated">Last updated 13 September 2026</p>
+
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.0</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-1-0">0.1.0</h2>
+    <span class="release-date">13 September 2026</span>
+  </div>
+  <p class="release-note">The first published version. Everything before it was development, run for months against a production Redis with millions of BullMQ jobs a day; this is the point where the dashboard is worth other people&rsquo;s time.</p>
+
+  <h3>The free edition</h3>
+  <p class="release-note">Everything bull-board does, with no login at all: start the container, open it, use it. No account, no first-run wizard. The header says &ldquo;No login&rdquo; where an account menu would be, and the server warns at boot when an open instance is reachable from outside the host. Put it behind your reverse proxy or VPN.</p>
+  <ul>
+    <li><strong>Queues and jobs.</strong> Every BullMQ state, per-minute completed and failed rates from BullMQ&rsquo;s own metrics counters, and an attention view for the queues that need you.</li>
+    <li><strong>Job pages</strong> with data as a tree or raw JSON, options, return value, stack traces, logs, progress and parent/child links. Delayed jobs say when they will run, correct after a backoff retry too.</li>
+    <li><strong>Flow tree per job.</strong> The real parent and child instances of a flow, bounded so a parent with 50k children returns the first slice, never 50k nodes.</li>
+    <li><strong>Actions.</strong> Add, retry, promote, remove and discard jobs, in bulk if you like; pause (with a reason, kept in the audit log), resume, clean, retry-all, drain and obliterate queues, with the destructive ones behind the admin role and a confirmation.</li>
+    <li><strong>Search inside job data</strong>, bounded and resumable so a big state never blocks Redis.</li>
+    <li><strong>Job schedulers</strong> per queue and across a whole connection, with next run, &ldquo;next run within&rdquo; windows and overdue highlighting.</li>
+    <li><strong>BullMQ Pro groups.</strong> Each group&rsquo;s status in Pro&rsquo;s own vocabulary &mdash; waiting, limited, maxed, paused &mdash; jobs waiting and how many are prioritized, active jobs against the concurrency cap, rate limit, and when a limited group returns to rotation.</li>
+    <li><strong>Redis health monitor.</strong> Memory, CPU, commands per second, latency, clients and keys, sampled on the server and shared across tabs.</li>
+    <li><strong>Command palette</strong> (<span class="kbd">⌘</span> <span class="kbd">K</span>) over every queue on every connection, hidden queues, and a sidebar whose order is the same for everyone.</li>
+    <li><strong>Read-only mode</strong> that refuses every write, for pointing the dashboard at production before you trust it.</li>
+    <li><strong>BullMQ 4, 5 and 6</strong> on Redis, Redis Cluster and Valkey, plus BullMQ Pro. The BullMQ 6 PostgreSQL backend is not supported yet.</li>
+  </ul>
+
+  <h3>Pro</h3>
+  <p class="release-note">One installation, unlimited users, USD 39/month or USD 390/year. A key turns the login on without a restart.</p>
+  <ul>
+    <li><strong>Users and roles</strong> (admin, operator, viewer), enforced on every API call. Users are disabled, never deleted, so the audit history keeps its names.</li>
+    <li><strong>SSO</strong> over OIDC and SAML 2.0, pre-provisioned only, with a password escape hatch so a misconfigured provider cannot lock you out.</li>
+    <li><strong>Alerts</strong> to Slack or any webhook, per queue or per folder.</li>
+    <li><strong>Folders</strong> to group queues the way the team thinks about them.</li>
+    <li><strong>Flows:</strong> the connection-wide graph of which queue feeds which.</li>
+    <li><strong>Audit log:</strong> append-only, with actor, target, detail and CSV export. Job payloads are never recorded.</li>
+  </ul>
+
+  <h3>Performance, because that is the whole point</h3>
+  <ul>
+    <li>No <code>KEYS</code>, no unbounded scans. One Lua round trip per read, pipelined per queue, every access touching a single queue&rsquo;s keys so Redis Cluster works.</li>
+    <li>Payloads are truncated inside Redis and sizes are checked before data is read. On 1&nbsp;MB payloads a page of 200 jobs costs 7&nbsp;ms of Redis time, a search 8&nbsp;ms.</li>
+    <li>Queue discovery finds queues with a live worker at once and covers any keyspace over successive passes.</li>
+    <li>Writes go through the official <code>bullmq</code> client. Bullpane never reimplements its Lua.</li>
+  </ul>
+</article>
+
+<p class="lead-sm" style="margin-top:40px">Something missing, or a change you would like to see? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

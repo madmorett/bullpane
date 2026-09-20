@@ -1,0 +1,79 @@
+# Bullpane — company trial (bundled MySQL).
+#
+# Metabase-style first run: bring it up, open it, and the app walks you through
+# creating the first admin and adding your first Redis connection. Nothing is
+# seeded; no credentials live in this file.
+#
+#   cp .env.company.example .env      # then set SESSION_SECRET
+#   docker compose -f docker-compose.company.yml up -d --build
+#   open http://localhost:3000
+#
+# Using your own MySQL / RDS instead of the bundled one? Add the override:
+#
+#   docker compose -f docker-compose.company.yml -f docker-compose.external-db.yml up -d --build
+#
+# NOTE: MySQL here stores the DASHBOARD's own data (users, connections, folders,
+# alerts). Your BullMQ Redis is added through the UI after login and never
+# appears in this file.
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    image: bullpane:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Where the dashboard keeps its own data. If you change MYSQL_PASSWORD,
+      # set DATABASE_URL to match (compose cannot nest variable defaults).
+      DATABASE_URL: ${DATABASE_URL:-mysql://bullpane:bullpane@mysql:3306/bullpane}
+
+      # REQUIRED. Signs session cookies.  openssl rand -hex 32
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env — openssl rand -hex 32}
+
+      # The URL people use to reach this. Alert links point here.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+
+      # Pro license. Empty = free edition. Can also be pasted in Settings → License.
+      BULLPANE_LICENSE_KEY: ${BULLPANE_LICENSE_KEY:-}
+
+      # Start read-only against production: every write is refused with 423,
+      # reads are untouched. Flip to false once you trust it.
+      BULLPANE_READ_ONLY: ${BULLPANE_READ_ONLY:-true}
+
+      # Performance knobs — raise the TTLs to make it quieter on a busy Redis.
+      BULLPANE_QUEUE_DISCOVERY_TTL: ${BULLPANE_QUEUE_DISCOVERY_TTL:-30}
+      BULLPANE_JOB_PREVIEW_BYTES: ${BULLPANE_JOB_PREVIEW_BYTES:-2048}
+      BULLPANE_ALERTS_INTERVAL: ${BULLPANE_ALERTS_INTERVAL:-15}
+      BULLPANE_AUDIT_RETENTION_DAYS: ${BULLPANE_AUDIT_RETENTION_DAYS:-365}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: bullpane
+      MYSQL_USER: bullpane
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-bullpane}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    # Deliberately not published to the host: only the app needs it.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mysql-data:

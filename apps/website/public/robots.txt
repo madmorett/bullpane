@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /thanks
+
+Sitemap: https://bullpane.com/sitemap.xml
+
+# Machine-readable summary of the product for AI assistants: https://bullpane.com/llms.txt

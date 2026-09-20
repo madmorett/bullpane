@@ -1,0 +1,25 @@
+node_modules
+dist
+.env
+# any real .env (.env.trial, .env.production, ...), while keeping the templates
+.env.*
+!.env.example
+!.env.company.example
+*.local
+.DS_Store
+coverage
+.turbo
+apps/web/dist
+apps/server/public
+keys/
+*.tsbuildinfo
+
+# --- Nothing in here goes to git ---
+# Customer configuration, signed license keys, real endpoints and IPs.
+# The repository may become open source; this directory never does.
+private/
+keys/
+*.pem
+
+# local `wrangler dev` cache (miniflare)
+apps/website/.wrangler/

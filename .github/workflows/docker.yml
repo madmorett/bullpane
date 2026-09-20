@@ -1,0 +1,53 @@
+# Builds the Bullpane dashboard image (Dockerfile target `runner`) and pushes it
+# to GitHub Container Registry.
+#   main            → ghcr.io/<owner>/bullpane:edge
+#   tag v1.2.3      → ghcr.io/<owner>/bullpane:1.2.3, :1.2, :latest
+# Make the package public once (GitHub → Packages → bullpane → Package settings →
+# Change visibility) so `docker pull` works without a token, as bullpane.com promises.
+name: Docker image
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+# Two pushes in quick succession used to race on the shared build cache
+# ("error writing layer blob: not_found"); one build at a time, newest wins.
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/bullpane
+          tags: |
+            type=raw,value=edge,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Dockerfile's last stage is `simulator`; without this the published
+          # image is the traffic generator instead of the dashboard.
+          target: runner
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
