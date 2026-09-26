@@ -46,6 +46,7 @@ import type {
   SsoLoginOptions,
   SsoProvider,
   SsoSettings,
+  SsoSettingsInput,
   SsoTestResult,
   UpdateSsoProviderInput,
   RedisServerInfo,
@@ -1078,7 +1079,7 @@ export function useTestSsoProvider() {
 export function useSetSsoSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: SsoSettings) => api.put<SsoSettings>("/sso/settings", input),
+    mutationFn: (input: SsoSettingsInput) => api.put<SsoSettings>("/sso/settings", input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.ssoSettings });
       void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });

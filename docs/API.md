@@ -375,7 +375,7 @@ edition gets `402 { error: "pro_required", feature: "sso" }` and a non-admin get
 | PATCH | `/api/sso/providers/:id` | `config` merges into the stored one, so the issuer can be fixed without re-typing the secret. Omit `clientSecret` to keep it; an empty string is refused (400) rather than silently clearing a working secret. `kind` is immutable. |
 | DELETE | `/api/sso/providers/:id` | 409 when it is the last enabled provider and `requireSso` is on. |
 | POST | `/api/sso/providers/:id/test` | Discovery only, performs no login. A failure is `200 { ok: false, message }` — a bad issuer is information for the form, not a server error. |
-| GET | `/api/sso/settings` · PUT | `{ requireSso: boolean }`. Turning it on with no enabled provider is 409. |
+| GET | `/api/sso/settings` · PUT | `{ requireSso, autoProvision, autoProvisionDomains: string[] }`. `PUT` takes any subset. `requireSso: true` with no enabled provider is 409; `autoProvision: true` with no domain (or removing the last domain while it is on) is 409. Domains are lower-cased, a leading `@` is dropped, and anything that is not a hostname is 400. |
 | GET | `/api/sso/metadata` | SAML SP metadata XML, so the IdP can be configured by file upload. |
 
 **The login flow** — unauthenticated by necessity, and **not** wrapped in
@@ -390,7 +390,7 @@ edition gets `402 { error: "pro_required", feature: "sso" }` and a non-admin get
 
 Every refusal is a `302` to `/login?sso_error=<one sentence>` — the user is in a
 browser mid-redirect. The detail goes to the log and the audit trail
-(`auth.sso_login`, `auth.sso_denied`), never to the URL.
+(`auth.sso_login`, `auth.sso_denied`, `auth.sso_provisioned`), never to the URL.
 
 Users: `POST /api/users` now takes `password` as **optional**. Omitted → NULL
 `password_hash` → an SSO-only account that cannot sign in with a password at all,

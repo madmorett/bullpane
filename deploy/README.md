@@ -31,7 +31,7 @@ docker compose --env-file .env up -d app
 docker compose --env-file .env logs -f app     # ctrl-C once it says "Bullpane <version>"
 ```
 
-Pin the version you want in `.env` (`IMAGE=ghcr.io/madmorett/bullpane:0.1.0`)
+Pin the version you want in `.env` (`IMAGE=ghcr.io/madmorett/bullpane:0.2.0`)
 rather than tracking `:latest`, so an update is a decision and not a surprise
 on the next `pull`. `docker image prune` afterwards reclaims the old layers.
 

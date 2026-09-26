@@ -280,7 +280,8 @@ export interface SetupStatus {
  * somebody is; it does not decide that they get a Bullpane account, nor which
  * role. Login resolves the asserted email against an existing `users` row and
  * refuses when there is none (audit action `auth.sso_denied`). Consequence the
- * admin must know: inviting the person in Users & roles is still step one.
+ * admin must know: inviting the person in Users & roles is still step one —
+ * unless they opt into domain-restricted auto-provisioning (see `SsoSettings`).
  */
 export const SSO_KINDS = ["oidc", "saml"] as const;
 export type SsoKind = (typeof SSO_KINDS)[number];
@@ -402,10 +403,41 @@ export interface SsoLoginOptions {
   passwordEscapeHatch: "admins" | "all" | "none";
 }
 
+/**
+ * An email domain for SSO auto-provisioning: lower-case, no "@", at least one
+ * dot. `monest.com.br` matches `ana@monest.com.br`, never a subdomain.
+ */
+export const ssoDomainSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .transform((d) => d.replace(/^@/, ""))
+  .pipe(z.string().regex(/^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, "Enter a domain like example.com"));
+
+/** Every field optional: the UI flips one switch at a time. */
 export const ssoSettingsSchema = z.object({
-  requireSso: z.boolean(),
+  requireSso: z.boolean().optional(),
+  autoProvision: z.boolean().optional(),
+  autoProvisionDomains: z.array(ssoDomainSchema).max(50).optional(),
 });
-export type SsoSettings = z.infer<typeof ssoSettingsSchema>;
+export type SsoSettingsInput = z.infer<typeof ssoSettingsSchema>;
+
+/**
+ * The one opt-in exception to "no just-in-time provisioning": with
+ * `autoProvision` on, somebody the IdP authenticates whose email is in one of
+ * `autoProvisionDomains` gets a `viewer` account on first sign-in instead of
+ * being refused. The domain list is mandatory — a Google OIDC client accepts
+ * every Google account on the planet, so "anyone the IdP knows" alone would
+ * mean anyone. The role is fixed at viewer: an admin promotes by hand.
+ */
+export interface SsoSettings {
+  requireSso: boolean;
+  autoProvision: boolean;
+  autoProvisionDomains: string[];
+}
+
+/** Role an auto-provisioned SSO account starts with. Read-only on purpose. */
+export const SSO_AUTO_PROVISION_ROLE: Role = "viewer";
 
 /** Result of "test connection" — discovery only, no login performed. */
 export interface SsoTestResult {
@@ -1296,6 +1328,8 @@ export const AUDIT_ACTIONS = [
    * pre-provisioned model, and the admin needs to see it to know who to invite.
    */
   "auth.sso_denied",
+  /** First SSO sign-in created a viewer account (auto-provisioning is on). */
+  "auth.sso_provisioned",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -1342,6 +1376,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "auth.logout": "signed out",
   "auth.sso_login": "signed in with SSO",
   "auth.sso_denied": "was refused by SSO (no account)",
+  "auth.sso_provisioned": "joined through SSO (auto-provisioned)",
 };
 
 /**
@@ -1368,6 +1403,8 @@ export const AUDIT_HIGH_RISK_ACTIONS: readonly AuditAction[] = [
   "sso.provider_create",
   "sso.provider_update",
   "sso.provider_delete",
+  // A new account appeared without an admin creating it.
+  "auth.sso_provisioned",
 ];
 
 export interface AuditEntry {

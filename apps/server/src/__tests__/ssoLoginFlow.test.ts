@@ -8,9 +8,12 @@
  * admin has not invited that email. Getting this wrong would silently turn
  * "anybody with a Google account" into "anybody with a Bullpane login", which
  * is the worst possible failure for a dashboard sitting on production queues.
+ *
+ * The one exception is opt-in and fenced (admin toggle + mandatory domain
+ * list, viewer only) and has its own block at the bottom of this file.
  */
 import { createSign, generateKeyPairSync } from "node:crypto";
-import { PRO_FEATURES, type ProFeature } from "@bullpane/shared";
+import { PRO_FEATURES, type ProFeature, type SsoSettings } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../app";
@@ -109,6 +112,8 @@ function fakeDb(users: unknown[], inserted: Record<string, unknown[]>) {
     insert: (t: unknown) => ({
       values(v: Record<string, unknown>) {
         (inserted[tableName(t)] ??= []).push(v);
+        // An auto-provisioned user must be readable back by UsersService.create.
+        if (tableName(t) === "users") users.push(v);
         const p = Promise.resolve();
         return Object.assign(p, { onDuplicateKeyUpdate: () => Promise.resolve() });
       },
@@ -118,7 +123,7 @@ function fakeDb(users: unknown[], inserted: Record<string, unknown[]>) {
   } as unknown as Db;
 }
 
-async function build(users: unknown[]) {
+async function build(users: unknown[], sso?: Partial<SsoSettings>) {
   const inserted: Record<string, unknown[]> = {};
   const config = loadConfig({ SESSION_SECRET, PUBLIC_URL: "https://bull.acme.test", DEMO_MODE: "false" }, { warn: () => undefined });
   const app = await buildApp({
@@ -136,6 +141,10 @@ async function build(users: unknown[]) {
     pricing: { monthlyUsd: 19, yearlyUsd: 149 },
     checkoutUrl: "",
   });
+  // The fake db ignores WHERE, so settings are stubbed at the service instead.
+  if (sso) {
+    vi.spyOn(app.ctx.sso, "getSettings").mockResolvedValue({ requireSso: false, autoProvision: false, autoProvisionDomains: [], ...sso });
+  }
   await app.ready();
   return { app, inserted };
 }
@@ -418,5 +427,77 @@ describe("OIDC round trip", () => {
     expect(res.headers.location).toBe("/");
     expect((inserted["sessions"] ?? [])[0]).toMatchObject({ userId: "u-dev" });
     await app.close();
+  });
+
+  describe("auto-provisioning (opt-in)", () => {
+    const AUTO: Partial<SsoSettings> = { autoProvision: true, autoProvisionDomains: ["acme.test", "other.test"] };
+
+    async function callback(app: FastifyInstance) {
+      const start = await app.inject({ method: "GET", url: "/api/auth/sso/p-oidc/start" });
+      const authorizeUrl = new URL(String(start.headers.location));
+      currentNonce = authorizeUrl.searchParams.get("nonce") as string;
+      const state = authorizeUrl.searchParams.get("state") as string;
+      const setCookie = start.headers["set-cookie"];
+      const cookieHeader = (Array.isArray(setCookie) ? setCookie : [String(setCookie)]).map((c) => c.split(";")[0]).join("; ");
+      return app.inject({
+        method: "GET",
+        url: `/api/auth/sso/p-oidc/callback?code=THE-CODE&state=${encodeURIComponent(state)}`,
+        headers: { cookie: cookieHeader },
+      });
+    }
+
+    it("creates a password-less VIEWER for an allowed domain and signs them in", async () => {
+      claimsOverride = { email: "New.Person@ACME.test", name: "New Person", email_verified: true };
+      const { app, inserted } = await build([], AUTO);
+      const res = await callback(app);
+
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toBe("/");
+      expect(String(res.headers["set-cookie"])).toContain("bullpane_session=");
+      const created = (inserted["users"] ?? []) as Record<string, unknown>[];
+      expect(created).toHaveLength(1);
+      expect(created[0]).toMatchObject({ email: "new.person@acme.test", name: "New Person", role: "viewer", passwordHash: null });
+      const session = (inserted["sessions"] ?? [])[0] as Record<string, unknown>;
+      expect(session.userId).toBe(created[0]?.id);
+      const audit = (inserted["audit_log"] ?? []) as Record<string, unknown>[];
+      expect(audit.some((r) => r.action === "auth.sso_provisioned" && r.actorId === created[0]?.id)).toBe(true);
+      await app.close();
+    });
+
+    it("still refuses a domain that is not listed, including look-alikes", async () => {
+      for (const email of ["dev@evil.test", "dev@sub.acme.test", "dev@acme.test.evil.io"]) {
+        claimsOverride = { email };
+        const { app, inserted } = await build([], AUTO);
+        const res = await callback(app);
+        expect(decodeURIComponent(String(res.headers.location))).toMatch(/not set up in Bullpane yet/);
+        expect(inserted["users"]).toBeUndefined();
+        await app.close();
+      }
+    });
+
+    it("refuses an email the IdP marks unverified", async () => {
+      claimsOverride = { email: "dev@acme.test", email_verified: false };
+      const { app, inserted } = await build([], AUTO);
+      const res = await callback(app);
+      expect(decodeURIComponent(String(res.headers.location))).toMatch(/not set up in Bullpane yet/);
+      expect(inserted["users"]).toBeUndefined();
+      await app.close();
+    });
+
+    it("does nothing when the toggle is off, even with domains saved", async () => {
+      const { app, inserted } = await build([], { autoProvision: false, autoProvisionDomains: ["acme.test"] });
+      const res = await callback(app);
+      expect(decodeURIComponent(String(res.headers.location))).toMatch(/not set up in Bullpane yet/);
+      expect(inserted["users"]).toBeUndefined();
+      await app.close();
+    });
+
+    it("keeps a DISABLED account disabled instead of re-provisioning it", async () => {
+      const { app, inserted } = await build([{ ...PROVISIONED, disabledAt: new Date("2025-06-01T00:00:00.000Z") }], AUTO);
+      const res = await callback(app);
+      expect(decodeURIComponent(String(res.headers.location))).toMatch(/has been disabled/);
+      expect(inserted["users"]).toBeUndefined();
+      await app.close();
+    });
   });
 });

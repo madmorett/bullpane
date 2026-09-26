@@ -70,7 +70,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   });
   const sessions = new SessionService(db);
   const users = new UsersService(db);
-  const sso = new SsoService(db, config, new DrizzleSettingsStore(db));
+  const sso = new SsoService(db, config, new DrizzleSettingsStore(db), users);
   const connections = new ConnectionsService(db, pool);
   const folders = new FoldersService(db);
   const health = new HealthService(connections);

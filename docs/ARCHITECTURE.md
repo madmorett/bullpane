@@ -257,6 +257,18 @@ decision. An admin can now create a **password-less account** (`password` omitte
 NULL `password_hash`), so an SSO user has no dormant credential; `verifyPassword`
 refuses a NULL hash outright, so such an account cannot use the password form at all.
 
+**Auto-provisioning is the one opt-in exception, and it is fenced.** Some teams want
+"everyone at the company can look" without inviting forty people. `Settings → SSO`
+has a toggle that, for an asserted email whose domain is in an admin-maintained list,
+creates the account on first sign-in instead of refusing. The fences are what make it
+acceptable: the domain list is mandatory (the server refuses the toggle without one,
+because a Google OIDC client authenticates every Google account), matching is exact on
+the part after the last `@`, an OIDC `email_verified: false` is refused, the role is
+always `viewer` with no password, a disabled row is never re-created, and the login is
+audited as `auth.sso_provisioned` rather than `auth.sso_login` so the trail shows who
+arrived without an invite. Settings live in the `settings` table
+(`sso.auto_provision`, `sso.auto_provision_domains`), not env vars, like `requireSso`.
+
 **The escape hatch is the reason "require SSO" is safe to ship.** The toggle hides the
 password form, but admins keep password access, and `BULLPANE_ALLOW_PASSWORD_LOGIN=true`
 widens that to everyone. Without a way back in, one misconfigured IdP locks a customer

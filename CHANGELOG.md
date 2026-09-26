@@ -11,6 +11,25 @@ The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
+## [0.2.0] — 2026-09-26
+
+### Added
+
+- **SSO auto-provisioning (Pro), opt-in.** `Settings → SSO → Let anyone from your
+  domains sign in`. When somebody your identity provider authenticates has no
+  Bullpane account and their email is in one of the listed domains, their first
+  sign-in creates a password-less **viewer** account instead of being refused.
+  Off by default; the pre-provisioned model is unchanged until an admin turns it on.
+  - The domain list is mandatory: a Google OIDC client accepts every Google
+    account, so the toggle cannot be switched on without at least one domain.
+    Matching is exact (`example.com` does not admit `sub.example.com`).
+  - OIDC tokens with `email_verified: false` are never provisioned.
+  - Disabled accounts stay disabled; the role is always viewer, promote by hand.
+  - New audit action `auth.sso_provisioned`, marked high risk, so the trail
+    shows every account that arrived without an invite.
+- `GET/PUT /api/sso/settings` now carries `autoProvision` and
+  `autoProvisionDomains`; `PUT` accepts any subset of fields.
+
 ## [0.1.0] — 2026-09-13
 
 The first published version. Everything before it was development, run for

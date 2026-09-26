@@ -3,7 +3,18 @@
 <h1>Changelog</h1>
 <p class="updated">Last updated 13 September 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.1.0</code>, <code>:0.1</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.2.0</code>, <code>:0.2</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-2-0">0.2.0</h2>
+    <span class="release-date">26 September 2026</span>
+  </div>
+  <h3>Added</h3>
+  <ul>
+    <li><strong>SSO auto-provisioning (Pro), opt-in.</strong> Turn on &ldquo;Let anyone from your domains sign in&rdquo; under Settings &rarr; SSO and list your company&rsquo;s email domains: somebody your identity provider authenticates gets a password-less <strong>viewer</strong> account on first sign-in instead of being told to ask an admin. Off by default. The domain list is mandatory and matched exactly, unverified OIDC emails are refused, disabled accounts stay disabled, and every account created this way is recorded in the audit log as <code>auth.sso_provisioned</code>.</li>
+  </ul>
+</article>
 
 <article class="release">
   <div class="release-head">

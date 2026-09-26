@@ -115,6 +115,10 @@ export async function authSsoRoutes(app: FastifyInstance): Promise<void> {
     reply: FastifyReply;
     provider: SsoProviderRow;
     email: string | null;
+    /** Display name the IdP asserted; only used when auto-provisioning creates the account. */
+    name?: string | null;
+    /** OIDC `email_verified`; null when the IdP does not say (SAML, Entra). */
+    emailVerified?: boolean | null;
     next?: string;
   }): Promise<FastifyReply> {
     const { request, reply, provider } = args;
@@ -124,7 +128,12 @@ export async function authSsoRoutes(app: FastifyInstance): Promise<void> {
       request.auditDetail({ provider: provider.name, reason: "no_email_in_assertion" });
       return fail(reply, "Your identity provider did not send an email address. Ask an admin to check the attribute mapping.");
     }
-    const user = await app.ctx.sso.resolveUser(args.email);
+    let user = await app.ctx.sso.resolveUser(args.email);
+    let provisioned = false;
+    if (!user) {
+      user = await app.ctx.sso.provisionUser({ email: args.email, name: args.name ?? null, emailVerified: args.emailVerified ?? null });
+      provisioned = user !== null;
+    }
     if (!user) {
       /**
        * The IdP authenticated somebody with no account here. This is the
@@ -154,9 +163,10 @@ export async function authSsoRoutes(app: FastifyInstance): Promise<void> {
     // The audit hook reads the actor from request.user, which the cookie only
     // populates on the next request — same reason as the password login.
     request.user = { ...user, lastLoginAt: now.toISOString() } as User;
-    request.auditTarget({ action: "auth.sso_login" });
-    request.auditDetail({ provider: provider.name, kind: provider.kind });
-    request.log.info({ userId: user.id, provider: provider.id }, "sso login");
+    // A created account is recorded as such, so the trail shows who arrived without an invite.
+    request.auditTarget({ action: provisioned ? "auth.sso_provisioned" : "auth.sso_login" });
+    request.auditDetail({ provider: provider.name, kind: provider.kind, ...(provisioned ? { role: user.role } : {}) });
+    request.log.info({ userId: user.id, provider: provider.id, provisioned }, "sso login");
     return reply.redirect(args.next ?? "/", 302);
   }
 
@@ -277,7 +287,17 @@ export async function authSsoRoutes(app: FastifyInstance): Promise<void> {
             expectedNonce: flow.nonce,
             ...(cfg.emailClaim ? { emailClaim: cfg.emailClaim } : {}),
           });
-          return completeLogin({ request, reply, provider, email: claims.email, ...(flow.next ? { next: flow.next } : {}) });
+          const verified = claims.raw["email_verified"];
+          return completeLogin({
+            request,
+            reply,
+            provider,
+            email: claims.email,
+            name: claims.name,
+            // Some IdPs send the string "true"/"false"; anything else means "not stated".
+            emailVerified: verified === true || verified === "true" ? true : verified === false || verified === "false" ? false : null,
+            ...(flow.next ? { next: flow.next } : {}),
+          });
         }
 
         const body = (request.body ?? {}) as { SAMLResponse?: string; RelayState?: string };
@@ -295,8 +315,7 @@ export async function authSsoRoutes(app: FastifyInstance): Promise<void> {
         const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: body.SAMLResponse });
         if (!profile) return fail(reply, "The identity provider's assertion could not be read.");
         const email = emailFromProfile(profile, app.ctx.sso.samlEmailAttribute(provider.config));
-        void nameFromProfile(profile);
-        return completeLogin({ request, reply, provider, email, ...(flow.next ? { next: flow.next } : {}) });
+        return completeLogin({ request, reply, provider, email, name: nameFromProfile(profile), ...(flow.next ? { next: flow.next } : {}) });
       } catch (err) {
         const publicMessage =
           err instanceof OidcError || err instanceof SamlError

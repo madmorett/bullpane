@@ -29,17 +29,16 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/sso/providers", { preHandler: admin }, async (): Promise<SsoProvider[]> => app.ctx.sso.list());
 
-  app.get("/sso/settings", { preHandler: admin }, async (): Promise<SsoSettings> => ({
-    requireSso: await app.ctx.sso.requireSso(),
-  }));
+  app.get("/sso/settings", { preHandler: admin }, async (): Promise<SsoSettings> => app.ctx.sso.getSettings());
 
   app.put("/sso/settings", { preHandler: adminMutating }, async (request): Promise<SsoSettings> => {
     const input = ssoSettingsSchema.parse(request.body);
-    await app.ctx.sso.setRequireSso(input.requireSso);
+    const settings = await app.ctx.sso.updateSettings(input);
     request.auditTarget({ action: "sso.provider_update" });
-    request.auditDetail({ requireSso: input.requireSso });
-    request.log.info({ requireSso: input.requireSso, by: request.user?.id }, "sso requirement changed");
-    return { requireSso: input.requireSso };
+    // Only the fields that were sent: "turned auto-provisioning on" is the finding.
+    request.auditDetail({ ...input });
+    request.log.info({ changed: Object.keys(input), by: request.user?.id }, "sso settings changed");
+    return settings;
   });
 
   app.post("/sso/providers", { preHandler: adminMutating }, async (request, reply): Promise<SsoProvider> => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy, Plug, Plus, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
 import {
   createSsoProviderSchema,
+  ssoDomainSchema,
   type CreateSsoProviderInput,
   type SsoKind,
   type SsoProvider,
@@ -92,8 +93,9 @@ function SsoManager() {
         <div>
           <h2 className="text-sm font-semibold text-fg">Single sign-on</h2>
           <p className="mt-1 max-w-2xl text-xs text-fg-muted">
-            Let your team sign in with your identity provider. Accounts are not created automatically: add the person under{" "}
-            <span className="text-fg">Users &amp; roles</span> first, then they can sign in with SSO using that same email.
+            Let your team sign in with your identity provider. By default accounts are not created automatically: add the person
+            under <span className="text-fg">Users &amp; roles</span> first, then they can sign in with SSO using that same email.
+            Or turn on <span className="text-fg">auto-provisioning</span> below for your company's email domains.
           </p>
         </div>
         <Button variant="primary" leftIcon={<Plus className="size-4" />} onClick={() => setAdding(true)}>
@@ -233,6 +235,8 @@ function SsoManager() {
         )}
       </div>
 
+      <AutoProvisionCard />
+
       {adding && <AddProviderDialog onClose={() => setAdding(false)} />}
 
       <ConfirmDialog
@@ -261,6 +265,98 @@ function SsoManager() {
           });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * The opt-in exception to "invite first". Domains are edited as one
+ * comma-separated field and saved explicitly; the switch refuses to turn on
+ * while the saved list is empty (the server refuses it too).
+ */
+function AutoProvisionCard() {
+  const settings = useSsoSettings();
+  const setSettings = useSetSsoSettings();
+  const saved = settings.data?.autoProvisionDomains ?? [];
+  const enabled = settings.data?.autoProvision ?? false;
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const text = draft ?? saved.join(", ");
+
+  const saveDomains = () => {
+    setError(null);
+    const parts = text
+      .split(/[\s,]+/)
+      .map((d) => d.trim())
+      .filter((d) => d !== "");
+    const domains: string[] = [];
+    for (const part of parts) {
+      const parsed = ssoDomainSchema.safeParse(part);
+      if (!parsed.success) {
+        setError(`"${part}" is not a domain. Use something like example.com.`);
+        return;
+      }
+      domains.push(parsed.data);
+    }
+    setSettings.mutate(
+      { autoProvisionDomains: domains },
+      {
+        onSuccess: () => {
+          setDraft(null);
+          toast.success("Domains saved");
+        },
+        onError: (err) => setError(errorMessage(err)),
+      },
+    );
+  };
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-fg">Let anyone from your domains sign in</p>
+          <p className="mt-1 max-w-2xl text-xs text-fg-muted">
+            When someone your identity provider authenticates has no Bullpane account yet and their email ends in one of the
+            domains below, create one for them as a <span className="text-fg">viewer</span> instead of refusing. They can look at
+            every queue but change nothing; promote them under Users &amp; roles if they need more. Disabled accounts stay
+            disabled.
+          </p>
+        </div>
+        <Switch
+          checked={enabled}
+          label="Auto-provision SSO accounts"
+          disabled={settings.isLoading || setSettings.isPending}
+          onChange={(value) => {
+            if (value && saved.length === 0) {
+              setError("Save at least one domain first.");
+              return;
+            }
+            setSettings.mutate(
+              { autoProvision: value },
+              {
+                onSuccess: () =>
+                  toast.success(value ? "New SSO users from your domains now get a viewer account" : "SSO accounts must be invited again"),
+                onError: (err) => toast.error(errorMessage(err)),
+              },
+            );
+          }}
+        />
+      </div>
+      <div className="mt-3 flex items-start gap-2">
+        <Input
+          label="Allowed email domains"
+          hint="Comma separated. Exact match: example.com does not include sub.example.com."
+          placeholder="example.com"
+          mono
+          wrapperClassName="flex-1"
+          value={text}
+          onChange={(e) => setDraft(e.target.value)}
+          error={error ?? undefined}
+        />
+        <Button className="mt-5" variant="secondary" disabled={draft === null} loading={setSettings.isPending} onClick={saveDomains}>
+          Save
+        </Button>
+      </div>
     </div>
   );
 }
@@ -324,7 +420,7 @@ function AddProviderDialog({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Add an identity provider"
-      description="Bullpane never creates accounts from SSO — invite people under Users & roles first."
+      description="Unless auto-provisioning is on, invite people under Users & roles first."
       size="md"
       footer={
         <>
