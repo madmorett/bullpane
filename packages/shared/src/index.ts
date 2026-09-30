@@ -989,6 +989,16 @@ export type PauseQueueInput = z.infer<typeof pauseQueueSchema>;
 /** Cap of ids per bulk call. See the comment above. */
 export const BULK_JOB_LIMIT = 500;
 
+/**
+ * What promoting a delayed job did. A delayed job produced by a job scheduler is that
+ * scheduler's next iteration: bullmq computes the iteration after it from that job's own
+ * scheduled time, so promoting it would make the scheduler skip a run. Those are never
+ * promoted; a one-off copy runs now instead and the scheduled iteration stays put.
+ */
+export type PromoteJobResult =
+  | { mode: "promoted" }
+  | { mode: "ran_copy"; jobId: string; schedulerId: string };
+
 export const BULK_JOB_ACTIONS = ["retry", "remove", "promote"] as const;
 export type BulkJobAction = (typeof BULK_JOB_ACTIONS)[number];
 

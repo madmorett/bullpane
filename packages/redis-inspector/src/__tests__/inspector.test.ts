@@ -614,6 +614,59 @@ describe("writes (official bullmq API)", () => {
     const s = await inspector.getQueueStats(["orders"]);
     expect(s.orders.counts.delayed).toBe(2);
   });
+  it("bullmq's own promote of a scheduler job makes the scheduler skip a run", async () => {
+    // Why promoteJob does not call job.promote() for these: the worker computes the next
+    // iteration from the promoted job's scheduled time, so the day it stood for is lost.
+    const daily = q("daily-promote");
+    await daily.upsertJobScheduler("start-imports", { pattern: "40 6 * * *" }, { name: "start-imports" });
+    const [scheduled] = await daily.getDelayed();
+    const scheduledAt = Number(await raw.zscore("bull:daily-promote:repeat", "start-imports"));
+
+    await scheduled.promote();
+    const worker = new Worker("daily-promote", async () => undefined, { connection });
+    workers.push(worker);
+    await waitFor(async () => Number(await raw.zscore("bull:daily-promote:repeat", "start-imports")) !== scheduledAt);
+    await worker.close();
+
+    const nextAt = Number(await raw.zscore("bull:daily-promote:repeat", "start-imports"));
+    expect(nextAt - scheduledAt).toBe(24 * 60 * 60 * 1000);
+  });
+  it("runs a copy instead of promoting a job produced by a job scheduler", async () => {
+    const daily = q("daily-copy");
+    await daily.upsertJobScheduler(
+      "start-imports",
+      { pattern: "40 6 * * *" },
+      { name: "start-imports", data: { source: "cron" }, opts: { attempts: 2 } },
+    );
+    const [scheduled] = await daily.getDelayed();
+    const scheduledAt = Number(await raw.zscore("bull:daily-copy:repeat", "start-imports"));
+
+    const result = await inspector.promoteJob("daily-copy", scheduled.id!);
+
+    expect(result).toMatchObject({ mode: "ran_copy", schedulerId: "start-imports" });
+    const copyId = result.mode === "ran_copy" ? result.jobId : "";
+    expect(copyId).not.toBe(scheduled.id);
+    const copy = await inspector.getJob("daily-copy", copyId);
+    expect(copy).toMatchObject({ name: "start-imports", data: { source: "cron" }, attempts: 2, state: "waiting" });
+    expect((await inspector.getJob("daily-copy", scheduled.id!))!.state).toBe("delayed");
+
+    // processing the copy must leave the scheduler exactly where it was
+    const worker = new Worker("daily-copy", async () => undefined, { connection });
+    workers.push(worker);
+    await waitFor(async () => (await inspector.getJob("daily-copy", copyId))?.state === "completed");
+    await worker.close();
+    expect(Number(await raw.zscore("bull:daily-copy:repeat", "start-imports"))).toBe(scheduledAt);
+    expect((await inspector.getJob("daily-copy", scheduled.id!))!.state).toBe("delayed");
+  });
+  it("only runs a scheduler copy from the delayed state", async () => {
+    const daily = q("daily-state");
+    await daily.upsertJobScheduler("tick", { pattern: "40 6 * * *" }, { name: "tick" });
+    const [scheduled] = await daily.getDelayed();
+    await raw.zrem("bull:daily-state:delayed", scheduled.id!);
+    await raw.zadd("bull:daily-state:failed", Date.now(), scheduled.id!);
+
+    await expect(inspector.promoteJob("daily-state", scheduled.id!)).rejects.toThrow(/cannot_promote_job_in_state_failed/);
+  });
   it("removes a job", async () => {
     const delayed = await inspector.getJobs("orders", "delayed", { start: 0, end: 0, order: "asc" });
     const id = delayed.jobs[0].id;

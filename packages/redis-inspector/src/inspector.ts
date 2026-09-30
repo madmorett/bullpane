@@ -23,6 +23,7 @@ import {
   type JobTreeNode,
   type JobsPage,
   type JobSummary,
+  type PromoteJobResult,
   type QueueCounts,
   type QueueMetrics,
   type RedisServerInfo,
@@ -1165,9 +1166,25 @@ export class RedisInspector implements Inspector {
     await job.remove();
   }
 
-  async promoteJob(queueName: string, jobId: string): Promise<void> {
+  async promoteJob(queueName: string, jobId: string): Promise<PromoteJobResult> {
     const job = await this.getBullJob(queueName, jobId);
-    await job.promote();
+    if (!job.repeatJobKey) {
+      await job.promote();
+      return { mode: "promoted" };
+    }
+    // A job scheduler's delayed job is its next iteration, and the worker computes the one
+    // after it from this job's scheduled time: promoting it would skip a run. Run a copy.
+    const state = await job.getState();
+    if (state !== "delayed") {
+      throw new Error(`cannot_promote_job_in_state_${state}`);
+    }
+    const { repeat, jobId: _jobId, repeatJobKey, prevMillis, delay, timestamp, ...opts } = job.opts as JobsOptions & {
+      repeat?: unknown;
+      repeatJobKey?: string;
+      prevMillis?: number;
+    };
+    const copy = await this.addJob(queueName, job.name, job.data, opts);
+    return { mode: "ran_copy", jobId: copy.id, schedulerId: job.repeatJobKey };
   }
 
   /**

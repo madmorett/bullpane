@@ -22,6 +22,7 @@ import { PageSpinner } from "@/components/ui/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StateBadge, STATE_META } from "@/components/StateBadge";
 import { useNow } from "@/lib/useNow";
+import { jobActionMessage } from "@/lib/jobActionMessage";
 import { useEdition } from "@/edition/useEdition";
 
 type Tab = "data" | "opts" | "returnvalue" | "error" | "logs" | "audit";
@@ -40,8 +41,8 @@ export function JobPage() {
     action.mutate(
       { jobId, action: kind },
       {
-        onSuccess: () => {
-          toast.success(`Job ${jobId} ${kind === "remove" ? "removed" : kind === "retry" ? "retried" : kind === "promote" ? "promoted" : "discarded"}`);
+        onSuccess: (result) => {
+          toast.success(jobActionMessage(jobId, kind, result));
           setConfirm(null);
           if (kind === "remove") navigate(routes.queue(connectionId, queue));
         },

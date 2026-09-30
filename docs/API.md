@@ -48,7 +48,7 @@ Pro column: the feature that gates the route (402 in free edition).
 | GET | /connections/:id/queues/:queue/jobs/:jobId/logs | viewer | | `?start&end` → `{ logs, count }` |
 | DELETE | /connections/:id/queues/:queue/jobs/:jobId | operator | | → `{ ok }` |
 | POST | /connections/:id/queues/:queue/jobs/:jobId/retry | operator | | → `{ ok }` |
-| POST | /connections/:id/queues/:queue/jobs/:jobId/promote | operator | | → `{ ok }` |
+| POST | /connections/:id/queues/:queue/jobs/:jobId/promote | operator | | → `{ ok } & PromoteJobResult` |
 | POST | /connections/:id/queues/:queue/jobs/:jobId/discard | operator | | → `{ ok }` |
 | POST | /connections/:id/queues/:queue/jobs/bulk/retry | operator | | `bulkJobActionSchema` (`{ jobIds }`) → `BulkJobActionResult` |
 | POST | /connections/:id/queues/:queue/jobs/bulk/remove | operator | | `bulkJobActionSchema` → `BulkJobActionResult` |

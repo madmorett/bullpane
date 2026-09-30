@@ -28,6 +28,7 @@ import type {
   JobsPage,
   JobSearchResult,
   JobState,
+  PromoteJobResult,
   QueueCounts,
   QueueMetrics,
   RedisServerInfo,
@@ -298,7 +299,8 @@ export interface Inspector {
   addJob(queueName: string, name: string, data: unknown, opts?: Record<string, unknown>): Promise<{ id: string }>;
   retryJob(queueName: string, jobId: string): Promise<void>;
   removeJob(queueName: string, jobId: string): Promise<void>;
-  promoteJob(queueName: string, jobId: string): Promise<void>;
+  /** Promotes a delayed job, or runs a one-off copy when a job scheduler produced it. */
+  promoteJob(queueName: string, jobId: string): Promise<PromoteJobResult>;
   /**
    * The same single-job action (retry / remove / promote) applied to many ids, ALWAYS
    * through the official bullmq API (`job.retry()` / `job.remove()` / `job.promote()`),

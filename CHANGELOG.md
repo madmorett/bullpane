@@ -20,6 +20,14 @@ written from this file — when you add an entry here, mirror it there
   the UI, works in read-only mode, and a bad entry fails the boot naming the field
   without printing the URL. For installs configured only by environment.
 
+### Fixed
+
+- **Promoting a job scheduler's delayed job no longer skips the next run.**
+  bullmq computes a scheduler's next iteration from the scheduled time of the job
+  that just ran, so promoting a daily job ran tomorrow's iteration today and left
+  tomorrow empty. Promote (single and bulk) now leaves that job in place and runs a
+  one-off copy with the same name, data and options; the toast says so.
+
 ## [0.3.0] — 2026-09-27
 
 ### Added

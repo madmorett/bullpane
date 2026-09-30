@@ -35,6 +35,7 @@ import { QueueAlerts, QueueAlertsPill, useQueueAlerts } from "./QueueAlerts";
 import { HIDE_HINT, HideIcon, useHideQueue } from "@/components/queues/hideQueue";
 import { GroupCombobox } from "./GroupCombobox";
 import { PauseQueueDialog } from "@/components/queues/PauseQueueDialog";
+import { jobActionMessage } from "@/lib/jobActionMessage";
 
 type StateTab = JobState | "groups" | "metrics" | "schedulers";
 
@@ -170,7 +171,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
     jobAction.mutate(
       { jobId, action },
       {
-        onSuccess: () => toast.success(`Job ${jobId}: ${action === "remove" ? "removed" : action === "retry" ? "retried" : action === "promote" ? "promoted" : "discarded"}`),
+        onSuccess: (result) => toast.success(jobActionMessage(jobId, action, result)),
         onError: (e) => toast.error(errorMessage(e)),
       },
     );

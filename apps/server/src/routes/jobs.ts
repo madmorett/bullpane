@@ -10,6 +10,7 @@ import {
   jobTreeQuerySchema,
   type JobsPage,
   listJobsQuerySchema,
+  type PromoteJobResult,
   searchJobsQuerySchema,
 } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
@@ -120,11 +121,17 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  app.post<JobParams>(`${base}/:jobId/promote`, { preHandler: [operator] }, async (request) => {
+  app.post<JobParams>(`${base}/:jobId/promote`, { preHandler: [operator] }, async (request): Promise<{ ok: true } & PromoteJobResult> => {
     const inspector = await app.ctx.connections.getInspector(request.params.id);
-    await withRedis(() => inspector.promoteJob(request.params.queue, request.params.jobId));
-    request.log.info({ queue: request.params.queue, jobId: request.params.jobId, by: request.user?.id }, "job promoted");
-    return { ok: true };
+    const result = await withRedis(() => inspector.promoteJob(request.params.queue, request.params.jobId));
+    if (result.mode === "ran_copy") {
+      request.auditDetail({ ranCopy: result.jobId, schedulerId: result.schedulerId });
+    }
+    request.log.info(
+      { queue: request.params.queue, jobId: request.params.jobId, mode: result.mode, by: request.user?.id },
+      "job promoted",
+    );
+    return { ok: true, ...result };
   });
 
   app.post<JobParams>(`${base}/:jobId/discard`, { preHandler: [operator] }, async (request) => {

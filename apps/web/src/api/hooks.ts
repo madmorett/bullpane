@@ -15,6 +15,7 @@ import type {
   AttentionThresholds,
   BulkJobAction,
   BulkJobActionResult,
+  PromoteJobResult,
   AuditAction,
   AuditPage,
   ConnectionHealth,
@@ -105,6 +106,10 @@ export interface AlertTestResult {
 }
 
 export type JobActionKind = "retry" | "promote" | "remove" | "discard";
+/** `promote` also says whether a scheduler's job ran as a copy (see PromoteJobResult). */
+export type JobActionResponse = { ok: boolean } & Partial<Record<"jobId" | "schedulerId", string>> & {
+  mode?: PromoteJobResult["mode"];
+};
 export type QueueActionKind =
   | "pause"
   | "resume"
@@ -434,10 +439,10 @@ export function useJobLogs(
 export function useJobAction(cid: string, queue: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ jobId, action }: { jobId: string; action: JobActionKind }) => {
+    mutationFn: ({ jobId, action }: { jobId: string; action: JobActionKind }): Promise<JobActionResponse> => {
       const base = `${queuePath(cid, queue)}/jobs/${seg(jobId)}`;
-      if (action === "remove") return api.del<{ ok: boolean }>(base);
-      return api.post<{ ok: boolean }>(`${base}/${action}`);
+      if (action === "remove") return api.del<JobActionResponse>(base);
+      return api.post<JobActionResponse>(`${base}/${action}`);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.queue(cid, queue) });
