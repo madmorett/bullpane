@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bullpane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #07090c; --s1: #0f1217; --s2: #151920; --s3: #1c212a; --line: #232935; --line2: #303846;
+    --fg: #e8ebf1; --mut: #9aa3b2; --sub: #626b7a;
+    --blue: #5b8def; --ok: #3fb950; --bad: #f85149; --wait: #e3b341; --act: #58a6ff; --del: #a371f7; --amber: #f5a524; --pro: #b48cff;
+    --mono: "JetBrains Mono", ui-monospace, monospace; --sans: "Inter", system-ui, sans-serif;
+    --display: "Bricolage Grotesque", system-ui, sans-serif; --serif: "Instrument Serif", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  #stage { position: relative; width: 1600px; height: 900px; overflow: hidden; color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased;
+    background: radial-gradient(1000px 600px at 70% 0%, rgba(91,141,239,.10), transparent 60%), radial-gradient(800px 500px at 0% 100%, rgba(245,165,36,.07), transparent 60%), var(--bg); }
+  #grid-bg { position: absolute; inset: -200px; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 48px 48px; }
+  .abs { position: absolute; }
+  .mono { font-family: var(--mono); }
+  canvas { position: absolute; inset: 0; pointer-events: none; }
+
+  /* kinetic words */
+  #word { position: absolute; left: 64px; bottom: 54px; z-index: 50; font-family: var(--display); font-weight: 750; font-size: 88px; letter-spacing: -.035em; line-height: 1; white-space: nowrap; }
+  #word .w { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: 6px; margin-right: 22px; }
+  #word .w span { display: inline-block; }
+  #word em { font-family: var(--serif); font-weight: 400; color: var(--amber); letter-spacing: -.01em; }
+  #scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 300px; z-index: 49; background: linear-gradient(to top, rgba(7,9,12,.92), rgba(7,9,12,0)); pointer-events: none; }
+
+  /* cards (overview) */
+  #world { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .card { position: absolute; width: 352px; height: 178px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); padding: 16px 18px; overflow: hidden; }
+  .card .nm { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .card .cn { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip { font-family: var(--mono); font-size: 12px; padding: 2px 7px; border-radius: 6px; border: 1px solid; }
+  .c-ok { color: var(--ok); border-color: rgba(63,185,80,.35); background: rgba(63,185,80,.08); }
+  .c-act { color: var(--act); border-color: rgba(88,166,255,.35); background: rgba(88,166,255,.08); }
+  .c-wait { color: var(--wait); border-color: rgba(227,179,65,.35); background: rgba(227,179,65,.08); }
+  .c-bad { color: var(--bad); border-color: rgba(248,81,73,.4); background: rgba(248,81,73,.1); }
+  .bar { position: absolute; left: 18px; right: 120px; bottom: 30px; height: 5px; border-radius: 3px; background: var(--s3); overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ok); border-radius: 3px; }
+  .bar b { position: absolute; top: 0; bottom: 0; background: var(--bad); }
+  .pct { position: absolute; left: 18px; bottom: 9px; font-family: var(--mono); font-size: 12px; color: var(--mut); }
+  .spark { position: absolute; right: 16px; bottom: 14px; width: 92px; height: 34px; }
+  .attn { position: absolute; right: 16px; top: 38px; font-family: var(--mono); font-size: 11px; color: #fff; background: var(--bad); padding: 3px 8px; border-radius: 999px; }
+  #topbar { position: absolute; left: 60px; right: 60px; top: 40px; height: 56px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); display: flex; align-items: center; gap: 28px; padding: 0 22px; font-family: var(--mono); font-size: 16px; color: var(--mut); }
+  #topbar b { font-weight: 600; }
+
+  /* queue view */
+  #queue { position: absolute; border-radius: 16px; background: var(--s1); border: 1px solid var(--line); overflow: hidden; }
+  #qin { position: absolute; left: 0; top: 0; width: 1480px; height: 800px; padding: 28px 32px; transform-origin: 0 0; }
+  .qh { display: flex; align-items: baseline; gap: 14px; }
+  .qh .n { font-family: var(--mono); font-size: 30px; font-weight: 600; }
+  .tabs { display: flex; gap: 22px; margin-top: 22px; font-size: 17px; color: var(--mut); border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .tabs .t { display: flex; align-items: center; gap: 8px; }
+  .tabs .t i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .tabs .t b { font-family: var(--mono); font-weight: 500; font-size: 14px; background: var(--s3); padding: 1px 7px; border-radius: 6px; color: var(--fg); }
+  .tabs .t.on { color: var(--fg); }
+  .search { margin-top: 18px; display: flex; gap: 12px; }
+  .sbox { flex: 1; height: 48px; border-radius: 10px; border: 1px solid var(--line2); background: var(--s2); display: flex; align-items: center; padding: 0 16px; font-size: 17px; color: var(--sub); }
+  .sbox .caret { width: 2px; height: 22px; background: var(--fg); margin-left: 2px; }
+  .btn { height: 48px; padding: 0 20px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; }
+  .btn.blue { background: var(--blue); color: #fff; }
+  .rows { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 44px 90px 180px 1fr 100px; overflow: hidden; align-items: center; gap: 10px; padding: 0 18px; height: 50px; border-top: 1px solid var(--line); font-size: 16px; }
+  .row:first-child { border-top: 0; }
+  .row.h { background: var(--s2); color: var(--sub); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; height: 42px; }
+  .cb { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid var(--line2); display: grid; place-items: center; }
+  .cb.on { background: var(--blue); border-color: var(--blue); }
+  .cb.on::after { content: ""; width: 9px; height: 5px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: rotate(-45deg) translate(1px, -1px); }
+  .row .id { font-family: var(--mono); color: var(--blue); }
+  .row .er { font-family: var(--mono); font-size: 14px; color: #c9d1dd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .er .k { color: #7fa6e8; } .row .er .s { color: #9fd59f; }
+  .row .er mark { background: transparent; color: inherit; border-radius: 4px; padding: 1px 2px; }
+  .row .er mark.hit { background: rgba(245,165,36,.35); color: #ffe2a8; box-shadow: 0 0 0 1px rgba(245,165,36,.6); }
+  .hits { font-family: var(--mono); font-size: 15px; color: var(--amber); margin-left: 14px; white-space: nowrap; }
+  .row .ag { color: var(--sub); text-align: right; font-size: 14px; }
+  .sel { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 18px; background: rgba(91,141,239,.12); border-bottom: 1px solid var(--line); font-size: 16px; }
+  .toast { position: absolute; right: 40px; bottom: 40px; padding: 14px 20px; border-radius: 12px; background: #11281a; border: 1px solid rgba(63,185,80,.5); color: #b7f5c4; font-size: 17px; font-weight: 500; display: flex; gap: 10px; align-items: center; }
+
+  /* flow graph */
+  .node { position: absolute; width: 268px; padding: 14px 16px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line2); }
+  .node .nm { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .node .ct { display: flex; gap: 10px; margin-top: 8px; font-family: var(--mono); font-size: 13px; color: var(--mut); }
+  .panel { position: absolute; border-radius: 16px; background: var(--s1); border: 1px solid var(--line); overflow: hidden; }
+  .ph { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--mut); letter-spacing: .06em; text-transform: uppercase; }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 999px; letter-spacing: .04em; text-transform: none; }
+  .b-pro { color: var(--pro); border: 1px solid rgba(180,140,255,.5); background: rgba(180,140,255,.12); }
+
+  /* groups */
+  .lane { position: absolute; left: 0; right: 0; height: 64px; display: flex; align-items: center; border-top: 1px solid var(--line); }
+  .lane .ln { width: 210px; padding-left: 22px; font-family: var(--mono); font-size: 15px; color: var(--blue); }
+  .lane .st { width: 120px; }
+  .lane .track { position: absolute; left: 360px; right: 30px; top: 18px; height: 28px; border-radius: 8px; background: var(--s2); overflow: hidden; }
+  .tok { position: absolute; top: 6px; width: 16px; height: 16px; border-radius: 5px; }
+
+  /* alert */
+  .notif { position: absolute; width: 470px; border-radius: 14px; background: #141821; border: 1px solid var(--line2); padding: 16px 18px; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .notif .ttl { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+  .notif .bd { margin-top: 6px; font-size: 15px; color: var(--mut); line-height: 1.45; }
+  .firing { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; background: var(--bad); padding: 3px 9px; border-radius: 999px; }
+  .okpill { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ok); background: rgba(63,185,80,.14); border: 1px solid rgba(63,185,80,.4); padding: 3px 9px; border-radius: 999px; }
+
+  /* security */
+  .role { position: absolute; width: 300px; height: 150px; border-radius: 16px; background: var(--s1); border: 1px solid var(--line2); padding: 20px 22px; }
+  .role .rn { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  .role .rl { margin-top: 12px; font-size: 15px; color: var(--mut); line-height: 1.7; }
+  .role .rl s { color: var(--sub); }
+  .denied { position: absolute; padding: 12px 18px; border-radius: 12px; background: #2a1214; border: 1px solid rgba(248,81,73,.6); color: #ffb3ae; font-family: var(--mono); font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .arow { display: grid; grid-template-columns: 90px 200px 1fr 120px 90px; gap: 10px; align-items: center; height: 46px; padding: 0 18px; border-top: 1px solid var(--line); font-size: 15px; }
+  .arow .who { font-weight: 600; }
+  .arow .tg { font-family: var(--mono); font-size: 13px; color: var(--blue); }
+  .res { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; justify-self: start; }
+  .res.ok { color: var(--ok); background: rgba(63,185,80,.12); }
+  .res.no { color: #fff; background: var(--bad); }
+  .via { font-family: var(--mono); font-size: 12px; color: var(--amber); border: 1px solid rgba(245,165,36,.5); background: rgba(245,165,36,.1); padding: 2px 8px; border-radius: 999px; }
+  .sso { position: absolute; font-family: var(--mono); font-size: 18px; font-weight: 600; padding: 10px 18px; border-radius: 12px; border: 1px solid var(--line2); background: var(--s2); }
+
+  /* mcp */
+  .chat { position: absolute; border-radius: 16px; background: #14161c; border: 1px solid var(--line); padding: 22px; }
+  .bub { font-size: 19px; line-height: 1.45; }
+  .bub.u { margin-left: auto; width: fit-content; max-width: 90%; background: #262a33; padding: 12px 16px; border-radius: 16px 16px 4px 16px; }
+  .who2 { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--mut); font-weight: 600; margin: 16px 0 6px; }
+  .aimk { width: 18px; height: 18px; border-radius: 6px; background: linear-gradient(135deg, #d97757, #c4623f); }
+  .tool { display: inline-flex; gap: 10px; align-items: center; font-family: var(--mono); font-size: 15px; color: var(--mut); background: #191c23; border: 1px solid var(--line); padding: 9px 12px; border-radius: 10px; margin-top: 12px; }
+
+  /* finale */
+  #finale { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 40; }
+  .logo { display: inline-flex; align-items: center; gap: 16px; font-family: var(--display); font-weight: 750; font-size: 64px; letter-spacing: -.03em; }
+  .lm { width: 84px; height: 84px; border-radius: 20px; background: #0b0d10; box-shadow: 0 0 0 1px #353c48, 0 20px 60px rgba(91,141,239,.25); display: grid; place-items: center; }
+  .tag2 { margin-top: 22px; font-family: var(--display); font-size: 44px; font-weight: 700; letter-spacing: -.025em; }
+  .tag2 em { font-family: var(--serif); font-weight: 400; color: var(--amber); }
+  .meta { margin-top: 18px; font-family: var(--mono); font-size: 20px; color: var(--mut); }
+  .tile { position: absolute; border-radius: 14px; background: var(--s1); border: 1px solid var(--line2); overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid-bg"></div>
+  <div id="world"></div>
+  <canvas id="fx" width="1600" height="900"></canvas>
+  <div id="scrim"></div>
+  <div id="word"></div>
+</div>
+<script>
+// ===========================================================================
+// Engine: everything is a pure function of t (seconds). renderAt(t) draws a frame.
+// ===========================================================================
+const DURATION = 40;
+const W = 1600, H = 900;
+const $ = (s, el = document) => el.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const io = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const out = (x) => 1 - Math.pow(1 - x, 3);
+const expo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+const spring = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.exp(-6.5 * x) * Math.cos(9.5 * x));
+const win = (t, a, b, d = 0.5) => Math.min(out(p(t, a, a + d)), 1 - io(p(t, b - d, b)));
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+const k1 = (n) => (n >= 10000 ? (n / 1000).toFixed(1) + "K" : fmt(n));
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const noise = (seed, x) => { const a = Math.sin(x * 1.7 + seed) * 0.5 + Math.sin(x * 0.63 + seed * 3.1) * 0.35 + Math.sin(x * 3.9 + seed * 0.7) * 0.15; return a; };
+const world = $("#world");
+const fx = $("#fx"), ctx = fx.getContext("2d");
+function el(html, parent = world) { const d = document.createElement("div"); d.innerHTML = html.trim(); const n = d.firstElementChild; parent.appendChild(n); return n; }
+function setT(e, { x = 0, y = 0, s = 1, r = 0, rx = 0, ry = 0, o = 1, blur = 0, z = 0 } = {}) {
+  e.style.transform = `translate3d(${x}px, ${y}px, ${z}px) rotateX(${rx}deg) rotateY(${ry}deg) rotate(${r}deg) scale(${s})`;
+  e.style.opacity = o;
+  e.style.filter = blur ? `blur(${blur}px)` : "";
+  e.style.display = o <= 0.001 ? "none" : "";
+}
+
+// ===========================================================================
+// Kinetic words
+// ===========================================================================
+const WORDS = [
+  { a: 0.8, b: 3.9, html: ["Every", "queue."] },
+  { a: 4.6, b: 8.6, html: ["Every", "number,", "<em>live.</em>"] },
+  { a: 9.4, b: 13.9, html: ["Search", "inside", "the", "<em>payload.</em>"] },
+  { a: 14.4, b: 18.2, html: ["See", "how", "it", "<em>flows.</em>"] },
+  { a: 18.6, b: 21.6, html: ["BullMQ", "Pro,", "<em>first", "class.</em>"] },
+  { a: 22.0, b: 25.8, html: ["Know", "<em>first.</em>"] },
+  { a: 26.2, b: 30.8, html: ["Who", "can.", "<em>Who</em>", "<em>did.</em>"] },
+  { a: 31.2, b: 35.6, html: ["Inside", "your", "<em>AI.</em>"] },
+];
+const wordEl = $("#word");
+let wordIdx = -1;
+function renderWord(t) {
+  const i = WORDS.findIndex((w) => t >= w.a && t < w.b);
+  if (i !== wordIdx) {
+    wordIdx = i;
+    wordEl.innerHTML = i < 0 ? "" : WORDS[i].html.map((h) => `<span class="w"><span>${h}</span></span>`).join("");
+  }
+  $("#scrim").style.opacity = i < 0 ? 0 : win(t, WORDS[i].a - 0.2, WORDS[i].b + 0.1, 0.4);
+  if (i < 0) return;
+  const w = WORDS[i];
+  [...wordEl.querySelectorAll(".w > span")].forEach((s, j) => {
+    const kin = out(p(t, w.a + j * 0.09, w.a + j * 0.09 + 0.45));
+    const kout = io(p(t, w.b - 0.35 + j * 0.04, w.b + j * 0.04));
+    s.style.transform = `translateY(${(1 - kin) * 110 - kout * 110}%)`;
+  });
+}
+
+// ===========================================================================
+// Scene 1–2: overview builds itself, numbers live, one queue blows up
+// ===========================================================================
+const QUEUES = [
+  ["payments.charge", "prod-redis-01", 5002, 94], ["payments.refund", "prod-redis-01", 439, 92], ["payments.webhook-dispatch", "prod-redis-01", 16628, 0],
+  ["notifications.email", "prod-redis-01", 10460, 0], ["notifications.push", "prod-redis-01", 1531, 0], ["notifications.sms", "prod-redis-02", 24596, 5],
+  ["pipeline.ingest", "prod-redis-02", 3999, 0], ["pipeline.transform", "prod-redis-02", 2006, 0], ["pipeline.load", "prod-redis-02", 659, 0],
+  ["media.thumbnails", "prod-redis-02", 8812, 8], ["search.reindex", "prod-redis-02", 1204, 0], ["reports.daily", "prod-redis-02", 31, 0],
+];
+const HOT = 2; // payments.webhook-dispatch
+const GX = 60, GY = 124, CW = 352, CH = 178, GAP = 24;
+const cardPos = (i) => ({ x: GX + (i % 4) * (CW + GAP), y: GY + Math.floor(i / 4) * (CH + GAP) });
+const topbar = el(`<div id="topbar"><span style="color:var(--fg)">ALL QUEUES</span><span><b id="tb-q" style="color:var(--fg)">12</b> queues</span><span style="color:var(--wait)">● <b id="tb-w">0</b> waiting</span><span style="color:var(--act)">● <b id="tb-a">0</b> active</span><span style="color:var(--bad)">● <b id="tb-f">0</b> failed</span><span style="color:var(--ok)">● <b id="tb-c">0</b> completed</span><span style="margin-left:auto;color:var(--ok)">● 2 connections</span></div>`);
+const cards = QUEUES.map((q, i) => {
+  const c = el(`<div class="card"><div class="nm">${q[0]}</div><div class="cn">${q[1]}</div>
+    <div class="chips"><span class="chip c-ok">completed <b class="v-c">0</b></span><span class="chip c-act">active <b class="v-a">0</b></span><span class="chip c-wait">waiting <b class="v-w">0</b></span><span class="chip c-bad">failed <b class="v-f">0</b></span></div>
+    <div class="bar"><i></i><b></b></div><div class="pct">100.0% ok</div>
+    <svg class="spark" viewBox="0 0 92 34"><path fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`);
+  c.style.left = cardPos(i).x + "px"; c.style.top = cardPos(i).y + "px";
+  return c;
+});
+const attn = el(`<span class="attn">needs attention</span>`, cards[HOT]);
+
+function sparkPath(seed, t, hotK) {
+  let d = "";
+  for (let i = 0; i <= 23; i++) {
+    const x = i * 4;
+    let v = 0.55 + 0.32 * noise(seed, i * 0.45 + t * 1.6);
+    if (hotK > 0 && i > 15) v = lerp(v, 0.08 + (i - 15) * 0.0, hotK * ((i - 15) / 8));
+    d += (i ? "L" : "M") + x + " " + (34 - v * 30).toFixed(1);
+  }
+  return d;
+}
+
+function renderOverview(t) {
+  // in from 0.2; out (except HOT) at 9.0–9.6 as the hot card becomes the queue view
+  const leave = p(t, 8.9, 9.6);
+  const vis = t < 9.7;
+  topbar.style.display = vis ? "" : "none";
+  cards.forEach((c) => (c.style.display = vis ? "" : "none"));
+  if (!vis) return;
+  // camera: slight 3D drift through the scene
+  const cam = io(p(t, 3.5, 9));
+  world.style.transform = `perspective(1800px) rotateX(${lerp(0, 8, cam) * (1 - leave)}deg) rotateY(${lerp(0, -5, cam) * (1 - leave)}deg) scale(${lerp(1, 0.98, cam)})`;
+  setT(topbar, { y: (1 - out(p(t, 0.1, 0.8))) * -30, o: out(p(t, 0.1, 0.8)) * (1 - leave) });
+
+  const hotK = clamp(p(t, 5.6, 7.2));
+  let sw = 0, sa = 0, sf = 0, sc = 0;
+  QUEUES.forEach((q, i) => {
+    const c = cards[i];
+    const appear = 0.3 + i * 0.11;
+    const k = spring(p(t, appear, appear + 0.9));
+    const isHot = i === HOT;
+    const o = clamp(p(t, appear, appear + 0.25)) * (isHot ? 1 : 1 - leave);
+    // others fly outward from the hot card as it takes over
+    const hp = cardPos(HOT), cp = cardPos(i);
+    const dx = (cp.x - hp.x) * leave * 0.6, dy = (cp.y - hp.y) * leave * 0.6;
+    setT(c, { y: (1 - k) * 60 + dy, x: dx, s: 0.86 + 0.14 * k, o, blur: leave * 6 * (isHot ? 0 : 1) });
+    // live numbers
+    const live = clamp(p(t, appear + 0.2, appear + 1.6));
+    const rate = 40 + (q[2] % 300);
+    const comp = q[2] * expo(live) + Math.max(0, t - appear - 1) * rate;
+    const act = Math.round(1 + Math.abs(noise(i * 7, t * 2)) * 6);
+    const waitN = Math.round(Math.abs(noise(i * 3, t * 0.8)) * (i === 5 ? 12300 : 40));
+    let failed = q[3] * expo(live);
+    if (isHot) failed = 381 * io(hotK);
+    $(".v-c", c).textContent = k1(comp);
+    $(".v-a", c).textContent = act;
+    $(".v-w", c).textContent = k1(waitN);
+    $(".v-f", c).textContent = fmt(failed);
+    const okPct = isHot ? lerp(100, 97.7, hotK) : 100 - (q[3] / Math.max(1, q[2] + q[3])) * 100;
+    $(".pct", c).textContent = `${okPct.toFixed(1)}% ok · ${k1(comp)} finished`;
+    $(".bar i", c).style.width = `${okPct * expo(live)}%`;
+    $(".bar b", c).style.left = `${okPct}%`; $(".bar b", c).style.width = `${(100 - okPct) * expo(live)}%`;
+    const path = $(".spark path", c);
+    path.setAttribute("d", sparkPath(i * 13, t, isHot ? hotK : 0));
+    path.setAttribute("stroke", isHot && hotK > 0.3 ? "#f85149" : "#3fb950");
+    path.style.strokeDasharray = "200"; path.style.strokeDashoffset = 200 * (1 - out(live));
+    if (isHot) {
+      const pulse = hotK > 0.2 ? 0.5 + 0.5 * Math.sin(t * 7) : 0;
+      c.style.borderColor = hotK > 0.2 ? `rgba(248,81,73,${0.5 + 0.4 * pulse})` : "";
+      c.style.boxShadow = hotK > 0.2 ? `0 0 ${30 + 30 * pulse}px rgba(248,81,73,${0.25 + 0.2 * pulse})` : "";
+      setT(attn, { s: spring(p(t, 6.6, 7.4)), o: clamp(p(t, 6.6, 6.8)) });
+    }
+    sw += waitN; sa += act; sf += failed; sc += comp;
+  });
+  $("#tb-w").textContent = k1(sw); $("#tb-a").textContent = sa; $("#tb-f").textContent = fmt(sf); $("#tb-c").textContent = k1(sc);
+}
+
+// particles: jobs streaming in from the left into the cards (0–5 s)
+function drawParticles(t) {
+  if (t > 6) return;
+  const R = rng(7);
+  for (let n = 0; n < 220; n++) {
+    const start = R() * 4.6, life = 0.9 + R() * 0.6, target = Math.floor(R() * 12), lane = R();
+    const k = (t - start) / life;
+    if (k < 0 || k > 1) continue;
+    const cp = cardPos(target);
+    const tx = cp.x + 30 + R() * 280, ty = cp.y + 50 + R() * 100;
+    const sx = -40, sy = 120 + lane * 700;
+    const e = io(k);
+    const x = lerp(sx, tx, e), y = lerp(sy, ty, e) - Math.sin(e * Math.PI) * 60;
+    const a = Math.sin(k * Math.PI);
+    ctx.fillStyle = target === HOT && t > 5.6 ? `rgba(248,81,73,${a})` : `rgba(${R() > 0.5 ? "91,141,239" : "63,185,80"},${a * 0.9})`;
+    ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// ===========================================================================
+// Scene 3: the hot card becomes the queue; search, select, retry
+// ===========================================================================
+const ROWS = 9;
+const queue = el(`<div id="queue"><div id="qin">
+  <div class="qh"><span class="n">payments.webhook-dispatch</span><span class="mono" style="color:var(--sub);font-size:16px">bull:payments.webhook-dispatch</span></div>
+  <div class="tabs"><span class="t"><i style="background:var(--wait)"></i>waiting <b id="q-w">0</b></span><span class="t"><i style="background:var(--act)"></i>active <b>1</b></span><span class="t"><i style="background:var(--ok)"></i>completed <b id="q-c">16.6K</b></span><span class="t on" style="border-bottom:2px solid var(--bad);padding-bottom:10px;margin-bottom:-13px"><i style="background:var(--bad)"></i>failed <b id="q-f">381</b></span><span class="t"><i style="background:var(--del)"></i>delayed <b>0</b></span></div>
+  <div class="search"><div class="sbox"><span id="q-s">Search job data, name, id or error…</span><span class="caret" id="q-caret"></span><span class="hits" id="q-hits"></span></div><div class="btn blue">Search in data</div></div>
+  <div class="rows" id="q-rows">
+    <div class="sel" id="q-sel"><span><b id="q-n">0</b> selected</span><div class="btn blue" id="q-retry" style="height:38px">↻ Retry <span id="q-rn"></span></div></div>
+    <div class="row h"><span></span><span>id</span><span>name</span><span>data</span><span style="text-align:right">failed</span></div>
+  </div>
+  <div class="toast" id="q-toast">✓ 214 jobs retried · every one of them tenant-stark</div>
+</div></div>`);
+const qRows = [];
+const NAMES = ["refund.created", "charge.succeeded", "refund.created", "charge.failed", "invoice.paid", "refund.created", "charge.succeeded", "charge.succeeded", "refund.created"];
+const TENANTS = ["tenant-stark", "tenant-stark", "tenant-piedpiper", "tenant-stark", "tenant-initech", "tenant-stark", "tenant-stark", "tenant-piedpiper", "tenant-stark"];
+const MATCH = TENANTS.map((x) => x === "tenant-stark");
+for (let i = 0; i < ROWS; i++) {
+  const amt = 1200 + ((i * 7919) % 8800);
+  qRows.push(el(`<div class="row"><span class="cb"></span><span class="id">${16951 - i * 37}</span><span>${NAMES[i]}</span><span class="er">{<span class="k">"eventId"</span>:<span class="s">"evt_${(i * 2654435761 >>> 0).toString(36).slice(0, 8)}"</span>, <span class="k">"tenantId"</span>:<span class="s">"<mark>${TENANTS[i]}</mark>"</span>, <span class="k">"amount"</span>:${amt}, <span class="k">"currency"</span>:<span class="s">"BRL"</span>}</span><span class="ag">${20 + i * 3}s ago</span></div>`, $("#q-rows")));
+}
+function renderQueue(t) {
+  const vis = t >= 8.9 && t < 15.2;
+  queue.style.display = vis ? "" : "none";
+  if (!vis) return;
+  // morph from the hot card rect to the full frame
+  const m = io(p(t, 8.9, 9.8));
+  const hp = cardPos(HOT);
+  const x = lerp(hp.x, 60, m), y = lerp(hp.y, 50, m), w = lerp(CW, 1480, m), h = lerp(CH, 800, m);
+  // leave: shrink into the flow graph's "webhook" node
+  const lv = io(p(t, 14.3, 15.1));
+  const fx2 = lerp(x, 685, lv), fy2 = lerp(y, 380, lv), fw = lerp(w, 268, lv), fh = lerp(h, 80, lv);
+  Object.assign(queue.style, { left: fx2 + "px", top: fy2 + "px", width: fw + "px", height: fh + "px" });
+  queue.style.opacity = 1;
+  const inner = $("#qin");
+  inner.style.transform = `scale(${fw / 1480})`;
+  inner.style.opacity = clamp(p(t, 9.3, 9.8)) * (1 - clamp(p(t, 14.4, 14.8)));
+  queue.style.borderColor = m < 1 ? "rgba(248,81,73,.7)" : "";
+  // search types "410"
+  const q = "tenant-stark";
+  const n = Math.floor(clamp((t - 10.1) * 16, 0, q.length));
+  $("#q-s").textContent = n ? q.slice(0, n) : "Search job data, name, id or error…";
+  $("#q-s").style.color = n ? "var(--fg)" : "";
+  $("#q-caret").style.opacity = t > 10 && t < 11.0 ? 1 : 0;
+  const found = t > 10.95;
+  $("#q-hits").textContent = found ? `${fmt(214 * out(p(t, 10.95, 11.3)))} matches in job data` : "";
+  // rows cascade in, highlight after search, checkboxes wave, retry flies them out
+  const selN = Math.round(214 * clamp(p(t, 11.45, 12.0)));
+  $("#q-n").textContent = selN;
+  $("#q-rn").textContent = selN ? `(${selN})` : "";
+  setT($("#q-sel"), { o: clamp(p(t, 11.45, 11.6)) });
+  const press = t > 12.15 && t < 12.35;
+  $("#q-retry").style.transform = press ? "scale(.94)" : "";
+  $("#q-retry").style.boxShadow = press ? "0 0 0 6px rgba(91,141,239,.35)" : "";
+  let mi = 0;
+  qRows.forEach((r, i) => {
+    const kin = out(p(t, 9.7 + i * 0.06, 10.1 + i * 0.06));
+    const m = MATCH[i];
+    // non-matching rows fold away once the search lands
+    const fold = m ? 0 : io(p(t, 11.0, 11.35));
+    r.style.height = `${50 * (1 - fold)}px`;
+    r.style.borderTopWidth = fold > 0.95 ? "0" : "";
+    const order = m ? mi++ : 0;
+    const fly = m ? io(p(t, 12.35 + order * 0.08, 12.85 + order * 0.08)) : 0;
+    setT(r, { x: fly * 900, y: (1 - kin) * 20, o: kin * (1 - fly) * (1 - fold) });
+    $(".cb", r).classList.toggle("on", m && t > 11.45 + order * 0.08);
+    $(".er mark", r).classList.toggle("hit", m && t > 10.95);
+  });
+  const r = io(p(t, 12.4, 13.4));
+  $("#q-f").textContent = fmt(381 - 214 * r);
+  $("#q-w").textContent = fmt(214 * r * (1 - io(p(t, 13.4, 14.3))));
+  $("#q-c").textContent = k1(16628 + 214 * io(p(t, 13.4, 14.3)));
+  setT($("#q-toast"), { y: (1 - spring(p(t, 13.3, 14.0))) * 40, o: clamp(p(t, 13.3, 13.5)) });
+}
+
+// ===========================================================================
+// Scene 4: flow graph + metrics (14.3–18.6)
+// ===========================================================================
+const NODES = [
+  { id: "api", nm: "api.requests", x: 120, y: 200 },
+  { id: "charge", nm: "payments.charge", x: 400, y: 120 },
+  { id: "refund", nm: "payments.refund", x: 400, y: 330 },
+  { id: "hook", nm: "payments.webhook-dispatch", x: 685, y: 380 },
+  { id: "email", nm: "notifications.email", x: 1010, y: 140 },
+  { id: "sms", nm: "notifications.sms", x: 1010, y: 330 },
+  { id: "ingest", nm: "pipeline.ingest", x: 400, y: 560 },
+  { id: "load", nm: "pipeline.load", x: 685, y: 600 },
+];
+const EDGES = [["api", "charge"], ["api", "refund"], ["charge", "hook"], ["refund", "hook"], ["charge", "email"], ["hook", "sms"], ["hook", "email"], ["api", "ingest"], ["ingest", "load"]];
+const graph = el(`<div class="abs" style="inset:0"><svg class="abs" style="inset:0" width="1600" height="900" id="g-svg"></svg></div>`);
+const nodeEls = {};
+NODES.forEach((n) => {
+  nodeEls[n.id] = el(`<div class="node" style="left:${n.x}px;top:${n.y}px"><div class="nm">${n.nm}</div><div class="ct"><span style="color:var(--ok)">✓ <b class="nc">0</b></span><span style="color:var(--act)">● <b class="na">0</b></span></div></div>`, graph);
+});
+const NX = Object.fromEntries(NODES.map((n) => [n.id, n]));
+const ePath = (a, b) => {
+  const A = NX[a], B = NX[b];
+  const x1 = A.x + 268, y1 = A.y + 40, x2 = B.x, y2 = B.y + 40;
+  const mx = (x1 + x2) / 2;
+  return { d: `M${x1} ${y1} C${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`, x1, y1, x2, y2, mx };
+};
+const svg = $("#g-svg");
+EDGES.forEach(([a, b]) => { const e = ePath(a, b); svg.insertAdjacentHTML("beforeend", `<path d="${e.d}" fill="none" stroke="#3a4560" stroke-width="2" stroke-dasharray="600" stroke-dashoffset="600"/>`); });
+const metric = el(`<div class="panel" style="left:1260px;top:470px;width:300px;height:230px"><div class="ph">throughput <span style="margin-left:auto" class="mono">249/min</span></div><svg width="300" height="180" viewBox="0 0 300 180"><path id="m-area" fill="rgba(63,185,80,.12)"/><path id="m-line" fill="none" stroke="#3fb950" stroke-width="2.5"/><path id="m-fail" fill="none" stroke="#f85149" stroke-width="2"/></svg></div>`, graph);
+function bez(e, k) { const u = 1 - k; return { x: u*u*u*e.x1 + 3*u*u*k*e.mx + 3*u*k*k*e.mx + k*k*k*e.x2, y: u*u*u*e.y1 + 3*u*u*k*e.y1 + 3*u*k*k*e.y2 + k*k*k*e.y2 }; }
+function renderGraph(t) {
+  const vis = t >= 14.2 && t < 18.9;
+  graph.style.display = vis ? "" : "none";
+  if (!vis) return;
+  const lv = io(p(t, 18.2, 18.9));
+  world.style.transform = `perspective(1800px) rotateX(${lerp(0, 6, io(p(t, 14.5, 18.5)))}deg) scale(${lerp(1, 1.04, io(p(t, 14.5, 18.5)))})`;
+  graph.style.opacity = 1 - lv;
+  NODES.forEach((n, i) => {
+    const k = spring(p(t, 14.4 + i * 0.12, 15.2 + i * 0.12));
+    const e = nodeEls[n.id];
+    setT(e, { s: 0.6 + 0.4 * k, o: clamp(p(t, 14.4 + i * 0.12, 14.6 + i * 0.12)) * (n.id === "hook" ? clamp(p(t, 14.9, 15.1)) : 1) });
+    $(".nc", e).textContent = k1((i + 2) * 2310 + Math.max(0, t - 14.5) * (60 + i * 25));
+    $(".na", e).textContent = Math.round(1 + Math.abs(noise(i, t * 2)) * 5);
+  });
+  [...svg.children].forEach((pth, i) => { pth.style.strokeDashoffset = 600 * (1 - io(p(t, 15.0 + i * 0.1, 15.8 + i * 0.1))); });
+  // metrics card draws its lines
+  const mk = io(p(t, 15.6, 17.0));
+  setT(metric, { y: (1 - out(p(t, 15.4, 16))) * 30, o: clamp(p(t, 15.4, 15.7)) });
+  let line = "", area = "M0 180", fail = "";
+  for (let i = 0; i <= 30; i++) {
+    const x = i * 10, v = 0.55 + 0.25 * noise(5, i * 0.4 + t), f = i > 18 && i < 23 ? 0.25 : 0.03;
+    const y = 160 - v * 120, yf = 170 - f * 120;
+    if (x > mk * 300) break;
+    line += (i ? "L" : "M") + x + " " + y.toFixed(1); area += ` L${x} ${y.toFixed(1)}`; fail += (i ? "L" : "M") + x + " " + yf.toFixed(1);
+  }
+  $("#m-line").setAttribute("d", line); $("#m-fail").setAttribute("d", fail); $("#m-area").setAttribute("d", area + ` L${Math.min(300, mk * 300)} 180 Z`);
+}
+function drawEdgeParticles(t) {
+  if (t < 15.6 || t > 18.9) return;
+  const a = (1 - io(p(t, 18.2, 18.9))) * clamp(p(t, 15.6, 16));
+  EDGES.forEach(([s, d], i) => {
+    const e = ePath(s, d);
+    for (let j = 0; j < 4; j++) {
+      const k = ((t - 15.6) * 0.55 + j / 4 + i * 0.13) % 1;
+      const pt = bez(e, k);
+      ctx.fillStyle = s === "hook" || d === "hook" ? `rgba(245,165,36,${a})` : `rgba(91,141,239,${a})`;
+      ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  });
+}
+
+// ===========================================================================
+// Scene 5: BullMQ Pro groups as live lanes (18.5–22)
+// ===========================================================================
+const LANES = [
+  { nm: "tenant-acme", st: "waiting", c: "var(--ok)", speed: 1.0, gap: 0.16 },
+  { nm: "tenant-throttled", st: "limited", c: "var(--del)", speed: 0.35, gap: 0.12, limited: true },
+  { nm: "tenant-pro", st: "maxed", c: "var(--bad)", speed: 1.2, gap: 0.07 },
+  { nm: "tenant-free", st: "waiting", c: "var(--ok)", speed: 0.8, gap: 0.2 },
+  { nm: "tenant-paused", st: "paused", c: "var(--wait)", speed: 0, gap: 0.09 },
+];
+const groups = el(`<div class="panel" style="left:160px;top:150px;width:1280px;height:400px"><div class="ph">sms · groups <span class="badge b-pro">BullMQ Pro</span><span style="margin-left:auto" class="mono">5 groups with jobs</span></div><div id="lanes" style="position:relative;height:340px"></div></div>`);
+LANES.forEach((L, i) => {
+  const lane = el(`<div class="lane" style="top:${i * 66}px"><span class="ln">${L.nm}</span><span class="st"><span class="badge" style="color:${L.c};border:1px solid ${L.c};background:transparent">${L.st}</span></span><div class="track"></div></div>`, $("#lanes"));
+  for (let j = 0; j < 14; j++) el(`<span class="tok" style="background:${L.c}"></span>`, $(".track", lane));
+});
+function renderGroups(t) {
+  const vis = t >= 18.3 && t < 22.2;
+  groups.style.display = vis ? "" : "none";
+  if (!vis) return;
+  world.style.transform = `perspective(1800px) rotateX(${lerp(10, 0, io(p(t, 18.3, 19.3)))}deg)`;
+  const k = spring(p(t, 18.3, 19.2));
+  setT(groups, { y: (1 - k) * 80, s: 0.92 + 0.08 * k, o: clamp(p(t, 18.3, 18.6)) * (1 - io(p(t, 21.6, 22.2))) });
+  [...$("#lanes").children].forEach((lane, i) => {
+    const L = LANES[i];
+    const toks = lane.querySelectorAll(".tok");
+    toks.forEach((tk, j) => {
+      let pos;
+      if (L.speed === 0) pos = 0.62 - j * 0.035;                       // paused: queued up, still
+      else if (L.limited) pos = ((t * 0.12 + j * L.gap) % 1.0) * 0.5 + (Math.floor(t * 2) % 2 ? 0.005 : 0); // trickles
+      else pos = (t * 0.18 * L.speed + j * L.gap) % 1;
+      tk.style.left = `${pos * 100}%`;
+      tk.style.opacity = L.speed === 0 ? 0.55 : 0.95;
+    });
+    if (L.limited) lane.querySelector(".badge").style.boxShadow = `0 0 ${12 + 10 * Math.sin(t * 6)}px rgba(163,113,247,.6)`;
+  });
+}
+
+// ===========================================================================
+// Scene 6: an alert fires and leaves the building (21.8–26)
+// ===========================================================================
+const alertP = el(`<div class="panel" style="left:120px;top:110px;width:860px;height:520px">
+  <div class="ph">failure rate · payments.webhook-dispatch <span style="margin-left:auto" id="al-state"></span></div>
+  <svg width="860" height="460" viewBox="0 0 860 460"><line x1="0" x2="860" y1="170" y2="170" stroke="#f85149" stroke-dasharray="8 8" stroke-width="2" opacity=".8"/><text x="12" y="160" fill="#f85149" font-family="JetBrains Mono" font-size="15">threshold 5% · 10 min</text><path id="al-area" fill="rgba(248,81,73,.10)"/><path id="al-line" fill="none" stroke="#e8ebf1" stroke-width="3"/><circle id="al-dot" r="7" fill="#f85149"/></svg></div>`);
+const notifs = [
+  el(`<div class="notif"><div class="ttl"><span class="firing">FIRING</span>Webhook dispatch failing</div><div class="bd">failure rate <b style="color:var(--fg)">12.4%</b> &gt; 5% over 10 min · payments.webhook-dispatch</div><div class="bd mono" style="font-size:13px;margin-top:10px">→ Slack #payments-oncall</div></div>`),
+  el(`<div class="notif"><div class="ttl"><span class="firing">FIRING</span>SMS backlog</div><div class="bd">waiting <b style="color:var(--fg)">12,304</b> &gt; 1,000 · notifications.sms</div><div class="bd mono" style="font-size:13px;margin-top:10px">→ webhook https://ops.acme.com/hooks</div></div>`),
+];
+function renderAlert(t) {
+  const vis = t >= 21.7 && t < 26.3;
+  alertP.style.display = vis ? "" : "none";
+  notifs.forEach((n) => (n.style.display = vis ? "" : "none"));
+  if (!vis) return;
+  world.style.transform = "none";
+  const out1 = io(p(t, 25.7, 26.3));
+  setT(alertP, { y: (1 - spring(p(t, 21.7, 22.6))) * 60, o: clamp(p(t, 21.7, 22)) * (1 - out1) });
+  const k = clamp(p(t, 22.0, 23.6));
+  let line = "", area = "", lastX = 0, lastY = 0;
+  for (let i = 0; i <= 43; i++) {
+    const x = i * 20; if (x > k * 860) break;
+    const base = 330 + 25 * noise(9, i * 0.5);
+    const y = i > 30 ? lerp(base, 70 + 20 * noise(2, i), clamp((i - 30) / 8)) : base;
+    line += (i ? "L" : "M") + x + " " + y.toFixed(1); area += (i ? "L" : "M") + x + " " + y.toFixed(1); lastX = x; lastY = y;
+  }
+  $("#al-line").setAttribute("d", line); $("#al-area").setAttribute("d", area + ` L${lastX} 460 L0 460 Z`);
+  $("#al-dot").setAttribute("cx", lastX); $("#al-dot").setAttribute("cy", lastY);
+  const fired = t > 23.35;
+  $("#al-state").innerHTML = fired ? '<span class="firing">FIRING</span>' : '<span class="okpill">OK</span>';
+  $("#al-state").style.transform = fired && t < 23.6 ? `scale(${1 + 0.3 * Math.sin(p(t, 23.35, 23.6) * Math.PI)})` : "";
+  alertP.style.boxShadow = fired ? `0 0 ${40 + 20 * Math.sin(t * 6)}px rgba(248,81,73,.25)` : "";
+  notifs.forEach((n, i) => {
+    const a = 23.5 + i * 0.55;
+    const kk = spring(p(t, a, a + 0.8));
+    setT(n, { x: 1030 + (1 - kk) * 600, y: 180 + i * 190, r: (1 - kk) * 8, o: clamp(p(t, a, a + 0.2)) * (1 - out1) });
+  });
+}
+
+// ===========================================================================
+// Scene 7: security — roles, a refused drain, the audit log, SSO (26–31)
+// ===========================================================================
+const ROLES = [
+  { n: "Admin", c: "#c4a7ff", l: "Everything, including drain,<br>obliterate, users and license" },
+  { n: "Operator", c: "#7fb2ff", l: "Retry, promote, remove, pause,<br>alerts and folders" },
+  { n: "Viewer", c: "#9aa3b2", l: "Sees everything.<br><s>Changes nothing.</s>" },
+];
+const roleEls = ROLES.map((r) => el(`<div class="role"><div class="rn" style="color:${r.c}">${r.n}</div><div class="rl">${r.l}</div></div>`));
+const drainBtn = el(`<div class="btn" style="position:absolute;background:#d73a37;color:#fff">⌫ Drain queue</div>`);
+const denied = el(`<div class="denied">🔒 403 · a viewer cannot drain</div>`);
+const audit = el(`<div class="panel" style="left:700px;top:290px;width:840px;height:390px"><div class="ph">audit log <span style="margin-left:auto" class="mono">append-only · CSV</span></div><div id="a-rows"></div></div>`);
+const AROWS = [
+  ["1s ago", "julia@acme.com", "drained the queue", "payments.charge", "no"],
+  ["4s ago", "ana@acme.com", "retried 214 jobs", "payments.webhook", "ok"],
+  ["9s ago", "rafael@acme.com", "paused the queue", "notifications.sms", "ok"],
+  ["21s ago", "ana@acme.com", "added a job", "payments.charge", "ok"],
+  ["1m ago", "ana@acme.com", "signed in with SSO", "Google Workspace", "ok"],
+  ["2m ago", "rafael@acme.com", "created an alert", "SMS backlog", "ok"],
+  ["3m ago", "ana@acme.com", "invited a user", "julia@acme.com", "ok"],
+];
+const aRowEls = AROWS.map((r) => el(`<div class="arow"><span style="color:var(--sub)">${r[0]}</span><span class="who">${r[1]}</span><span>${r[2]}</span><span class="tg">${r[3]}</span><span class="res ${r[4]}">${r[4] === "ok" ? "ok" : "refused"}</span></div>`, $("#a-rows")));
+const ssoEls = ["OIDC", "SAML 2.0", "Google", "Entra ID", "Okta"].map((s) => el(`<div class="sso">${s}</div>`));
+const cursor = el(`<svg class="abs" width="30" height="30" viewBox="0 0 24 24" style="z-index:30"><path d="M4 2 L20 13 L12.5 14.5 L16.5 22 L13.5 23.3 L9.6 15.8 L4 20 Z" fill="#fff" stroke="#000" stroke-width="1.2"/></svg>`);
+function renderSecurity(t) {
+  const vis = t >= 25.9 && t < 31.4;
+  [...roleEls, drainBtn, denied, audit, ...ssoEls, cursor].forEach((e) => (e.style.display = vis ? "" : "none"));
+  if (!vis) return;
+  const lv = io(p(t, 30.8, 31.4));
+  // roles deal in like cards, then slide left to make room for the audit log
+  const slide = io(p(t, 28.0, 28.8));
+  roleEls.forEach((r, i) => {
+    const k = spring(p(t, 26.0 + i * 0.15, 26.8 + i * 0.15));
+    const x0 = 180 + i * 420, y0 = 190, x1 = 60, y1 = 120 + i * 168;
+    setT(r, { x: lerp(x0, x1, slide), y: lerp(y0, y1, slide) + (1 - k) * 200, r: (1 - k) * (i - 1) * 12, s: lerp(1, 0.86, slide), o: clamp(p(t, 26.0 + i * 0.15, 26.2 + i * 0.15)) * (1 - lv) });
+    r.style.transformOrigin = "0 0";
+  });
+  // the viewer tries to drain
+  const vx = lerp(180 + 840, 60, slide), vy = lerp(190, 120 + 336, slide);
+  const db = { x: 1060, y: 470 };
+  setT(drainBtn, { x: db.x, y: db.y, o: clamp(p(t, 26.6, 26.9)) * (1 - io(p(t, 27.9, 28.2))) });
+  const cK = io(p(t, 26.7, 27.2));
+  const press = t > 27.2 && t < 27.4;
+  const shake = t > 27.3 && t < 27.8 ? Math.sin((t - 27.3) * 60) * 10 * (1 - p(t, 27.3, 27.8)) : 0;
+  drainBtn.style.transform += ` translateX(${shake}px) ${press ? "scale(.95)" : ""}`;
+  setT(cursor, { x: lerp(vx + 220, db.x + 120, cK), y: lerp(vy + 150, db.y + 28, cK), o: clamp(p(t, 26.6, 26.8)) * (1 - io(p(t, 27.8, 28.0))) });
+  setT(denied, { x: db.x - 40, y: db.y + 70 + (1 - spring(p(t, 27.3, 28))) * -20, o: clamp(p(t, 27.3, 27.45)) * (1 - io(p(t, 27.9, 28.2))) });
+  roleEls[2].style.borderColor = t > 27.3 && t < 28.2 ? "rgba(248,81,73,.7)" : "";
+  // audit log streams in, newest on top, the refused row lands first
+  setT(audit, { x: (1 - out(p(t, 28.3, 28.9))) * 200, o: clamp(p(t, 28.3, 28.6)) * (1 - lv) });
+  aRowEls.forEach((r, i) => {
+    const a = 28.6 + (AROWS.length - 1 - i) * 0.12;
+    const k = out(p(t, a, a + 0.35));
+    setT(r, { y: (1 - k) * -24, o: k });
+  });
+  aRowEls[0].style.background = t > 29.4 ? `rgba(248,81,73,${0.1 + 0.06 * Math.sin(t * 6)})` : "";
+  // SSO badges drop into a row above the audit log
+  ssoEls.forEach((s, i) => {
+    const a = 29.3 + i * 0.12, k = spring(p(t, a, a + 0.7));
+    setT(s, { x: 700 + i * 168, y: 196 + (1 - k) * -80, o: clamp(p(t, a, a + 0.15)) * (1 - lv) });
+  });
+}
+
+// ===========================================================================
+// Scene 8: MCP — your AI does it, as you (31–36)
+// ===========================================================================
+const chat = el(`<div class="chat" style="left:110px;top:130px;width:640px;height:470px">
+  <div style="display:flex;align-items:center;gap:10px;font-weight:600;color:var(--fg)">Claude <span class="mono" style="margin-left:auto;font-size:14px;color:var(--ok)">bullpane · read &amp; write</span></div>
+  <div class="bub u" id="c-u" style="margin-top:24px"></div>
+  <div id="c-a"><div class="who2"><span class="aimk"></span>Claude</div>
+    <div class="tool" id="c-t1"><span id="c-s1"></span>search_jobs <span style="color:var(--sub)">payments.refund · failed</span></div><br>
+    <div class="tool" id="c-t2"><span id="c-s2"></span>bulk_job_action <span style="color:var(--sub)">retry × 92</span></div>
+    <div class="bub" id="c-r" style="margin-top:14px"></div></div></div>`);
+const mcard = el(`<div class="card" style="width:520px;height:auto;padding:22px 24px"><div class="nm">payments.refund</div><div class="cn">prod-redis-01</div><div class="chips"><span class="chip c-ok" style="font-size:17px;padding:5px 10px">completed <b id="m-c">439</b></span><span class="chip c-wait" style="font-size:17px;padding:5px 10px">waiting <b id="m-w">0</b></span><span class="chip c-bad" style="font-size:17px;padding:5px 10px">failed <b id="m-f">92</b></span></div></div>`);
+const maudit = el(`<div class="panel" style="width:660px"><div class="arow" style="border-top:0;grid-template-columns:200px 1fr 170px"><span class="who">ana@acme.com</span><span>retried 92 jobs in bulk</span><span class="via">via MCP · Claude</span></div></div>`);
+const MU = "Retry the failed refunds.";
+const MR = "Done: 92 refunds are back in waiting. Logged in Bullpane's audit trail, as you.";
+function renderMcp(t) {
+  const vis = t >= 31.0 && t < 36.3;
+  [chat, mcard, maudit].forEach((e) => (e.style.display = vis ? "" : "none"));
+  if (!vis) return;
+  const lv = io(p(t, 35.7, 36.3));
+  setT(chat, { x: (1 - spring(p(t, 31.0, 31.9))) * -200, o: clamp(p(t, 31.0, 31.3)) * (1 - lv) });
+  $("#c-u").textContent = MU.slice(0, Math.floor(clamp((t - 31.4) * 32, 0, MU.length)));
+  $("#c-u").style.opacity = t > 31.4 ? 1 : 0;
+  $("#c-a").style.opacity = clamp(p(t, 32.3, 32.5));
+  $("#c-t1").style.opacity = clamp(p(t, 32.5, 32.7)); $("#c-s1").innerHTML = t < 33.0 ? "◌" : '<span style="color:var(--ok)">✓</span>';
+  $("#c-t2").style.opacity = clamp(p(t, 33.1, 33.3)); $("#c-s2").innerHTML = t < 33.7 ? "◌" : '<span style="color:var(--ok)">✓</span>';
+  $("#c-r").textContent = MR.slice(0, Math.floor(clamp((t - 34.0) * 55, 0, MR.length)));
+  const mk = spring(p(t, 31.3, 32.1));
+  setT(mcard, { x: 840, y: 200 + (1 - mk) * 60, o: clamp(p(t, 31.3, 31.6)) * (1 - lv) });
+  const r = io(p(t, 33.5, 34.3));
+  $("#m-f").textContent = fmt(92 * (1 - r)); $("#m-w").textContent = fmt(92 * r * (1 - io(p(t, 34.4, 35.4)))); $("#m-c").textContent = fmt(439 + 92 * io(p(t, 34.4, 35.4)));
+  mcard.style.boxShadow = t > 33.5 && t < 34.6 ? "0 0 0 2px rgba(63,185,80,.6), 0 0 40px rgba(63,185,80,.2)" : "";
+  const ak = spring(p(t, 34.4, 35.1));
+  setT(maudit, { x: 840 + (1 - ak) * 300, y: 380, o: clamp(p(t, 34.4, 34.6)) * (1 - lv) });
+  maudit.style.boxShadow = t > 34.6 && t < 35.6 ? "0 0 0 2px rgba(245,165,36,.6)" : "";
+}
+
+// ===========================================================================
+// Finale: everything collapses into a bento around the logo (36–40)
+// ===========================================================================
+const finale = el(`<div id="finale"><div class="logo"><span class="lm"><svg viewBox="0 0 32 32" width="58" height="58"><rect x="7" y="8" width="18" height="4" rx="2" fill="#5b8def"/><rect x="7" y="14" width="13" height="4" rx="2" fill="#5b8def" opacity=".75"/><rect x="7" y="20" width="8" height="4" rx="2" fill="#5b8def" opacity=".5"/><circle cx="24" cy="22" r="3" fill="#f85149"/></svg></span>Bullpane</div>
+  <div class="tag2">Every BullMQ queue. <em>One pane.</em></div>
+  <div class="meta">Free, no login · Pro adds roles, SSO, alerts, audit and MCP</div></div>`, $("#stage"));
+const TILES = [
+  { l: "overview", x: 60, y: 60, w: 300, h: 170, c: "var(--ok)" }, { l: "search inside payloads", x: 1240, y: 60, w: 300, h: 170, c: "var(--bad)" },
+  { l: "flows", x: 60, y: 670, w: 300, h: 170, c: "var(--blue)" }, { l: "BullMQ Pro groups", x: 1240, y: 670, w: 300, h: 170, c: "var(--del)" },
+  { l: "alerts → Slack", x: 400, y: 40, w: 250, h: 120, c: "var(--bad)" }, { l: "audit log", x: 950, y: 740, w: 250, h: 120, c: "var(--amber)" },
+  { l: "SSO · roles", x: 950, y: 40, w: 250, h: 120, c: "var(--pro)" }, { l: "MCP", x: 400, y: 740, w: 250, h: 120, c: "var(--amber)" },
+];
+const tileEls = TILES.map((T) => el(`<div class="tile" style="left:${T.x}px;top:${T.y}px;width:${T.w}px;height:${T.h}px"><div style="padding:14px 16px;font-family:var(--mono);font-size:14px;color:${T.c}">● ${T.l}</div><svg width="${T.w}" height="${T.h - 50}" viewBox="0 0 ${T.w} ${T.h - 50}"><path fill="none" stroke="${T.c}" stroke-width="2" opacity=".8"/></svg></div>`, $("#stage")));
+function renderFinale(t) {
+  const k = clamp(p(t, 36.0, 36.6));
+  const lv = io(p(t, 39.3, 40));
+  finale.style.display = t >= 36 ? "" : "none";
+  tileEls.forEach((e) => (e.style.display = t >= 36 ? "" : "none"));
+  if (t < 36) return;
+  world.style.transform = "none";
+  const lk = spring(p(t, 36.3, 37.2));
+  setT(finale, { s: 0.8 + 0.2 * lk, o: clamp(p(t, 36.3, 36.6)) * (1 - lv) });
+  TILES.forEach((T, i) => {
+    const a = 36.0 + i * 0.07, kk = spring(p(t, a, a + 0.9));
+    const cx = 800 - (T.x + T.w / 2), cy = 450 - (T.y + T.h / 2);
+    setT(tileEls[i], { x: cx * (1 - kk), y: cy * (1 - kk), s: 0.3 + 0.7 * kk, o: clamp(p(t, a, a + 0.2)) * (1 - lv) * 0.9 });
+    let d = "";
+    for (let j = 0; j <= 24; j++) { const x = (j / 24) * T.w, y = (T.h - 50) * (0.55 - 0.3 * noise(i * 5, j * 0.5 + t * 1.4)); d += (j ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }
+    tileEls[i].querySelector("path").setAttribute("d", d);
+  });
+}
+
+// ===========================================================================
+window.renderAt = function (t) {
+  t = ((t % DURATION) + DURATION) % DURATION;
+  ctx.clearRect(0, 0, W, H);
+  world.style.transform = "none";
+  $("#grid-bg").style.transform = `translate(${(t * 6) % 48}px, ${(t * 3) % 48}px)`;
+  renderOverview(t);
+  renderQueue(t);
+  renderGraph(t);
+  renderGroups(t);
+  renderAlert(t);
+  renderSecurity(t);
+  renderMcp(t);
+  renderFinale(t);
+  drawParticles(t);
+  drawEdgeParticles(t);
+  renderWord(t);
+  // fade from/to black at the loop point
+  $("#stage").style.opacity = Math.min(clamp(t / 0.3), 1 - io(p(t, DURATION - 0.3, DURATION)) * 0);
+};
+
+window.DURATION = DURATION;
+const q = new URLSearchParams(location.search);
+document.fonts.ready.then(() => {
+  window.ready = true;
+  if (q.has("t")) window.renderAt(Number(q.get("t")));
+  else { const t0 = performance.now(); const loop = () => { window.renderAt((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; loop(); }
+});
+</script>
+</body>
+</html>

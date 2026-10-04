@@ -4,7 +4,10 @@ Two kinds of video, on purpose:
 
 - **For the website** — the product fills the picture, nothing else, because the
   page around it already has the headline and the copy:
-  - `tour.html` → `public/media/tour.mp4` (hero). 1600×900.
+  - `hero.html` → `public/media/hero.mp4` (hero). 1600×900, 40 s, encoded with
+    `-crf 25 -tune animation`. A motion piece: every UI element is drawn and
+    animated in code (no screenshots), so numbers roll, lines draw and rows move.
+  - `tour.html` — the earlier screenshot slideshow, kept as a source only.
   - `mcp.html?site=1` → `public/media/mcp.{mp4,webm,gif}` (MCP section, and the
     GIF in the README). Rendered at 1280×720 with device scale 1.25.
 - **Standalone** (LinkedIn, a post, a talk) — title card, story, end card:
