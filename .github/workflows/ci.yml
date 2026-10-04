@@ -30,6 +30,8 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
     env:
       BULLPANE_TEST_PG_URL: postgres://postgres:bullpane@127.0.0.1:5440/bullpane
+      # the npm smoke below also runs `bullpane --postgres` (read, write, remove)
+      BULLPANE_NPM_SMOKE_PG_URL: postgres://postgres:bullpane@127.0.0.1:5440/bullpane
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
