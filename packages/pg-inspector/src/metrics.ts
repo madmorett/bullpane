@@ -94,26 +94,27 @@ export function windowMetricsFrom(
  */
 export function ratesFrom(input: {
   windowMinutes: number;
-  /** oldest first */
-  metricsCompleted: number[];
-  metricsFailed: number[];
-  totalCompleted: number | null;
-  totalFailed: number | null;
+  now: number;
+  /** BullMQ's metrics rows; null when the queue does not collect that side */
+  completed: MetricsRow | null;
+  failed: MetricsRow | null;
   storedCompleted: number;
   storedFailed: number;
   prunesCompleted: boolean;
 }): QueueRates {
   const pct = (c: number, f: number) => (c + f === 0 ? null : Math.round((c / (c + f)) * 1000) / 10);
-  if (input.totalCompleted !== null || input.totalFailed !== null) {
-    const points = Math.min(input.windowMinutes, Math.max(input.metricsCompleted.length, input.metricsFailed.length));
-    const sum = (xs: number[]) => xs.slice(-points).reduce((a, b) => a + b, 0);
-    const completed = points > 0 ? sum(input.metricsCompleted) : (input.totalCompleted ?? 0);
-    const failed = points > 0 ? sum(input.metricsFailed) : (input.totalFailed ?? 0);
+  if (input.completed || input.failed) {
+    // The same arithmetic as the alerts (windowMetricsFrom): the minute in
+    // progress is `count - prevCount`, not yet in `data`. Summing `data` alone
+    // dropped it, so a queue whose failures all happened this minute read 100%.
+    const nowMin = Math.floor(input.now / 60_000);
+    const c = side(input.completed ?? undefined, nowMin).read(input.windowMinutes);
+    const f = side(input.failed ?? undefined, nowMin).read(input.windowMinutes);
     return {
-      windowMinutes: points > 0 ? points : 0,
-      completed,
-      failed,
-      successPct: pct(completed, failed),
+      windowMinutes: Math.min(c.covered, f.covered),
+      completed: c.total,
+      failed: f.total,
+      successPct: pct(c.total, f.total),
       source: "metrics",
       retentionSkewed: false,
     };

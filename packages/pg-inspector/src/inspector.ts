@@ -445,10 +445,9 @@ export class PgInspector implements Inspector {
         groupsCount: 0,
         rates: ratesFrom({
           windowMinutes,
-          metricsCompleted,
-          metricsFailed,
-          totalCompleted: numOrNull(r.m_completed_total),
-          totalFailed: numOrNull(r.m_failed_total),
+          now,
+          completed: (r.m_completed as MetricsRow | null) ?? null,
+          failed: (r.m_failed as MetricsRow | null) ?? null,
           storedCompleted: num(r.w_completed),
           storedFailed: num(r.w_failed),
           prunesCompleted: prunesCompleted(r.remove_on_complete),

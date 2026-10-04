@@ -134,7 +134,9 @@ benefits from a more aggressive `autovacuum_vacuum_scale_factor` on `job`.
 - **BullMQ Pro groups** are not part of the open-source Postgres backend; the
   groups panel stays empty.
 - **No `CLIENT LIST`.** Connected workers are read from `pg_stat_activity`:
-  BullMQ names each worker's LISTEN connection after its queue.
+  BullMQ names each worker's LISTEN connection after its queue — without the
+  schema. Two schemas in one database with a queue of the same name share that
+  count.
 - **The `event` table is never trimmed.** BullMQ 6's `trimEvents()` is not
   implemented on Postgres, so `event` grows forever. The health card shows its
   size and warns past 1 GiB. Delete old rows on a schedule, for example

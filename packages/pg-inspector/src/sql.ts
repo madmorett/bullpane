@@ -97,8 +97,12 @@ SELECT q.queue,
   EXISTS (SELECT 1 FROM meta WHERE queue = q.queue AND field = 'paused') AS paused,
   (SELECT value FROM meta WHERE queue = q.queue AND field = 'version') AS version,
   (SELECT count(*) FROM scheduler WHERE queue = q.queue) AS schedulers,
-  (SELECT count FROM metrics WHERE queue = q.queue AND kind = 'completed') AS m_completed_total,
-  (SELECT count FROM metrics WHERE queue = q.queue AND kind = 'failed') AS m_failed_total,
+  -- the whole metrics row per side: count, prev_ts and prev_count carry the
+  -- current minute, which is not in data until the minute rolls over
+  (SELECT json_build_object('kind', kind, 'count', count, 'prevTs', prev_ts, 'prevCount', prev_count, 'data', data[1:$3])
+     FROM metrics WHERE queue = q.queue AND kind = 'completed') AS m_completed,
+  (SELECT json_build_object('kind', kind, 'count', count, 'prevTs', prev_ts, 'prevCount', prev_count, 'data', data[1:$3])
+     FROM metrics WHERE queue = q.queue AND kind = 'failed') AS m_failed,
   (SELECT data[1:$3] FROM metrics WHERE queue = q.queue AND kind = 'completed') AS m_completed_data,
   (SELECT data[1:$3] FROM metrics WHERE queue = q.queue AND kind = 'failed') AS m_failed_data,
   -- Only read when the queue has no metrics (the rate then falls back to stored

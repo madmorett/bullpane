@@ -268,7 +268,10 @@ describe.skipIf(!available)("PgInspector (real Postgres)", () => {
     expect(setup).toMatchObject({ isPaused: true, groups: null, batch: "unknown" });
     const emails = await inspector.getQueueSetup("emails");
     expect(emails.metricsEnabled).toBe(true);
-    expect(emails.workers).toMatchObject({ count: 0 });
+    // a queue name no other schema in this database uses: BullMQ names a
+    // worker's session after the queue only, so same-named queues of another
+    // schema would count here too (documented in docs/POSTGRES.md)
+    expect(setup.workers).toMatchObject({ count: 0 });
   });
 
   it("sees a connected worker through pg_stat_activity", async () => {
