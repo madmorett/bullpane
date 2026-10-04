@@ -44,9 +44,9 @@
 
 <header class="hero">
   <div class="wrap">
-    <span class="eyebrow">Self-hosted · BullMQ &amp; BullMQ Pro · v0.5.0</span>
+    <span class="eyebrow">Self-hosted · BullMQ &amp; BullMQ Pro · on Redis or Postgres · v0.6.0</span>
     <h1>The BullMQ dashboard you can <em>put in front of production.</em></h1>
-    <p class="lead">One container next to your stack. Queues, jobs, failures, progress, logs, flows and Pro groups, safe to point at production from day one. The free edition needs no account and no login: start it and open it.</p>
+    <p class="lead">One container next to your stack, for BullMQ on Redis or on its Postgres backend. Queues, jobs, failures, progress, logs, flows and Pro groups, safe to point at production from day one. The free edition needs no account and no login: start it and open it.</p>
     <div class="cta">
       <a class="btn primary" href="#install">Install the free edition</a>
       <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a>
@@ -54,7 +54,7 @@
     </div>
     <ul class="proof" aria-label="Facts">
       <li>100M+ jobs/day watched in production</li>
-      <li>No performance issues on your Redis</li>
+      <li>No performance issues on your Redis or Postgres</li>
       <li>One container. No database to set up</li>
     </ul>
 
@@ -67,12 +67,13 @@
 
     <div class="terminal" id="install">
       <div class="bar"><em>$</em><b>install</b></div>
-<pre><span class="c"># 1. run it next to the Redis your workers already use</span>
+<pre><span class="c"># 1. run it next to the Redis or Postgres your workers already use</span>
 docker run -d --name bullpane -p 3000:3000 \
   -v <span class="k">bullpane-data:/data</span> \
   bullpane/bullpane
 <span class="c">#    SQLite is built in. MySQL is optional: -e DATABASE_URL=mysql://…</span>
 <span class="c">#    no Docker? </span>npx bullpane --redis <span class="k">redis://localhost:6379</span>
+<span class="c">#           or  </span>npx bullpane --postgres <span class="k">postgres://user:pass@localhost:5432/app</span>
 
 <span class="c"># 2. open http://localhost:3000 and add a Redis or Postgres connection. No account, no login.</span>
 <span class="c"># 3. that's the whole install. Pro is a key you paste in Settings → License.</span>
