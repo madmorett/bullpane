@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bullpane — the self-hosted BullMQ dashboard you can put in front of production</title>
-<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, Redis health, flows and BullMQ Pro groups in one container next to your stack. The free edition needs no login at all; Pro adds login, roles, alerts, folders, flow graphs and an audit log.">
+<meta name="description" content="Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. Queues, jobs, failures, metrics, server health, flows and BullMQ Pro groups, on Redis or on BullMQ 6&#39;s Postgres backend, in one container next to your stack. The free edition needs no login at all; Pro adds login, roles, alerts, folders, flow graphs and an audit log.">
 <meta property="og:title" content="Bullpane — self-hosted BullMQ dashboard">
 <meta property="og:description" content="Everything bull-board does, faster. Free needs no login at all. Pro adds login, users & roles, alerts, folders, flows and an audit log. USD 39/month or 390/year per installation.">
 <meta property="og:url" content="https://bullpane.com/">
@@ -74,7 +74,7 @@ docker run -d --name bullpane -p 3000:3000 \
 <span class="c">#    SQLite is built in. MySQL is optional: -e DATABASE_URL=mysql://…</span>
 <span class="c">#    no Docker? </span>npx bullpane --redis <span class="k">redis://localhost:6379</span>
 
-<span class="c"># 2. open http://localhost:3000 and add a Redis connection. No account, no login.</span>
+<span class="c"># 2. open http://localhost:3000 and add a Redis or Postgres connection. No account, no login.</span>
 <span class="c"># 3. that's the whole install. Pro is a key you paste in Settings → License.</span>
 <span class="g">✓</span> works with Redis, Redis Cluster, Valkey, Postgres · BullMQ 4, 5 and 6 · BullMQ Pro</pre>
     </div>
@@ -159,7 +159,7 @@ docker run -d --name bullpane -p 3000:3000 \
 <figure class="frame">
       <div class="bar"><em>/health</em></div>
       <img src="/shots/health.jpg" width="1776" height="960" loading="lazy" alt="Redis health, one INFO every three seconds">
-      <figcaption><h3>Redis health, one INFO every three seconds</h3><p>Memory, CPU, commands per second, latency, clients, keys. Ten tabs cost your Redis as much as one.</p></figcaption>
+      <figcaption><h3>Server health, one read every three seconds</h3><p>Redis: memory, CPU, commands per second, latency, clients, keys. Postgres: connections, transactions per second, table sizes and BullMQ&rsquo;s untrimmed event table. Ten tabs cost your server as much as one.</p></figcaption>
     </figure>
 <figure class="frame">
       <div class="bar"><em>/schedulers</em></div>
@@ -199,7 +199,7 @@ docker run -d --name bullpane -p 3000:3000 \
 <figure class="frame">
       <div class="bar"><em>/health</em></div>
       <img src="/shots/health.jpg" width="1776" height="960" loading="lazy" alt="Redis health, one INFO every three seconds">
-      <figcaption><h3>Redis health, one INFO every three seconds</h3><p>Memory, CPU, commands per second, latency, clients, keys. Ten tabs cost your Redis as much as one.</p></figcaption>
+      <figcaption><h3>Server health, one read every three seconds</h3><p>Redis: memory, CPU, commands per second, latency, clients, keys. Postgres: connections, transactions per second, table sizes and BullMQ&rsquo;s untrimmed event table. Ten tabs cost your server as much as one.</p></figcaption>
     </figure>
 <figure class="frame">
       <div class="bar"><em>/schedulers</em></div>
