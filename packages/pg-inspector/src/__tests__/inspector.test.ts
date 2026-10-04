@@ -143,6 +143,10 @@ describe.skipIf(!available)("PgInspector (real Postgres)", () => {
     expect(ping.redisVersion).toMatch(/^\d+/);
   });
 
+  it("a direct connection keeps session mode: one round trip per read, settings applied", async () => {
+    expect(await inspector.connectionMode()).toBe("session");
+  });
+
   it("explains a missing schema instead of failing on a missing table", async () => {
     const wrong = new PgInspector({ id: "w", kind: "postgres", url: URL, prefix: "no_such_schema" });
     const ping = await wrong.ping();

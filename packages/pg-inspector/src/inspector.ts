@@ -72,6 +72,11 @@ const DEFAULTS = {
 const READ_POOL_MAX = 4;
 /** A dashboard read that runs longer than this is cancelled by Postgres itself. */
 const STATEMENT_TIMEOUT_MS = 10_000;
+/** What every read runs with, besides the schema; see createPool. */
+const SESSION_SETTINGS: [string, string | number][] = [
+  ["statement_timeout", STATEMENT_TIMEOUT_MS],
+  ["max_parallel_workers_per_gather", 0],
+];
 /**
  * What the read pool calls itself in pg_stat_activity. Workers name their
  * LISTEN connection `<queue>` or `<queue>:w:<name>`, so this can never be
@@ -125,7 +130,18 @@ function errorMessage(err: unknown): string {
 export class PgInspector implements Inspector {
   readonly config: ResolvedConfig;
   private readonly opts: typeof DEFAULTS;
-  private readonly pool: pg.Pool;
+  private pool: pg.Pool;
+  /**
+   * How reads carry their settings (schema, statement timeout, no parallel query):
+   *  - "session": as startup options on each connection. One round trip per
+   *    read. Used on a direct connection.
+   *  - "transaction": behind a transaction pooler (PgBouncer, Supavisor, RDS
+   *    Proxy...), which refuses or silently drops startup options and hands each
+   *    transaction a different server connection. Each read is then its own
+   *    READ ONLY transaction with SET LOCAL, so nothing depends on session state.
+   * Decided once in ensureReady, by trying the first and checking it took effect.
+   */
+  private mode: "session" | "transaction" = "session";
   private readonly filter: RegExp | null;
   private ready: Promise<void> | null = null;
   private discovered: { at: number; names: string[] } | null = null;
@@ -147,23 +163,32 @@ export class PgInspector implements Inspector {
       if (v !== undefined && k in DEFAULTS) (this.opts as Record<string, number>)[k] = v as number;
     }
     this.filter = config.queueFilter ? globToRegExp(config.queueFilter) : null;
-    this.pool = new pg.Pool({
-      connectionString: nodePgConnectionString(config.url),
+    this.pool = this.createPool(true);
+  }
+
+  /**
+   * The read pool. The settings every read runs with:
+   *  - search_path = the BullMQ schema, so its unqualified table names resolve;
+   *  - statement_timeout, so no read can hold the database for long;
+   *  - no parallel query: a count over a big state would otherwise run as a
+   *    parallel index scan on 3 cores at once, and the smoke test measured
+   *    what that does to the workers sharing the database (throughput down to
+   *    a third under a read storm). A dashboard gets one core per query, ever.
+   * `withOptions: false` is the pooler fallback: no startup options at all.
+   */
+  private createPool(withOptions: boolean): pg.Pool {
+    const pool = new pg.Pool({
+      connectionString: nodePgConnectionString(this.config.url),
       max: READ_POOL_MAX,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: this.opts.connectTimeoutMs,
       application_name: APPLICATION_NAME,
-      // Every connection resolves BullMQ's unqualified table names in the
-      // connection's schema, and no read can hold the database for long.
-      // No parallel query: a count over a big state would otherwise run as a
-      // parallel index scan on 3 cores at once, and the smoke test measured
-      // what that does to the workers sharing the database (throughput down to
-      // a third under a read storm). A dashboard gets one core per query, ever.
-      options: `-c search_path=${quoteIdent(this.config.prefix)} -c statement_timeout=${STATEMENT_TIMEOUT_MS} -c max_parallel_workers_per_gather=0`,
+      ...(withOptions ? { options: `-c search_path=${quoteIdent(this.config.prefix)} -c ${SESSION_SETTINGS.map(([k, v]) => `${k}=${v}`).join(" -c ")}` } : {}),
     });
     // An idle client dropped by the server emits 'error' on the pool; without a
     // listener that crashes the process when a customer database restarts.
-    this.pool.on("error", () => undefined);
+    pool.on("error", () => undefined);
+    return pool;
   }
 
   // ---------------------------------------------------------------------------
@@ -180,6 +205,7 @@ export class PgInspector implements Inspector {
     if (this.closed) throw new Error("inspector_closed");
     if (!this.ready) {
       this.ready = (async () => {
+        await this.pickMode();
         const client = await this.pool.connect();
         try {
           await assertSchemaCompatibility(client, this.config.prefix);
@@ -202,10 +228,55 @@ export class PgInspector implements Inspector {
     return this.ready;
   }
 
+  /**
+   * Session mode if the server takes the startup options AND they took effect;
+   * transaction mode otherwise. A pooler can refuse them ("unsupported startup
+   * parameter", PgBouncer ≥ 1.20 accepts search_path only) or drop them silently
+   * (`ignore_startup_parameters`), so success alone proves nothing: the
+   * settings are read back.
+   */
+  private async pickMode(): Promise<void> {
+    if (this.mode === "transaction") return;
+    try {
+      const { rows } = await this.pool.query<{ timeout: string; parallel: string }>(
+        "SELECT current_setting('statement_timeout') AS timeout, current_setting('max_parallel_workers_per_gather') AS parallel",
+      );
+      const applied = rows[0]?.parallel === "0" && rows[0]?.timeout !== "0";
+      if (!applied) this.mode = "transaction";
+    } catch (err) {
+      if (!/unsupported startup parameter/i.test(errorMessage(err))) throw err;
+      const old = this.pool;
+      this.pool = this.createPool(false);
+      void old.end().catch(() => undefined);
+      this.mode = "transaction";
+    }
+  }
+
   private async query<R extends pg.QueryResultRow>(text: string, values: unknown[] = []): Promise<R[]> {
     await this.ensureReady();
-    const res = await this.pool.query<R>(text, values);
-    return res.rows;
+    if (this.mode === "session") return (await this.pool.query<R>(text, values)).rows;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN READ ONLY");
+      await client.query(
+        `SELECT set_config('search_path', $1, true), ${SESSION_SETTINGS.map(([k], i) => `set_config('${k}', $${i + 2}, true)`).join(", ")}`,
+        [quoteIdent(this.config.prefix), ...SESSION_SETTINGS.map(([, v]) => String(v))],
+      );
+      const res = await client.query<R>(text, values);
+      await client.query("COMMIT");
+      return res.rows;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** "session" or "transaction" (behind a pooler); see `mode`. For diagnostics and tests. */
+  async connectionMode(): Promise<"session" | "transaction"> {
+    await this.ensureReady();
+    return this.mode;
   }
 
   async ping(): Promise<PingResult> {
