@@ -53,7 +53,8 @@ jobs:
   # release: shared 2-core runners make throughput numbers noise.
   smoke-postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # includes the environments section: PgBouncer, TLS, MySQL in containers
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16-alpine

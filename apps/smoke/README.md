@@ -40,15 +40,22 @@ pnpm --filter @bullpane/smoke exec playwright install chromium
    connection. A screenshot per step.
 4. **The free edition**: no login, the same reads and actions, Pro routes
    answer `402 pro_required`.
+5. **Where customers run Postgres**, in throwaway Docker containers on a
+   private network (skipped without Docker): PgBouncer in transaction mode
+   (defaults, and `ignore_startup_parameters=options`), Postgres with TLS and a
+   private CA (`sslmode=require`, `verify-full` with the CA, `verify-full`
+   without it refused), a read-only role (reads work, actions are a 403), and
+   MySQL as the dashboard's own database. Each runs the journey: test and create
+   the connection, read, search, remove, add, retry, health.
 
-Typical run: ~2 minutes, 107 checks.
+Typical run: ~3 minutes, ~160 checks.
 
 ## Options
 
 | Env | |
 |---|---|
 | `BULLPANE_SMOKE_PG_URL` | Postgres to use. Default `postgres://postgres:bullpane@127.0.0.1:5440/bullpane`; if nothing answers there, a throwaway `postgres:16-alpine` container is started and removed. |
-| `SMOKE_SKIP` | Comma list of `interference`, `ui`, `free`. |
+| `SMOKE_SKIP` | Comma list of `interference`, `ui`, `free`, `environments`. |
 | `SMOKE_PHASE_MS` | Length of each load phase (default 15 000). |
 | `SMOKE_SCREENSHOTS` | Where the browser screenshots go (default: a temp dir, printed). |
 | `SMOKE_NO_BUILD=1` | Do not rebuild `apps/web` first (it is rebuilt by default so the browser never tests a stale UI). |

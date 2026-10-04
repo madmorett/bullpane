@@ -10,7 +10,7 @@ Add a connection, pick **Postgres (BullMQ 6)**, and give it:
 
 | Field | What it is |
 |---|---|
-| URL | `postgres://user:password@host:5432/database`, the database your workers use. Add `?sslmode=require` for TLS. |
+| URL | `postgres://user:password@host:5432/database`, the database your workers use. Paste it as your provider gives it; see TLS and poolers below. |
 | Schema | The schema BullMQ created its tables in. BullMQ's default is `bullmq`. |
 | Queue filter | Optional glob over queue names, as on Redis. |
 
@@ -28,13 +28,55 @@ Requirements:
   your database. If it is missing, the connection says
   `postgres_schema_missing`: start one worker with `migrate: true`, or run
   `runMigrations()` once.
-- **Role.** `SELECT` on the schema is enough to browse. Actions (retry, remove,
-  pause, clean, drain, add job) go through the official bullmq API and need the
-  same rights your workers have. The health card reads `pg_stat_database`,
-  readable by any role. Connected workers come from `pg_stat_activity`; Postgres
-  hides some columns of other roles' sessions, so if the dashboard uses a
-  different role than the workers and shows 0 workers, grant it
-  `pg_read_all_stats`.
+- **Role.** A read-only role is enough to browse everything, health card and
+  connected workers included (tested with only `USAGE` on the schema and
+  `SELECT` on its tables, workers running under another role):
+
+  ```sql
+  CREATE ROLE bullpane_ro LOGIN PASSWORD '…';
+  GRANT USAGE ON SCHEMA bullmq TO bullpane_ro;
+  GRANT SELECT ON ALL TABLES IN SCHEMA bullmq TO bullpane_ro;
+  ```
+
+  Actions (retry, remove, pause, clean, drain, add job) go through the official
+  bullmq API and need the rights your workers have; with a read-only role they
+  answer `403 database_permission_denied` and say so.
+
+### TLS
+
+`sslmode` means what it means in `psql`. A URL with `?sslmode=require`, as RDS,
+Supabase or Neon hand it out, encrypts without verifying the certificate.
+(node-postgres on its own treats `require` as `verify-full` and fails with
+"unable to verify the first certificate" on any server whose CA Node does not
+know; Bullpane gives `prefer`, `require` and `verify-ca` libpq semantics.)
+
+| `sslmode` | Encrypted | Certificate checked |
+|---|---|---|
+| `require`, `prefer` | yes | no |
+| `verify-ca&sslrootcert=/path/ca.pem` | yes | against that CA |
+| `verify-full&sslrootcert=/path/ca.pem` | yes | against that CA, and the host name |
+| `verify-full` | yes | against Node's public CAs; a private CA is refused |
+| `no-verify` (node-postgres) | yes | no |
+
+`sslrootcert` is a path on the machine running Bullpane (mount it into the
+container).
+
+### Poolers (PgBouncer, Supavisor, RDS Proxy)
+
+Bullpane works behind a pooler in transaction mode. It first tries a session
+setup (schema, statement timeout, no parallel query, sent as startup options)
+and reads the settings back; a pooler refuses those options or drops them, and
+then every read runs as its own `READ ONLY` transaction with `SET LOCAL`, so
+nothing depends on which server connection the pooler hands out. Tested against
+PgBouncer in transaction mode, with its defaults and with
+`ignore_startup_parameters=options`: reads, search and actions, and concurrent
+reads of two schemas that never cross.
+
+Two things to know behind a pooler:
+- each read costs three extra short round trips (BEGIN, SET LOCAL, COMMIT);
+- **Workers connected** counts sessions named after the queue in
+  `pg_stat_activity`. Workers that connect through the pooler appear under the
+  pooler's own connections, so the count can read 0 while they work.
 
 ## What it costs your database
 
@@ -54,6 +96,11 @@ Requirements:
   kept the visibility map current. Counts are cached per queue for 2 s and
   shared by the overview, queue pages, job-list totals and the alerts engine, so
   ten open tabs cost what one does. Actions taken from Bullpane drop the cache.
+- **Big states are recounted less often.** Under 100 000 jobs a count is fresh
+  every 2 s. Above that it stays exact but is reused for longer, in proportion
+  to its size: 20 s at 1M, 60 s from 3M up. Counting 10M completed jobs takes
+  ~1.2 s of one core, so refreshing it every 2 s would keep a core of your
+  database busy; once a minute is ~2%. Waiting and active counts stay fresh.
 
 Measured on 1M jobs across 20 queues (Postgres 16, after autovacuum):
 

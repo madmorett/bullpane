@@ -53,6 +53,8 @@ function throwawayProLicense(): { key: string; publicKeyB64: string } {
 
 export interface RunningServer {
   url: string;
+  /** when the process was spawned: every connection it opens is newer */
+  startedAt: Date;
   pro: boolean;
   log: () => string;
   stop: () => Promise<void>;
@@ -72,11 +74,13 @@ export async function startServer(opts: { pro: boolean; env?: Record<string, str
     // the alerts engine must tick fast enough for the smoke to see an alert fire
     BULLPANE_ALERTS_INTERVAL: "1",
     ...(existsSync(path.join(webDist, "index.html")) ? { WEB_DIST: webDist } : {}),
-    ...opts.env,
   };
+  // the caller's environment must not leak in (a developer's DATABASE_URL, a
+  // seeded connection list); what the smoke asks for goes on top afterwards
   delete env.DATABASE_URL;
   delete env.BULLPANE_CONNECTIONS;
   delete env.DEMO_MODE;
+  Object.assign(env, opts.env);
   if (opts.pro) {
     const lic = throwawayProLicense();
     env.BULLPANE_LICENSE_KEY = lic.key;
@@ -86,6 +90,7 @@ export async function startServer(opts: { pro: boolean; env?: Record<string, str
   }
 
   let output = "";
+  const startedAt = new Date();
   const child: ChildProcess = spawn(path.join(REPO_ROOT, "node_modules/.bin/tsx"), ["src/index.ts"], {
     cwd: path.join(REPO_ROOT, "apps/server"),
     env,
@@ -108,6 +113,7 @@ export async function startServer(opts: { pro: boolean; env?: Record<string, str
 
   return {
     url,
+    startedAt,
     pro: opts.pro,
     log: () => output,
     stop: async () => {

@@ -26,9 +26,19 @@ written from this file — when you add an entry here, mirror it there
   transactions/sec, database and table sizes, and a warning when BullMQ's
   `event` table (never trimmed by BullMQ 6) passes 1 GiB.
 
+- **Works where Postgres actually runs**: behind PgBouncer and other
+  transaction poolers (reads fall back to one READ ONLY transaction each when
+  the pooler refuses or drops startup options), over TLS with the URL your
+  provider gives you (`sslmode=require` means what it means in psql), and with
+  a read-only role (browsing works; actions answer
+  `403 database_permission_denied`).
+
 ### Changed
 
 - The health monitor is now "Server health": its wording no longer assumes Redis.
+- Counts of big states (100k+ jobs) are still exact but refreshed less often,
+  up to once a minute from 3M jobs, so a large install does not keep a core of
+  its database busy recounting.
 
 ### Tested
 

@@ -77,6 +77,8 @@ interface LockReport {
   violations: string[];
   workersBlockedByDashboard: number;
   maxWorkerBlockedMs: number;
+  /** what the dashboard sessions were doing the first time they exceeded the read pool */
+  overPool: string[];
 }
 
 class LockMonitor {
@@ -86,10 +88,15 @@ class LockMonitor {
   report: LockReport = LockMonitor.empty();
 
   static empty(): LockReport {
-    return { samples: 0, maxDashboardConnections: 0, maxDashboardQueryMs: 0, modes: new Set(), violations: [], workersBlockedByDashboard: 0, maxWorkerBlockedMs: 0 };
+    return { samples: 0, maxDashboardConnections: 0, maxDashboardQueryMs: 0, modes: new Set(), violations: [], workersBlockedByDashboard: 0, maxWorkerBlockedMs: 0, overPool: [] };
   }
 
-  constructor(url: string) {
+  /**
+   * `since`: only sessions opened after the server under test started are its
+   * own. An older `bullpane-dashboard` session belongs to something else (another
+   * dashboard, or a pooler that kept a server connection named after a client).
+   */
+  constructor(url: string, private readonly since: Date) {
     this.client = new pg.Client({ connectionString: url, application_name: "bullpane-smoke-monitor" });
   }
 
@@ -122,20 +129,25 @@ class LockMonitor {
       pid: number;
       app: string;
       state: string | null;
+      query: string | null;
+      backend_start: Date;
       wait_event_type: string | null;
       running_ms: number | null;
       blocked_by: number[];
       waiting_ms: number | null;
     }>(`
-      SELECT pid, application_name AS app, state, wait_event_type,
+      SELECT pid, application_name AS app, state, left(query, 80) AS query, backend_start, wait_event_type,
         CASE WHEN state = 'active' THEN extract(epoch FROM clock_timestamp() - query_start) * 1000 END AS running_ms,
         pg_blocking_pids(pid) AS blocked_by,
         CASE WHEN wait_event_type = 'Lock' THEN extract(epoch FROM clock_timestamp() - query_start) * 1000 END AS waiting_ms
       FROM pg_stat_activity
       WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'`);
-    const dashboard = sessions.filter((s) => s.app === DASHBOARD_APP);
+    const dashboard = sessions.filter((s) => s.app === DASHBOARD_APP && s.backend_start >= this.since);
     const dashboardPids = new Set(dashboard.map((s) => s.pid));
     r.maxDashboardConnections = Math.max(r.maxDashboardConnections, dashboard.length);
+    if (dashboard.length > 4 && r.overPool.length === 0) {
+      r.overPool = dashboard.map((d) => `pid ${d.pid} ${d.state} since ${d.backend_start.toISOString().slice(11, 19)}: ${(d.query ?? "").replace(/\s+/g, " ")}`);
+    }
     for (const s of dashboard) {
       if (s.running_ms !== null) r.maxDashboardQueryMs = Math.max(r.maxDashboardQueryMs, Number(s.running_ms));
       if (s.state === "idle in transaction" || s.state === "idle in transaction (aborted)") r.violations.push(`dashboard pid ${s.pid} idle in transaction`);
@@ -222,11 +234,12 @@ function printLatencies(latencies: Map<string, number[]>): void {
 }
 
 function printLocks(r: LockReport): void {
+  if (r.overPool.length) for (const line of r.overPool) info(`over the read pool → ${line}`);
   info(`lock samples ${r.samples} · dashboard connections ≤ ${r.maxDashboardConnections} · longest dashboard query ${r.maxDashboardQueryMs.toFixed(0)} ms`);
   info(`lock modes held by the dashboard: ${[...r.modes].sort().join(", ") || "none seen"}`);
 }
 
-export async function runInterference(opts: { api: Api; cid: string; pgUrl: string; schema: string }): Promise<void> {
+export async function runInterference(opts: { api: Api; cid: string; pgUrl: string; schema: string; serverStartedAt: Date }): Promise<void> {
   const { api, cid, pgUrl, schema } = opts;
   heading("Non-interference: reading must not slow the workers, and must not lock");
 
@@ -249,7 +262,7 @@ export async function runInterference(opts: { api: Api; cid: string; pgUrl: stri
   });
   const ids = Array.from({ length: 200 }, (_, i) => `h${(i + 1) * 1500}`);
 
-  const monitor = new LockMonitor(pgUrl);
+  const monitor = new LockMonitor(pgUrl, opts.serverStartedAt);
   await monitor.connect();
   const workload = new Workload();
   workload.start(pgUrl, schema);
@@ -303,8 +316,11 @@ export async function runInterference(opts: { api: Api; cid: string; pgUrl: stri
   heading("Non-interference: realistic use (10 tabs)");
   printLatencies(realisticLat);
   printLocks(realistic.locks);
-  await check("workers keep ≥ 90% of their throughput with 10 tabs open", () =>
-    assert(realistic.jobsPerSec >= baseline.jobsPerSec * 0.9, `${realistic.jobsPerSec.toFixed(0)} vs ${baseline.jobsPerSec.toFixed(0)} jobs/s`),
+  // Against the slower of the two baselines: the machine's own drift between
+  // them is not something the dashboard did.
+  const floor = Math.min(before.jobsPerSec, after.jobsPerSec);
+  await check("workers keep ≥ 90% of their throughput with 10 tabs open (vs the slower baseline)", () =>
+    assert(realistic.jobsPerSec >= floor * 0.9, `${realistic.jobsPerSec.toFixed(0)} vs ${floor.toFixed(0)} jobs/s`),
   );
   await check("reads take no row locks, block no worker, never wait on a lock", () =>
     assert(realistic.locks.violations.length === 0, realistic.locks.violations.slice(0, 5).join("; ")),

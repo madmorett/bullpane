@@ -14,7 +14,10 @@
  * else a throwaway `postgres:16-alpine` container started (and removed) here.
  * Every run works in its own schemas (`smoke_<random>`) and drops them.
  *
- * Env: SMOKE_SKIP=ui,interference,free · SMOKE_PHASE_MS (default 15000) ·
+ *   5. environments: PgBouncer (2 configs), TLS, a read-only role, MySQL app DB
+ *      (throwaway Docker containers; skipped without Docker)
+ *
+ * Env: SMOKE_SKIP=ui,interference,free,environments · SMOKE_PHASE_MS (default 15000) ·
  * SMOKE_SCREENSHOTS (dir) · SMOKE_CHROMIUM (path to a Chromium binary)
  */
 import { execFileSync, execSync } from "node:child_process";
@@ -26,6 +29,7 @@ import { runInterference } from "./interference.js";
 import { dropSchema, resetSchema, seed, SEED } from "./seed.js";
 import { Api, REPO_ROOT, startServer, type RunningServer } from "./server.js";
 import { runUi } from "./ui.js";
+import { runEnvironments } from "./environments.js";
 
 const skip = new Set((process.env.SMOKE_SKIP ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 const ADMIN = { email: "admin@smoke.test", password: "smoke-password-1" };
@@ -92,7 +96,7 @@ async function main(): Promise<number> {
     const cid = await runFunctional({ api, base: server.url, pro: true, pgUrl: db.url, schema, seeded });
 
     // 2. reads must not slow the workers, and must not lock
-    if (!skip.has("interference")) await runInterference({ api, cid, pgUrl: db.url, schema });
+    if (!skip.has("interference")) await runInterference({ api, cid, pgUrl: db.url, schema, serverStartedAt: server.startedAt });
     await runCleanup(api, cid);
     await seeded.close();
 
@@ -112,6 +116,9 @@ async function main(): Promise<number> {
 
     // 4. free edition: no login, every read and action, Pro routes locked
     if (!skip.has("free")) await runFree(db.url, freeSchema, cleanups);
+
+    // 5. where customers run Postgres: poolers, TLS, a read-only role, MySQL app DB
+    if (!skip.has("environments")) await runEnvironments();
   } catch (err) {
     if (!(err instanceof Abort)) throw err;
   } finally {
