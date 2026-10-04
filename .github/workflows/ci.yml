@@ -54,9 +54,11 @@ jobs:
       # migrations, UI) or a dependency missing from the generated package.json.
       - run: node packages/npm/build.mjs --no-web && node packages/npm/smoke.mjs
 
-  # End to end on BullMQ's Postgres backend: the real server, real workers and a
-  # real browser (apps/smoke). The load phase is left to local runs before a
-  # release: shared 2-core runners make throughput numbers noise.
+  # End to end, both backends: the real server, real workers and a real browser
+  # (apps/smoke). Redis is the path every existing install is on; Postgres adds
+  # PgBouncer, TLS, a read-only role and MySQL in containers. The load phase is
+  # left to local runs before a release: shared 2-core runners make throughput
+  # numbers noise.
   smoke-postgres:
     runs-on: ubuntu-latest
     # includes the environments section: PgBouncer, TLS, MySQL in containers
@@ -86,6 +88,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @bullpane/smoke exec playwright install --with-deps chromium
       - run: pnpm smoke:postgres
+      # a throwaway redis:7 container; the web UI is already built by the step above
+      - run: pnpm smoke:redis
+        env:
+          SMOKE_NO_BUILD: "1"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

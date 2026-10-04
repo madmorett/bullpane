@@ -33,14 +33,13 @@ interface PingResult {
   error: string | null;
 }
 import { Abort, assert, check, eq, heading, info, waitFor } from "./harness.js";
-import { SEED, type Seeded } from "./seed.js";
+import { SEED, type Seeded, type Target } from "./seed.js";
 
 interface Ctx {
   api: Api;
   base: string;
   pro: boolean;
-  pgUrl: string;
-  schema: string;
+  target: Target;
   seeded: Seeded;
 }
 
@@ -73,57 +72,80 @@ export async function runFunctional(ctx: Ctx): Promise<string> {
   }
 
   // ---------------------------------------------------------------------------
-  heading("Create a PostgreSQL connection");
-  const goodUrl = ctx.pgUrl;
-  const badUrl = (() => {
-    const u = new URL(ctx.pgUrl);
-    u.password = "definitely-wrong";
-    return u.toString();
-  })();
-  await check("test connection: wrong password fails with Postgres' own message", async () => {
-    const ping = await api.post<PingResult>("/connections/test", { kind: "postgres", url: badUrl, prefix: ctx.schema });
-    assert(!ping.ok, "ping should fail");
-    assert(/password authentication failed/.test(ping.error ?? ""), `unexpected error: ${ping.error}`);
-  });
-  await check("test connection: wrong schema says postgres_schema_missing", async () => {
-    const ping = await api.post<PingResult>("/connections/test", { kind: "postgres", url: goodUrl, prefix: "no_such_schema" });
-    assert(!ping.ok && /postgres_schema_missing/.test(ping.error ?? ""), `unexpected: ${JSON.stringify(ping)}`);
-  });
+  const t = ctx.target;
+  const pg = t.kind === "postgres";
+  const label = pg ? "Postgres" : "Redis";
+  heading(`Create a ${pg ? "PostgreSQL" : "Redis"} connection`);
+  const goodUrl = t.url;
+  const body = (extra: Record<string, unknown> = {}) => ({ kind: t.kind, url: goodUrl, prefix: t.ns, ...extra });
+  if (pg) {
+    const badUrl = (() => {
+      const u = new URL(t.url);
+      u.password = "definitely-wrong";
+      return u.toString();
+    })();
+    await check("test connection: wrong password fails with Postgres' own message", async () => {
+      const ping = await api.post<PingResult>("/connections/test", body({ url: badUrl }));
+      assert(!ping.ok, "ping should fail");
+      assert(/password authentication failed/.test(ping.error ?? ""), `unexpected error: ${ping.error}`);
+    });
+    await check("test connection: wrong schema says postgres_schema_missing", async () => {
+      const ping = await api.post<PingResult>("/connections/test", body({ prefix: "no_such_schema" }));
+      assert(!ping.ok && /postgres_schema_missing/.test(ping.error ?? ""), `unexpected: ${JSON.stringify(ping)}`);
+    });
+    await check("a redis:// URL on a postgres connection is refused (400)", () =>
+      api.expect(400, "POST", "/connections", { name: "bad", kind: "postgres", url: "redis://localhost:6379" }),
+    );
+    await check("a schema name that is not an identifier is refused (400)", () =>
+      api.expect(400, "POST", "/connections", { name: "bad", ...body({ prefix: "x; drop table job" }) }),
+    );
+  } else {
+    await check("test connection: an unreachable Redis fails fast with the reason", async () => {
+      const u = new URL(t.url);
+      u.port = "1";
+      const t0 = Date.now();
+      const ping = await api.post<PingResult>("/connections/test", body({ url: u.toString() }));
+      assert(!ping.ok && /ECONNREFUSED|unavailable|connect/i.test(ping.error ?? ""), `unexpected: ${JSON.stringify(ping)}`);
+      assert(Date.now() - t0 < 8000, "took longer than the connect timeout");
+    });
+    await check("a postgres:// URL on a redis connection is refused (400)", () =>
+      api.expect(400, "POST", "/connections", { name: "bad", kind: "redis", url: "postgres://u:p@localhost/db" }),
+    );
+    await check("a connection without kind is a Redis connection (what 0.5.x clients send)", async () => {
+      const ping = await api.post<PingResult>("/connections/test", { url: goodUrl, prefix: t.ns });
+      assert(ping.ok, JSON.stringify(ping));
+    });
+  }
   await check("test connection: the right one answers with the server version", async () => {
-    const ping = await api.post<PingResult>("/connections/test", { kind: "postgres", url: goodUrl, prefix: ctx.schema });
+    const ping = await api.post<PingResult>("/connections/test", body());
     assert(ping.ok && /^\d+/.test(ping.redisVersion ?? ""), JSON.stringify(ping));
   });
-  await check("a redis:// URL on a postgres connection is refused (400)", () =>
-    api.expect(400, "POST", "/connections", { name: "bad", kind: "postgres", url: "redis://localhost:6379" }),
-  );
-  await check("a schema name that is not an identifier is refused (400)", () =>
-    api.expect(400, "POST", "/connections", { name: "bad", kind: "postgres", url: goodUrl, prefix: "x; drop table job" }),
-  );
   const created = await check("create the connection", async () => {
-    const c = await api.post<RedisConnection>("/connections", { name: "pg-smoke", kind: "postgres", url: goodUrl, prefix: ctx.schema });
-    eq(c.kind, "postgres", "kind");
-    eq(c.prefix, ctx.schema, "schema");
+    const c = await api.post<RedisConnection>("/connections", { name: `${t.kind}-smoke`, ...body() });
+    eq(c.kind, t.kind, "kind");
+    eq(c.prefix, t.ns, "namespace");
     assert(c.status?.ok, `status not ok: ${JSON.stringify(c.status)}`);
-    eq(new URL(c.url).password, "****", "password in the returned URL");
+    if (new URL(goodUrl).password) eq(new URL(c.url).password, "****", "password in the returned URL");
     return c;
   });
   if (!created) throw new Abort("cannot continue without a connection");
   cid = created.id;
-  await check("the connection is listed with kind postgres and a redacted URL", async () => {
+  await check(`the connection is listed with kind ${t.kind}`, async () => {
     const list = await api.get<RedisConnection[]>("/connections");
     const c = list.find((x) => x.id === cid);
-    assert(c && c.kind === "postgres" && c.url.includes("****"), JSON.stringify(c));
+    assert(c && c.kind === t.kind, JSON.stringify(c));
   });
 
   // ---------------------------------------------------------------------------
   heading("Read: overview, queues, counts");
-  const overview = await check("connection overview: Postgres server info, discovery complete", async () => {
-    const o = await api.get<Overview>(`${C()}/overview`);
-    assert(o.info.backend === "postgres", `backend ${JSON.stringify(o.info).slice(0, 100)}`);
+  const overview = await check(`connection overview: ${label} server info, discovery complete`, async () => {
+    const o = await api.get<Overview>(`${C()}/overview?refresh=1`);
+    if (pg) assert(o.info.backend === "postgres", `backend ${JSON.stringify(o.info).slice(0, 100)}`);
+    else assert(o.info.backend !== "postgres" && /^\d/.test(o.info.redisVersion), `info ${JSON.stringify(o.info).slice(0, 100)}`);
     assert(o.discovery.complete, "discovery incomplete");
     return o;
   });
-  await check("every queue is discovered, including flow-only ones (no meta row)", async () => {
+  await check("every queue is discovered, including flow-only ones (no meta)", async () => {
     const names = (overview?.queues ?? []).map((q) => q.name).sort();
     for (const n of ["assemble", "emails", "frozen", "orders", "parts", "reports", "stuck"]) assert(names.includes(n), `missing ${n} in ${names}`);
   });
@@ -156,7 +178,7 @@ export async function runFunctional(ctx: Ctx): Promise<string> {
     const stuck = await api.get<QueueSetup>(`${Q("stuck")}/setup`);
     eq(stuck.workers?.names, ["holder"], "workers");
   });
-  await check("Pro groups panel is empty (not part of BullMQ's open-source Postgres backend)", async () => {
+  await check("Pro groups panel is empty (open-source BullMQ, no groups)", async () => {
     const g = await api.get<GroupsPage>(`${Q("orders")}/groups`);
     eq(g.total, 0, "groups");
   });
@@ -190,7 +212,8 @@ export async function runFunctional(ctx: Ctx): Promise<string> {
     const desc = await api.get<JobsPage>(`${Q("orders")}/jobs?state=waiting&pageSize=1`);
     const asc = await api.get<JobsPage>(`${Q("orders")}/jobs?state=waiting&pageSize=1&order=asc`);
     eq(desc.jobs[0]?.name, "big", "newest");
-    assert(asc.jobs[0]?.dataPreview.includes('"n": 0'), `oldest: ${asc.jobs[0]?.dataPreview}`);
+    // jsonb renders `"n": 0`, a Redis hash keeps the producer's `"n":0`
+    assert(/"n": ?0[,}]/.test(asc.jobs[0]?.dataPreview ?? ""), `oldest: ${asc.jobs[0]?.dataPreview}`);
   });
   await check("a 60 KB payload is not copied into the list: truncated, size reported", async () => {
     const page = await api.get<JobsPage>(`${Q("orders")}/jobs?state=waiting&pageSize=1`);
@@ -389,30 +412,38 @@ export async function runFunctional(ctx: Ctx): Promise<string> {
 
   // ---------------------------------------------------------------------------
   heading("Health monitor");
-  await check("health: postgres card with sizes, connections and a rate after two samples", async () => {
+  await check(`health: ${label} card and a rate after two samples`, async () => {
     const first = await api.get<ConnectionHealth[]>("/health/connections");
     const h0 = first.find((h) => h.connectionId === cid);
-    assert(h0 && h0.kind === "postgres" && h0.ok && h0.info?.backend === "postgres", JSON.stringify(h0).slice(0, 300));
-    assert(h0.info.jobTableBytes > 0 && h0.info.maxConnections > 0, "sizes");
-    const h = await waitFor("a transactions/sec rate", async () => {
+    assert(h0 && h0.kind === t.kind && h0.ok && h0.info, JSON.stringify(h0).slice(0, 300));
+    if (h0.info.backend === "postgres") assert(pg && h0.info.jobTableBytes > 0 && h0.info.maxConnections > 0, "sizes");
+    else assert(!pg && h0.info.usedMemoryBytes > 0 && h0.info.connectedClients > 0, `redis info ${JSON.stringify(h0.info).slice(0, 200)}`);
+    const h = await waitFor(pg ? "a transactions/sec rate" : "a commands/sec rate", async () => {
       const list = await api.get<ConnectionHealth[]>("/health/connections");
       const x = list.find((y) => y.connectionId === cid);
       return x && x.commandsPerSec !== null ? x : null;
     }, 15_000, 1000);
-    info(`tx/s ${h.commandsPerSec} · ${h.info?.backend === "postgres" ? `${h.info.connectedClients}/${h.info.maxConnections} connections` : ""}`);
+    info(`${pg ? "tx/s" : "cmd/s"} ${h.commandsPerSec} · ${h.info?.backend === "postgres" ? `${h.info.connectedClients}/${h.info.maxConnections} connections` : `cpu ${h.cpuCores}`}`);
   });
 
   // ---------------------------------------------------------------------------
   heading("Connection settings");
   await check("rename the connection", async () => {
-    const c = await api.patch<RedisConnection>(C(), { name: "pg-smoke-renamed" });
-    eq(c.name, "pg-smoke-renamed", "name");
+    const c = await api.patch<RedisConnection>(C(), { name: `${t.kind}-smoke-renamed` });
+    eq(c.name, `${t.kind}-smoke-renamed`, "name");
   });
-  await check("editing the URL to redis:// is refused (kind is fixed)", () => api.expect(400, "PATCH", C(), { url: "redis://localhost:6379" }));
+  const otherScheme = pg ? "redis://localhost:6379" : "postgres://u:p@localhost/db";
+  await check(`editing the URL to ${otherScheme.split(":")[0]}:// is refused (kind is fixed)`, () => api.expect(400, "PATCH", C(), { url: otherScheme }));
   await check("kind cannot be changed by a PATCH", async () => {
-    await api.request("PATCH", C(), { kind: "redis" });
-    eq((await api.get<RedisConnection[]>("/connections")).find((c) => c.id === cid)?.kind, "postgres", "kind");
+    await api.request("PATCH", C(), { kind: pg ? "redis" : "postgres" });
+    eq((await api.get<RedisConnection[]>("/connections")).find((c) => c.id === cid)?.kind, t.kind, "kind");
   });
+  if (!pg) {
+    await check("a Redis edit still works: prefix and cluster flag round-trip", async () => {
+      const c = await api.patch<RedisConnection>(C(), { cluster: false, prefix: t.ns });
+      assert(c.prefix === t.ns && c.cluster === false && c.status?.ok, JSON.stringify(c));
+    });
+  }
 
   // ---------------------------------------------------------------------------
   if (pro) await runPro(ctx, cid, Q);
@@ -428,13 +459,13 @@ async function runPro(ctx: Ctx, cid: string, Q: (q: string) => string): Promise<
     const edge = g.edges.find((e) => e.from === "parts" && e.to === "assemble") ?? g.edges.find((e) => e.to === "parts" && e.from === "assemble");
     assert(edge, `edges: ${JSON.stringify(g.edges)}`);
   });
-  await check("folders: create one and put a Postgres queue in it", async () => {
+  await check(`folders: create one and put a ${ctx.target.kind} queue in it`, async () => {
     const f = await api.post<Folder>("/folders", { name: "Smoke folder" });
     const updated = await api.put<Folder>(`/folders/${f.id}/queues`, { queues: [{ connectionId: cid, queueName: "orders" }] });
     assert(JSON.stringify(updated).includes("orders"), JSON.stringify(updated));
     await api.del(`/folders/${f.id}`);
   });
-  await check("alerts: a waiting_above rule fires on the Postgres queue", async () => {
+  await check(`alerts: a waiting_above rule fires on the ${ctx.target.kind} queue`, async () => {
     const alert = await api.post<Alert>("/alerts", {
       name: "orders backlog",
       scope: { type: "queue", connectionId: cid, queueName: "orders" },
@@ -449,7 +480,7 @@ async function runPro(ctx: Ctx, cid: string, Q: (q: string) => string): Promise<
     assert(events.some((e) => e.alertId === alert.id && e.status === "fired"), `events: ${JSON.stringify(events).slice(0, 300)}`);
     await api.del(`/alerts/${alert.id}`);
   });
-  await check("roles: a viewer can read the Postgres queue and cannot remove a job (403)", async () => {
+  await check(`roles: a viewer can read the ${ctx.target.kind} queue and cannot remove a job (403)`, async () => {
     await api.post("/users", { email: "viewer@smoke.test", name: "Viewer", role: "viewer", password: "viewer-password-1" });
     const viewer = new Api(ctx.base);
     await viewer.post("/auth/login", { email: "viewer@smoke.test", password: "viewer-password-1" });
@@ -457,7 +488,7 @@ async function runPro(ctx: Ctx, cid: string, Q: (q: string) => string): Promise<
     await viewer.expect(403, "DELETE", `${Q("orders")}/jobs/${page.jobs[0]!.id}`);
     await viewer.expect(403, "POST", `${Q("orders")}/pause`, {});
   });
-  await check("audit log recorded the actions on the Postgres connection", async () => {
+  await check(`audit log recorded the actions on the ${ctx.target.kind} connection`, async () => {
     const page = await api.get<AuditPage>("/audit");
     const actions = new Set(page.entries.map((e) => (e as { action: string }).action));
     for (const a of ["connection.create", "job.remove", "queue.pause", "queue.obliterate"]) assert(actions.has(a), `missing ${a} in ${[...actions].join(", ")}`);

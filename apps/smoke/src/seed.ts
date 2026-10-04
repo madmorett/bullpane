@@ -1,11 +1,60 @@
 /**
- * Real BullMQ data in a fresh Postgres schema, produced only through the
- * official bullmq API (Queue, Worker, FlowProducer, job schedulers) with the
- * Postgres backend — so the rows are exactly what a customer has.
+ * Real BullMQ data, produced only through the official bullmq API (Queue,
+ * Worker, FlowProducer, job schedulers) — so the rows or keys are exactly what
+ * a customer has. The same data on either backend:
+ *  - Postgres: a fresh schema in the given database;
+ *  - Redis: a fresh key prefix in the given Redis.
  */
 import pg from "pg";
 import { createPostgresBackend, FlowProducer, Queue, runMigrations, Worker, type Job } from "bullmq";
+import { Redis } from "ioredis";
 import { waitFor } from "./harness.js";
+
+/** Where the queues live. `ns` is the Postgres schema or the Redis key prefix. */
+export type Target = { kind: "postgres"; url: string; ns: string } | { kind: "redis"; url: string; ns: string };
+
+/** What every bullmq class of the seed is constructed with, for this target. */
+function bullmqArgs(t: Target): { opts: Record<string, unknown>; backend: never | undefined } {
+  if (t.kind === "postgres") {
+    return { opts: { connection: { connectionString: t.url, schema: t.ns, max: 4 } }, backend: createPostgresBackend as never };
+  }
+  const u = new URL(t.url);
+  const connection = {
+    host: u.hostname,
+    port: Number(u.port || 6379),
+    password: u.password ? decodeURIComponent(u.password) : undefined,
+    db: u.pathname.length > 1 ? Number(u.pathname.slice(1)) : 0,
+    maxRetriesPerRequest: null,
+  };
+  return { opts: { connection, prefix: t.ns }, backend: undefined };
+}
+
+/** Empty namespace, ready for BullMQ: a migrated schema, or no key under the prefix. */
+export async function prepare(t: Target): Promise<void> {
+  if (t.kind === "postgres") return resetSchema(t.url, t.ns);
+  await deleteRedisPrefix(t.url, t.ns);
+}
+
+export async function dispose(t: Target): Promise<void> {
+  if (t.kind === "postgres") return dropSchema(t.url, t.ns);
+  await deleteRedisPrefix(t.url, t.ns);
+}
+
+/** SCAN + DEL of `${prefix}:*` only: the smoke never touches other keys of the Redis it is given. */
+async function deleteRedisPrefix(url: string, prefix: string): Promise<void> {
+  const r = new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: true });
+  await r.connect();
+  try {
+    let cursor = "0";
+    do {
+      const [next, keys] = await r.scan(cursor, "MATCH", `${prefix}:*`, "COUNT", 1000);
+      cursor = next;
+      if (keys.length) await r.del(...keys);
+    } while (cursor !== "0");
+  } finally {
+    r.disconnect();
+  }
+}
 
 export const SEED = {
   ordersWaiting: 62, // 60 orders + needle + big
@@ -21,10 +70,6 @@ export interface Seeded {
   stuckJobId: string;
   flowRootId: string;
   close: () => Promise<void>;
-}
-
-export function pgConnection(url: string, schema: string) {
-  return { connectionString: url, schema, max: 4 } as never;
 }
 
 export async function resetSchema(url: string, schema: string): Promise<void> {
@@ -44,12 +89,12 @@ export async function dropSchema(url: string, schema: string): Promise<void> {
   await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`).finally(() => admin.end());
 }
 
-export async function seed(url: string, schema: string): Promise<Seeded> {
-  const connection = pgConnection(url, schema);
+export async function seed(t: Target): Promise<Seeded> {
+  const { opts: base, backend } = bullmqArgs(t);
   const queues: Queue[] = [];
   const workers: Worker[] = [];
   const q = (name: string) => {
-    const queue = new Queue(name, { connection }, createPostgresBackend as never);
+    const queue = new Queue(name, base as never, backend);
     queues.push(queue);
     return queue;
   };
@@ -71,8 +116,8 @@ export async function seed(url: string, schema: string): Promise<Seeded> {
       if ((job.data as { fail: boolean }).fail) throw new Error("smtp down");
       return { sent: true };
     },
-    { connection, metrics: { maxDataPoints: 60 }, concurrency: 5 },
-    createPostgresBackend as never,
+    { ...base, metrics: { maxDataPoints: 60 }, concurrency: 5 } as never,
+    backend,
   );
   mailer.on("error", () => undefined);
   await waitFor("emails to be processed", async () => {
@@ -86,7 +131,7 @@ export async function seed(url: string, schema: string): Promise<Seeded> {
   await reports.upsertJobScheduler("hourly", { every: 3_600_000 }, { name: "rollup", data: {} });
 
   // A FlowProducer writes no meta row: these two queues exist only through their jobs.
-  const flow = new FlowProducer({ connection }, createPostgresBackend as never);
+  const flow = new FlowProducer(base as never, backend);
   const tree = await flow.add({
     name: "car",
     queueName: "assemble",
@@ -107,7 +152,7 @@ export async function seed(url: string, schema: string): Promise<Seeded> {
   // One job held active by a live worker that never finishes it (for discard).
   const stuck = q("stuck");
   const stuckJob = await stuck.add("hang", {}, { attempts: 5 });
-  const holder = new Worker("stuck", () => new Promise(() => undefined), { connection, lockDuration: 600_000, name: "holder" }, createPostgresBackend as never);
+  const holder = new Worker("stuck", () => new Promise(() => undefined), { ...base, lockDuration: 600_000, name: "holder" } as never, backend);
   holder.on("error", () => undefined);
   workers.push(holder);
   await waitFor("the stuck job to become active", async () => (await stuckJob.getState()) === "active");

@@ -19,7 +19,7 @@ import pg from "pg";
 import type { JobDetail, JobSearchResult, JobsPage, QueueSummary, RedisConnection } from "@bullpane/shared";
 import { Api, startServer, type RunningServer } from "./server.js";
 import { assert, check, eq, heading, info } from "./harness.js";
-import { resetSchema, seed, SEED } from "./seed.js";
+import { prepare, seed, SEED } from "./seed.js";
 
 const docker = (...args: string[]) => execFileSync("docker", args, { stdio: ["ignore", "pipe", "pipe"] }).toString().trim();
 
@@ -118,8 +118,9 @@ async function journey(opts: {
 }): Promise<void> {
   const { api, label, schema } = opts;
   const seeded = await check(`${label}: seed real BullMQ data`, async () => {
-    await resetSchema(opts.seedUrl, schema);
-    const s = await seed(opts.seedUrl, schema);
+    const t = { kind: "postgres" as const, url: opts.seedUrl, ns: schema };
+    await prepare(t);
+    const s = await seed(t);
     await opts.afterSeed?.();
     return s;
   });

@@ -6,11 +6,13 @@
   "description": "End-to-end smoke tests: a real server, a real database, real BullMQ workers, a real browser.",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "smoke:postgres": "tsx src/postgres.ts"
+    "smoke:postgres": "tsx src/postgres.ts",
+    "smoke:redis": "tsx src/redis.ts"
   },
   "dependencies": {
     "@bullpane/shared": "workspace:*",
     "bullmq": "^6.3.4",
+    "ioredis": "^5.4.2",
     "pg": "^8.13.1",
     "playwright": "^1.56.0"
   },

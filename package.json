@@ -19,7 +19,8 @@
     "license:keygen": "tsx scripts/gen-license.ts keygen",
     "license:sign": "tsx scripts/gen-license.ts sign",
     "demo": "docker compose -f docker-compose.demo.yml up --build",
-    "smoke:postgres": "pnpm --filter @bullpane/smoke smoke:postgres"
+    "smoke:postgres": "pnpm --filter @bullpane/smoke smoke:postgres",
+    "smoke:redis": "pnpm --filter @bullpane/smoke smoke:redis"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260907.1",

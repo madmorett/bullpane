@@ -156,6 +156,9 @@ importers:
       bullmq:
         specifier: ^6.3.4
         version: 6.3.4(ioredis@5.11.1)(pg@8.23.1)
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
       pg:
         specifier: ^8.13.1
         version: 8.23.1

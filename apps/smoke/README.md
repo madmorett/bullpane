@@ -1,12 +1,18 @@
 # @bullpane/smoke
 
-End-to-end smoke tests. Nothing is mocked: a real Postgres, real BullMQ
+End-to-end smoke tests. Nothing is mocked: a real Redis or Postgres, real BullMQ
 workers, the real server (`apps/server`, started the way `pnpm dev` starts it)
 and a real browser.
 
 ```bash
-pnpm smoke:postgres
+pnpm smoke:redis      # the path every existing install is on
+pnpm smoke:postgres   # BullMQ 6's Postgres backend, plus load, locks and environments
 ```
+
+Both run the same sections from `src/runner.ts`: every feature over HTTP
+(Pro), the browser journey and the free edition. `smoke:redis` starts a
+throwaway `redis:7-alpine` container unless `BULLPANE_SMOKE_REDIS_URL` is set,
+and only ever deletes keys under its own `smoke-<random>-*` prefixes.
 
 First time only, for the browser part:
 

@@ -240,7 +240,7 @@ function printLocks(r: LockReport): void {
 }
 
 export async function runInterference(opts: { api: Api; cid: string; pgUrl: string; schema: string; serverStartedAt: Date }): Promise<void> {
-  const { api, cid, pgUrl, schema } = opts;
+  const { api, cid, pgUrl, schema } = opts; // Postgres only: the load test reads pg_locks
   heading("Non-interference: reading must not slow the workers, and must not lock");
 
   // A realistic history to read: 300k completed + 20k failed rows, vacuumed

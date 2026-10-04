@@ -13,16 +13,16 @@ import path from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import type { JobDetail, JobsPage, RedisConnection } from "@bullpane/shared";
 import { Api } from "./server.js";
+import type { Target } from "./seed.js";
 import { assert, check, heading, info, waitFor } from "./harness.js";
 
 export async function runUi(opts: {
   base: string;
   api: Api;
-  pgUrl: string;
-  schema: string;
+  target: Target;
   login: { email: string; password: string } | null;
 }): Promise<void> {
-  heading("Browser: the journey a person makes");
+  heading(`Browser: the journey a person makes (${opts.target.kind})`);
   const shots = process.env.SMOKE_SCREENSHOTS ?? path.join(tmpdir(), `bullpane-smoke-shots-${Date.now()}`);
   mkdirSync(shots, { recursive: true });
   info(`screenshots: ${shots}`);
@@ -51,7 +51,9 @@ export async function runUi(opts: {
       }
     });
 
-  const { api, pgUrl, schema } = opts;
+  const { api, target: t } = opts;
+  const pg = t.kind === "postgres";
+  const name = `${t.kind}-ui`;
   let cid = "";
   try {
     if (opts.login) {
@@ -65,29 +67,38 @@ export async function runUi(opts: {
       });
     }
 
-    await step("add a PostgreSQL connection through the dialog, testing it first", async (p) => {
+    await step(`add a ${pg ? "PostgreSQL" : "Redis"} connection through the dialog, testing it first`, async (p) => {
       await p.goto(`${opts.base}/settings/connections`);
       await p.getByRole("button", { name: "Add connection" }).first().click();
       const dialog = p.getByRole("dialog");
-      await dialog.getByRole("tab", { name: "Postgres (BullMQ 6)" }).click();
-      await dialog.getByLabel("Name").fill("pg-ui");
-      await dialog.getByLabel("Postgres URL").fill(pgUrl);
-      await dialog.getByLabel("Schema").fill(schema);
+      await dialog.getByLabel("Name", { exact: true }).fill(name);
+      if (pg) {
+        await dialog.getByRole("tab", { name: "Postgres (BullMQ 6)" }).click();
+        await dialog.getByLabel("Postgres URL").fill(t.url);
+        await dialog.getByLabel("Schema").fill(t.ns);
+      } else {
+        // Redis is the default backend; the URL tab is what most people paste into
+        await dialog.getByRole("tab", { name: "Connection URL" }).click();
+        await dialog.getByLabel("Redis URL").fill(t.url);
+        await dialog.getByLabel("Key prefix").fill(t.ns);
+      }
       await dialog.getByRole("button", { name: "Test connection" }).click();
-      await dialog.getByText(/Connected in .* · Postgres \d+/).waitFor();
+      await dialog.getByText(pg ? /Connected in .* · Postgres \d+/ : /Connected in .* · Redis \d+/).waitFor();
       await dialog.getByRole("button", { name: "Add connection" }).click();
       await dialog.waitFor({ state: "detached" });
-      await p.getByRole("cell", { name: /pg-ui/ }).getByText("postgres").waitFor();
+      await p.getByRole("cell", { name: new RegExp(name) }).first().waitFor();
+      if (pg) await p.getByRole("cell", { name: new RegExp(name) }).getByText("postgres", { exact: true }).waitFor();
       const list = await api.get<RedisConnection[]>("/connections");
-      const c = list.find((x) => x.name === "pg-ui");
-      assert(c?.kind === "postgres" && c.prefix === schema, `stored as ${JSON.stringify(c)}`);
+      const c = list.find((x) => x.name === name);
+      assert(c?.kind === t.kind && c.prefix === t.ns, `stored as ${JSON.stringify(c)}`);
       cid = c.id;
     });
     if (!cid) return;
 
-    await step("connection page shows the Postgres server and every queue", async (p) => {
+    await step(`connection page shows the ${pg ? "Postgres" : "Redis"} server and every queue`, async (p) => {
       await p.goto(`${opts.base}/c/${cid}`);
-      await p.getByText("Postgres", { exact: true }).first().waitFor();
+      await p.getByText(pg ? "Postgres" : "Redis", { exact: true }).first().waitFor();
+      if (!pg) await p.getByText("Memory", { exact: true }).first().waitFor();
       for (const q of ["orders", "emails", "assemble", "parts"]) await p.getByRole("link", { name: q, exact: true }).first().waitFor();
     });
 
@@ -95,8 +106,10 @@ export async function runUi(opts: {
       await p.getByRole("link", { name: "orders", exact: true }).first().click();
       await p.waitForURL(/\/q\/orders/);
       await p.getByText("needle-xyz").first().waitFor();
-      const text = await p.locator("body").innerText();
-      assert(!/Redis/.test(text), `a Postgres queue page talks about Redis: …${text.slice(Math.max(0, text.indexOf("Redis") - 60), text.indexOf("Redis") + 40)}…`);
+      if (pg) {
+        const text = await p.locator("body").innerText();
+        assert(!/Redis/.test(text), `a Postgres queue page talks about Redis: …${text.slice(Math.max(0, text.indexOf("Redis") - 60), text.indexOf("Redis") + 40)}…`);
+      }
     });
 
     let jobId = "";
@@ -144,17 +157,25 @@ export async function runUi(opts: {
       await p.getByText("waiting", { exact: true }).first().waitFor();
     });
 
-    await step("health page shows the Postgres card", async (p) => {
+    await step(`health page shows the ${pg ? "Postgres" : "Redis"} card`, async (p) => {
       await p.goto(`${opts.base}/health`);
-      await p.getByText(/Postgres \d+/).first().waitFor();
-      await p.getByText("Events table").first().waitFor();
+      if (pg) {
+        await p.getByText(/Postgres \d+/).first().waitFor();
+        await p.getByText("Events table").first().waitFor();
+      } else {
+        // exact: the top bar's tooltip also mentions commands and memory
+        await p.getByText("Commands/sec", { exact: true }).first().waitFor();
+        await p.getByText("Memory", { exact: true }).first().waitFor();
+        // the Redis card still has its Redis-only details
+        await p.getByText("Maxmemory policy").first().waitFor({ state: "attached" });
+      }
     });
 
     await step("delete the connection from settings", async (p) => {
       await p.goto(`${opts.base}/settings/connections`);
-      await p.getByRole("row", { name: /pg-ui/ }).getByRole("button", { name: "Delete connection" }).click();
+      await p.getByRole("row", { name: new RegExp(name) }).getByRole("button", { name: "Delete connection" }).click();
       const dialog = p.getByRole("dialog");
-      await dialog.getByRole("textbox").fill("pg-ui");
+      await dialog.getByRole("textbox").fill(name);
       await dialog.getByRole("button", { name: "Remove connection" }).click();
       await dialog.waitFor({ state: "detached" });
       const list = await api.get<RedisConnection[]>("/connections");
