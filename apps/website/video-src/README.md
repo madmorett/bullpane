@@ -1,7 +1,14 @@
 # Website videos
 
-The source of `public/media/bullpane.mp4` (the tour in the hero) and
-`public/media/mcp.{mp4,webm,gif}` (the MCP section, and the GIF in the README).
+Two kinds of video, on purpose:
+
+- **For the website** — the product fills the picture, nothing else, because the
+  page around it already has the headline and the copy:
+  - `tour.html` → `public/media/tour.mp4` (hero). 1600×900.
+  - `mcp.html?site=1` → `public/media/mcp.{mp4,webm,gif}` (MCP section, and the
+    GIF in the README). Rendered at 1280×720 with device scale 1.25.
+- **Standalone** (LinkedIn, a post, a talk) — title card, story, end card:
+  - `bullpane.html` and `mcp.html` (no `?site`). 1600×900. Not in `public/`.
 
 Each page is one 1600×900 scene drawn as a pure function of time,
 `window.renderAt(t)`, so every render is frame-exact. Open a file in a browser

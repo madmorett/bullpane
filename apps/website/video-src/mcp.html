@@ -28,6 +28,13 @@
     color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased;
   }
   .abs { position: absolute; }
+  /* ?site=1 — for the website frame: only the two panes, filling the picture */
+  body.site #stage { width: 1280px; height: 720px; background: #0d1015; }
+  body.site .pane { top: 16px; bottom: 16px; border-radius: 12px; box-shadow: none; }
+  body.site #chat { left: 16px; width: 500px; }
+  body.site #app { left: 532px; right: 16px; }
+  body.site #title, body.site #rule, body.site #end { display: none; }
+  #fade { inset: 0; background: #0d1015; pointer-events: none; opacity: 0; }
   .mono { font-family: var(--mono); }
 
   /* ---------- title / end ---------- */
@@ -127,6 +134,7 @@
 </head>
 <body>
 <div id="stage">
+  <div id="fade" class="abs" style="z-index:10"></div>
   <!-- 1. title -->
   <div id="title" class="abs">
     <div class="kicker">Bullpane · MCP</div>
@@ -233,6 +241,7 @@
 
 <script>
 const DURATION = 31;
+window.CURSOR_OFFSET = null;
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const p = (t, a, b) => clamp((t - a) / (b - a));
@@ -352,6 +361,8 @@ window.renderAt = function (t) {
     if (t < b[0]) { const k = ease(p(t, a[0], b[0])); cx = a[1] + (b[1] - a[1]) * k; cy = a[2] + (b[2] - a[2]) * k; }
     else { const k = ease(p(t, b[0] + 0.3, c[0] + 0.3)); cx = b[1] + (c[1] - b[1]) * k; cy = b[2] + (c[2] - b[2]) * k; }
   }
+  const [ox, oy] = window.CURSOR_OFFSET ?? [0, 0];
+  cx += ox; cy += oy;
   cur.style.opacity = co; cur.style.left = cx + "px"; cur.style.top = cy + "px";
   const clicks = [7.65, 8.55];
   let rO = 0, rS = 0.4;
@@ -364,8 +375,21 @@ window.renderAt = function (t) {
   $("facts").style.opacity = out(p(t, 26.3, 26.8));
 };
 
-window.DURATION = DURATION;
+window.DURATION = window.DURATION ?? DURATION;
 const q = new URLSearchParams(location.search);
+if (q.has("site")) {
+  // The story without the cards: from the question to the obliterate dialog,
+  // with a short fade at both ends so the loop does not jump.
+  document.body.classList.add("site");
+  const full = window.renderAt, A = 3.5, B = 24.4;
+  window.DURATION = B - A;
+  window.CURSOR_OFFSET = [-42, -50];
+  window.renderAt = (ts) => {
+    full(A + ts);
+    const f = Math.max(1 - clamp(ts / 0.4), clamp((ts - (B - A - 0.5)) / 0.5));
+    $("fade").style.opacity = f;
+  };
+}
 if (q.has("t")) window.renderAt(Number(q.get("t")));
 else {
   // live preview: loop in real time

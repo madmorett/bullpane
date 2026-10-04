@@ -201,6 +201,10 @@ footer a { color: var(--fg-muted); }
 }
 .showcase .sub + .show { border-top: 0; padding-top: 28px; }
 .show.flip .copy { order: 2; }
+/* A video that has to be read (MCP): copy on top, the picture at full width. */
+.show.wide { grid-template-columns: 1fr; }
+.show.wide .copy { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 48px; align-items: start; }
+@media (max-width: 860px) { .show.wide .copy { grid-template-columns: 1fr; gap: 0; } }
 .show .copy h3 { font-family: var(--display); font-size: clamp(22px, 2.5vw, 29px); letter-spacing: -0.025em; line-height: 1.1; margin: 0 0 12px; font-weight: 650; }
 .show .copy p { color: var(--fg-muted); font-size: 15.5px; margin: 0 0 10px; }
 .show .copy p b { color: var(--fg); font-weight: 650; }

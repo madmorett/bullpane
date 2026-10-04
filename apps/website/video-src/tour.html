@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bullpane tour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Inter:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  /* For the website hero frame: the product fills the picture, nothing else.
+     Each scene is a real screenshot (public/shots) with a slow camera move and
+     one caption; scenes crossfade. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0c0d11; }
+  #stage { position: relative; width: 1600px; height: 900px; overflow: hidden; background: #0c0d11; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .scene { position: absolute; inset: 0; overflow: hidden; }
+  .scene img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .cap { position: absolute; left: 28px; bottom: 28px; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 12px;
+         background: rgba(11,13,18,.95); backdrop-filter: blur(6px); border: 1px solid #2a3140; box-shadow: 0 12px 40px rgba(0,0,0,.45); color: #e6e9f0; font-size: 22px; font-weight: 500; }
+  .cap b { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: #f5a524; }
+  .cap b.pro { color: #b48cff; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+// `from`/`to` = [zoom over cover-fit, x%, y%] of how far into the image we look.
+const SCENES = [
+  { img: "../public/shots/overview.jpg", tag: "Overview", text: "Every queue on every connection, with what needs attention", from: [1.0, 0, 0], to: [1.12, 30, 35] },
+  { img: "../public/shots/queue-failed.jpg", tag: "Failures", text: "Search job data, names and errors. Retry or remove in bulk", from: [1.0, 0, 20], to: [1.08, 0, 70] },
+  { img: "../public/shots/job.jpg", tag: "One job", text: "Data, options, stack trace, logs and its flow parent", from: [1.0, 0, 0], to: [1.1, 20, 40] },
+  { img: "../public/shots/metrics.jpg", tag: "Metrics", text: "Throughput and failure rate per minute, from BullMQ itself", from: [1.0, 0, 10], to: [1.08, 30, 60] },
+  { img: "../public/shots/groups.jpg", tag: "BullMQ Pro", text: "Groups: rate limited, paused or maxed, at a glance", from: [1.0, 0, 50], to: [1.06, 8, 50] },
+  { img: "../public/shots/alerts.jpg", tag: "Alerts", pro: true, text: "Backlog and failure-rate rules, to Slack or any webhook", from: [1.0, 0, 50], to: [1.06, 12, 50] },
+  { img: "../public/shots/audit.jpg", tag: "Audit log", pro: true, text: "Who did what, on which queue, from which IP", from: [1.0, 0, 0], to: [1.08, 20, 45] },
+  { img: "../public/shots/flows.jpg", tag: "Flows", pro: true, text: "How queues feed each other, detected from BullMQ flows", from: [1.0, 0, 20], to: [1.1, 40, 60] },
+];
+const PER = 3.6, XF = 0.6; // seconds per scene, crossfade
+const DURATION = SCENES.length * PER;
+const W = 1600, H = 900;
+const stage = document.getElementById("stage");
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+
+const els = SCENES.map((s) => {
+  const el = document.createElement("div");
+  el.className = "scene";
+  el.innerHTML = `<img src="${s.img}"><div class="cap"><b class="${s.pro ? "pro" : ""}">${s.tag}${s.pro ? " · Pro" : ""}</b><span>${s.text}</span></div>`;
+  stage.appendChild(el);
+  return el;
+});
+
+window.renderAt = function (t) {
+  t = ((t % DURATION) + DURATION) % DURATION;
+  SCENES.forEach((s, i) => {
+    const el = els[i], img = el.querySelector("img"), cap = el.querySelector(".cap");
+    // local time, wrapping so the last scene crossfades into the first
+    let lt = t - i * PER;
+    if (lt > DURATION - XF) lt -= DURATION;
+    // the incoming scene fades in over the outgoing one
+    el.style.opacity = clamp(lt < 0 ? 1 + lt / XF : 1);
+    el.style.zIndex = lt < 0 ? 2 : 1;
+    el.style.display = lt >= -XF && lt <= PER ? "" : "none";
+    if (el.style.display === "none") return;
+    const k = ease(clamp((lt + XF) / (PER + XF)));
+    // Fill the picture, but never zoom a wide, short screenshot past 1.2× its
+    // fit-width size: past that it stops reading as the product. What is left
+    // is centred on the frame colour, which is the app's own background.
+    const fitW = W / img.naturalWidth;
+    const base = Math.max(fitW, Math.min(H / img.naturalHeight, fitW * 1.2));
+    const z = base * (s.from[0] + (s.to[0] - s.from[0]) * k);
+    const iw = img.naturalWidth * z, ih = img.naturalHeight * z;
+    const x = -(iw - W) * ((s.from[1] + (s.to[1] - s.from[1]) * k) / 100);
+    const y = ih > H ? -(ih - H) * ((s.from[2] + (s.to[2] - s.from[2]) * k) / 100) : (H - ih) / 2;
+    img.style.width = img.naturalWidth + "px";
+    img.style.transform = `translate(${x}px, ${y}px) scale(${z})`;
+    const c = clamp((lt - 0.2) / 0.4);
+    cap.style.opacity = c * (lt > PER - 0.3 ? clamp((PER - lt) / 0.3) : 1);
+    cap.style.transform = `translateY(${(1 - c) * 12}px)`;
+  });
+};
+
+window.DURATION = DURATION;
+const q = new URLSearchParams(location.search);
+Promise.all([document.fonts.ready, ...[...document.images].map((i) => (i.complete ? null : new Promise((r) => (i.onload = i.onerror = r))))]).then(() => {
+  window.ready = true;
+  if (q.has("t")) window.renderAt(Number(q.get("t")));
+  else {
+    const t0 = performance.now();
+    const loop = () => { window.renderAt((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+    loop();
+  }
+});
+</script>
+</body>
+</html>
