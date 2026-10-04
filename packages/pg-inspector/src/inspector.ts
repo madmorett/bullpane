@@ -51,6 +51,7 @@ import { metricPoints, num, numOrNull, prunesCompleted, rowToDetail, rowToSchedu
 import type { DetailRow, SchedulerRow, SummaryRow } from "./rows.js";
 import { ratesFrom, windowMetricsFrom, type MetricsRow } from "./metrics.js";
 import * as SQL from "./sql.js";
+import { nodePgConnectionString } from "./connection.js";
 
 const DEFAULTS = {
   discoveryTtlMs: 30_000,
@@ -147,7 +148,7 @@ export class PgInspector implements Inspector {
     }
     this.filter = config.queueFilter ? globToRegExp(config.queueFilter) : null;
     this.pool = new pg.Pool({
-      connectionString: config.url,
+      connectionString: nodePgConnectionString(config.url),
       max: READ_POOL_MAX,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: this.opts.connectTimeoutMs,
@@ -751,7 +752,7 @@ export class PgInspector implements Inspector {
       queueName,
       {
         connection: {
-          connectionString: this.config.url,
+          connectionString: nodePgConnectionString(this.config.url),
           schema: this.config.prefix,
           max: 1,
           idleTimeoutMillis: 10_000,

@@ -6,3 +6,4 @@
  */
 export { PgInspector } from "./inspector.js";
 export { PgInspectorPool } from "./pool.js";
+export { nodePgConnectionString } from "./connection.js";
