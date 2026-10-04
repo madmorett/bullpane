@@ -87,6 +87,7 @@ last = { count: meta.count, at: Date.now() };</code></pre>
   return [...names];
 }</code></pre>
 Cache the result for a while. Queues are created rarely; the scan does not need to run on every refresh.</li>
+<li><strong>On BullMQ 6's Postgres backend</strong> the cost model changes. Discovery is cheap, with one catch: <code>bullmq.meta</code> has a row for every queue a <code>Queue</code> or <code>Worker</code> was created for, but a queue fed only by a <code>FlowProducer</code> has none until a worker shows up, so also look for queue names in <code>bullmq.job</code>. Counts are not cheap: there is no <code>LLEN</code>, so a count reads every row of the state. Keep every query on a single state, which is what BullMQ's partial indexes are built for, cache counts for a few seconds, and do not let a dashboard query run in parallel on several cores of the database your workers share.</li>
 <li><strong>Always pass a range.</strong> <code>getJobs</code>, <code>getMetrics</code> and the job lists all default to ranges that can mean "everything". A failed set with 200,000 jobs is not a list to render.</li>
 <li><strong>Do not load payloads in lists.</strong> Job data can be megabytes. Show the payload when someone opens the job, not on every row.</li>
 <li><strong>Read-only by default.</strong> A dashboard that can retry, drain and obliterate needs a login and an audit trail, or it should not have those buttons.</li>
@@ -119,10 +120,11 @@ http.createServer(async (req, res) =&gt; {
 <p><a href="https://github.com/felixmosh/bull-board" rel="noopener">bull-board</a> mounts inside your Express, Fastify, NestJS or Hono app, behind the auth you already have. It is the quickest way to see jobs, retry them and read a stack trace. It is a viewer: no throughput, no failure rate over time, no alerts, no search inside job data. <a href="/vs/bull-board">Full comparison</a>.</p>
 
 <h2>Option 3: a dashboard that already does this</h2>
-<p>Bullpane covers most of this guide out of the box: every queue with counts, success rate and throughput charts, stalled jobs on the <em>active</em> tab, Redis memory, eviction policy and evicted keys, and the jobs themselves with search inside job data. Reads follow the rules above (no <code>KEYS</code>, one round trip per read, payloads truncated inside Redis), so it is safe to point at production. It runs next to your stack, no database to set up:</p>
+<p>Bullpane covers most of this guide out of the box, on Redis and on BullMQ 6's Postgres backend: every queue with counts, success rate and throughput charts, stalled jobs on the <em>active</em> tab, server health (Redis memory, eviction policy and evicted keys; Postgres connections, table sizes and BullMQ's untrimmed <code>event</code> table), and the jobs themselves with search inside job data. Reads follow the rules above (no <code>KEYS</code>, one round trip per read, payloads truncated on the server), so it is safe to point at production. It runs next to your stack, no database to set up:</p>
 <pre><code>docker run -d -p 3000:3000 -v bullpane-data:/data bullpane/bullpane
 # or, without Docker:
-npx bullpane --redis redis://localhost:6379</code></pre>
+npx bullpane --redis redis://localhost:6379
+npx bullpane --postgres postgres://user:pass@localhost:5432/app</code></pre>
 <p><a class="btn primary" href="/#install">Install the free edition</a> <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a></p>
 
 <h2>Sources</h2>

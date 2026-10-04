@@ -72,6 +72,12 @@ if (job.stalledCounter &gt; 0) {
 }</code></pre>
 <p><strong>In Redis</strong>, the SET holds the active ids being checked between two rounds. It is a transient reading, but it is O(1) to count:</p>
 <pre><code>SCARD bull:payments:stalled</code></pre>
+<p><strong>On BullMQ 6's Postgres backend</strong> the same mechanism lives in columns of the <code>job</code> table instead of keys. The lock is <code>locked_until_ms</code>, the stalled check marks active jobs with <code>stalled_marked</code> on one pass and reclaims the ones still marked with an expired lock on the next, and <code>stalled_count</code> is the job's <code>stalledCounter</code>. An expired lock is one query on the partial index BullMQ keeps for active jobs:</p>
+<pre><code>SELECT id, stalled_count
+  FROM bullmq.job
+ WHERE queue = 'payments'
+   AND state = 'active'
+   AND locked_until_ms &lt; extract(epoch FROM now()) * 1000;</code></pre>
 
 <h2>How to make it stop</h2>
 <ul>
@@ -82,7 +88,7 @@ if (job.stalledCounter &gt; 0) {
 </ul>
 
 <h2>Seeing it in Bullpane</h2>
-<p>Bullpane does not invent a "stalled" tab, because that would contradict BullMQ's model. On a queue's <em>active</em> tab it warns how many of those jobs are stalled right now ("3 of these are stalled (worker lost the lock)"), read in the same Redis round trip as the counts. In the job list, every job that ever stalled carries a badge with its <code>stalledCounter</code>, so the job that ran twice is visible without digging through logs.</p>
+<p>Bullpane does not invent a "stalled" tab, because that would contradict BullMQ's model. On a queue's <em>active</em> tab it warns how many of those jobs are stalled right now ("3 of these are stalled (worker lost the lock)"), read in the same round trip as the counts, on Redis and on BullMQ 6's Postgres backend alike. In the job list, every job that ever stalled carries a badge with its <code>stalledCounter</code>, so the job that ran twice is visible without digging through logs.</p>
 <p><a class="btn primary" href="/#install">Run Bullpane on your queues</a> <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a></p>
 
 <h2>Sources</h2>

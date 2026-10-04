@@ -11,43 +11,42 @@ The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
-## [Unreleased]
+## [0.6.0] — 2026-10-04
 
 ### Added
 
 - **BullMQ on Postgres.** BullMQ 6 can keep its queues in PostgreSQL, and
   Bullpane now reads and operates them: add a connection of kind *Postgres*
-  (or `"kind": "postgres"` in `BULLPANE_CONNECTIONS`) with the database URL and
-  the schema (BullMQ's default, `bullmq`). Queues, counts, job lists, search,
-  job detail, logs, schedulers, flows, metrics, alerts and every action work as
-  on Redis. Requires the schema written by BullMQ ≥ 6.0.3; Bullpane never runs
-  migrations on your database. See `docs/POSTGRES.md`.
+  with the database URL and the schema BullMQ created (default `bullmq`), or
+  `npx bullpane --postgres postgres://user:pass@host:5432/db`, or
+  `"kind": "postgres"` in `BULLPANE_CONNECTIONS`. Queues, counts, job lists,
+  search, job detail, logs, schedulers, flow trees, metrics, alerts and every
+  action work as on Redis. Reads are SQL on BullMQ's own tables (one statement
+  each, on BullMQ's partial indexes, single-core, payloads truncated in SQL);
+  writes go through the official bullmq API. Requires a schema written by
+  BullMQ ≥ 6.0.3; Bullpane never runs migrations on your database.
+  See `docs/POSTGRES.md`.
+- **Works where Postgres actually runs**: behind PgBouncer and other
+  transaction poolers, over TLS with the URL your provider gives you
+  (`sslmode=require` means what it means in psql), and with a read-only role
+  (browsing works; actions answer `403 database_permission_denied`).
 - **Postgres health card**: connections against `max_connections`,
   transactions/sec, database and table sizes, and a warning when BullMQ's
-  `event` table (never trimmed by BullMQ 6) passes 1 GiB.
-
-- **Works where Postgres actually runs**: behind PgBouncer and other
-  transaction poolers (reads fall back to one READ ONLY transaction each when
-  the pooler refuses or drops startup options), over TLS with the URL your
-  provider gives you (`sslmode=require` means what it means in psql), and with
-  a read-only role (browsing works; actions answer
-  `403 database_permission_denied`).
+  `event` table, which BullMQ 6 never trims, passes 1 GiB.
+- Counts on Postgres are exact. Big states (100k+ jobs) are recounted less
+  often, up to once a minute from 3M jobs, so a large install does not keep a
+  core of its database busy.
 
 ### Changed
 
 - The health monitor is now "Server health": its wording no longer assumes Redis.
-- Counts of big states (100k+ jobs) are still exact but refreshed less often,
-  up to once a minute from 3M jobs, so a large install does not keep a core of
-  its database busy recounting.
 
 ### Tested
 
-- `pnpm smoke:postgres` (apps/smoke): every feature end to end against a real
-  Postgres, real BullMQ workers and a real browser, plus a load test proving
-  the dashboard's reads take no locks a worker can wait on and leave worker
-  throughput within noise with 10 tabs open. It found that counts on big
-  states ran as 3-core parallel scans and starved the workers; dashboard
-  queries are now single-core and counts are shared per queue for 2 s.
+- Every feature end to end on Postgres (`pnpm smoke:postgres`): real workers,
+  a real browser, PgBouncer, TLS, a read-only role, MySQL as the app
+  database, and a load test showing the dashboard's reads take no locks a
+  worker can wait on and leave worker throughput within noise with 10 tabs open.
 
 ## [0.5.2] — 2026-10-04
 

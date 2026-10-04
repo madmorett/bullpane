@@ -3,7 +3,25 @@
 <h1>Changelog</h1>
 <p class="updated">Last updated 4 October 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>bullpane/bullpane:0.5.2</code> (also on <code>ghcr.io/madmorett/bullpane</code>), <code>:0.5</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>bullpane/bullpane:0.6.0</code> (also on <code>ghcr.io/madmorett/bullpane</code>), <code>:0.6</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-6-0">0.6.0</h2>
+    <span class="release-date">4 October 2026</span>
+  </div>
+  <p class="release-note">BullMQ on Postgres.</p>
+  <h3>Added</h3>
+  <ul>
+    <li><strong>BullMQ 6&rsquo;s Postgres backend.</strong> Add a connection of kind Postgres with your database URL and the schema BullMQ created (default <code>bullmq</code>), or run <code>npx bullpane --postgres postgres://user:pass@host:5432/db</code>. Queues, counts, job lists, search inside job data, job detail and logs, schedulers, flow trees, metrics, alerts and every action work as on Redis. Reads are SQL on BullMQ&rsquo;s own tables; writes go through the official BullMQ API. Bullpane never runs migrations on your database.</li>
+    <li><strong>Works where Postgres actually runs:</strong> behind PgBouncer and other transaction poolers, over TLS with the URL your provider gives you (<code>?sslmode=require</code> means what it means in <code>psql</code>), and with a read-only role, which can browse everything while actions are refused with a clear message.</li>
+    <li><strong>Postgres health card:</strong> connections against <code>max_connections</code>, transactions per second, database and table sizes, and a warning when BullMQ&rsquo;s <code>event</code> table, which BullMQ 6 never trims, passes 1 GiB.</li>
+  </ul>
+  <h3>Changed</h3>
+  <ul>
+    <li>The health monitor is now &ldquo;Server health&rdquo;: it covers Redis and Postgres connections.</li>
+  </ul>
+</article>
 
 <article class="release">
   <div class="release-head">

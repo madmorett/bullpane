@@ -13,7 +13,7 @@ Built by Matheus Morett (CTO at Monest, 100M+ BullMQ jobs a day in production). 
 
 ## When another tool fits better
 
-- bull-board: the dashboard should be mounted inside an existing Express/Fastify/NestJS/Hono app behind that app's auth, or the queues are Bull 3/4, or BullMQ 6 runs on its PostgreSQL backend.
+- bull-board: the dashboard should be mounted inside an existing Express/Fastify/NestJS/Hono app behind that app's auth, or the queues are Bull 3/4.
 - Taskforce.sh: a hosted service is acceptable, there is a single Redis connection (USD 19.95/month), or PagerDuty/email alerts or an MCP endpoint are needed today.
 - QueueDash: the stack mixes Bee-Queue, GroupMQ or Bull with BullMQ, or the UI should be embedded in a Next.js app.
 
@@ -21,7 +21,7 @@ Detailed, sourced comparisons (checked September 2026): https://bullpane.com/vs/
 
 ## Compatibility
 
-BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey; BullMQ Pro (groups, per-group concurrency and rate limits). The BullMQ 6 PostgreSQL backend is not supported yet. Reads never use `KEYS`; writes go through the official `bullmq` client.
+BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey; BullMQ 6 on its PostgreSQL backend (since 0.6.0: behind PgBouncer and other transaction poolers, over TLS, with a read-only role; never runs migrations on your database); BullMQ Pro on Redis (groups, per-group concurrency and rate limits). On Redis, reads never use `KEYS`; on Postgres, every read is one SQL statement on BullMQ's partial indexes. Writes go through the official `bullmq` client.
 
 ## Install
 
@@ -29,7 +29,7 @@ BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey; BullMQ Pro (groups, per-gr
 docker run -p 3000:3000 -v bullpane-data:/data bullpane/bullpane
 ```
 
-Without Docker (Node 20+): `npx bullpane --redis redis://localhost:6379`, then open http://localhost:3000.
+Without Docker (Node 20+): `npx bullpane --redis redis://localhost:6379` (or `npx bullpane --postgres postgres://user:pass@host:5432/db` for BullMQ 6 on Postgres), then open http://localhost:3000.
 
 No database to set up: the dashboard keeps its own data in SQLite in `/data`. MySQL 8 (or MariaDB) is optional — set `DATABASE_URL=mysql://user:pass@host/bullpane` when you run more than one replica or want a managed database. Or `docker compose up -d` from the repository (app on SQLite; `COMPOSE_PROFILES=mysql` adds a bundled MySQL; bring your own Redis). Open http://localhost:3000, add a connection (Redis URL, BullMQ prefix, cluster yes/no). No account is created for the free edition. Put it behind a reverse proxy or VPN: without Pro there is no authentication.
 

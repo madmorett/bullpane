@@ -17,6 +17,19 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # smoke.mjs also runs `bullpane --postgres` against this: a write there is
+    # bullmq requiring `pg` from the installed package, which a bad bundle breaks
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: bullpane
+          POSTGRES_DB: bullpane
+        ports: ["5440:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      BULLPANE_NPM_SMOKE_PG_URL: postgres://postgres:bullpane@127.0.0.1:5440/bullpane
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

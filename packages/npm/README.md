@@ -4,6 +4,8 @@
 
 ```sh
 npx bullpane --redis redis://localhost:6379
+# or, for BullMQ 6's Postgres backend
+npx bullpane --postgres postgres://user:pass@localhost:5432/app
 ```
 
 Open <http://localhost:3000>. That is the whole install: no database to set up, no account, no login.
@@ -14,24 +16,26 @@ Open <http://localhost:3000>. That is the whole install: no database to set up, 
 
 ## What you get
 
-- Every queue on a Redis, with counts, success rate and what needs attention.
+- Every queue on a Redis, or in BullMQ 6's Postgres backend, with counts, success rate and what needs attention.
 - Jobs by state, search inside job data, job detail with data, return value, stack trace and logs.
 - Retry, promote, remove and bulk actions through the official `bullmq` API. Pause, resume, clean, drain.
 - Job schedulers, flows (parent/child trees), stalled jobs, Redis health.
 - BullMQ Pro groups: per-group concurrency, rate limits and paused groups.
 - Safe on a busy production Redis: no `KEYS`, one round trip per read, payloads truncated inside Redis.
 
-Works with BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey, and with BullMQ Pro.
+Works with BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey, with BullMQ 6 on Postgres (behind PgBouncer too), and with BullMQ Pro.
 
 **Pro** (USD 39/month, one installation, unlimited users) adds login with roles, SSO, alerts to Slack or webhooks, folders, a flow graph, an audit log and an MCP server for Claude and other AI clients.
 
 ## Options
 
 ```
-npx bullpane [--redis <url>] [options]
+npx bullpane [--redis <url> | --postgres <url>] [options]
 
   --redis <url>          Redis your BullMQ workers use, added as a connection
   --prefix <prefix>      BullMQ prefix of that connection (default: bull)
+  --postgres <url>       Postgres of BullMQ 6's Postgres backend, added as a connection
+  --schema <schema>      Schema of that connection (default: bullmq)
   --port <port>          HTTP port (default: 3000)
   --host <host>          Interface to listen on (default: 127.0.0.1)
   --data-dir <dir>       Where the SQLite database lives (default: ~/.bullpane)

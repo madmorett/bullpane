@@ -20,7 +20,7 @@
         { "@type": "Question", "name": "Is Bullpane a bull-board alternative?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Both are self-hosted dashboards for BullMQ with public source: bull-board is MIT, Bullpane is MIT with its Pro features source-available. bull-board is a viewer you embed in your own server or run with its CLI or Docker image. Bullpane is a standalone dashboard that adds search inside job data, a BullMQ Pro groups view and reads bounded for production Redis; its Pro edition adds users and roles, SSO, alerts and an audit log." } },
         { "@type": "Question", "name": "Does bull-board have authentication?", "acceptedAnswer": { "@type": "Answer", "text": "The embedded bull-board has no built-in authentication; you protect it with your own app's middleware. Its CLI and Docker image support one shared basic-auth user. Neither has user accounts or roles. Bullpane's free edition has no login at all; Bullpane Pro has user accounts, admin/operator/viewer roles and SSO over OIDC and SAML." } },
         { "@type": "Question", "name": "Can bull-board search inside job data?", "acceptedAnswer": { "@type": "Answer", "text": "No. bull-board's search matches queue names; searching job payloads has been an open request since 2020 (issue #154). Bullpane searches inside job data in the free edition, bounded and resumable so it never blocks Redis." } },
-        { "@type": "Question", "name": "When should I pick bull-board over Bullpane?", "acceptedAnswer": { "@type": "Answer", "text": "Pick bull-board when you want the dashboard mounted inside your existing Express, Fastify, NestJS or Hono app behind the auth you already have, when you still run Bull 3/4, or when you run BullMQ 6 on its PostgreSQL backend, which Bullpane does not support yet." } }
+        { "@type": "Question", "name": "When should I pick bull-board over Bullpane?", "acceptedAnswer": { "@type": "Answer", "text": "Pick bull-board when you want the dashboard mounted inside your existing Express, Fastify, NestJS or Hono app behind the auth you already have, or when you still run Bull 3/4." } }
       ]
     }
   ]
@@ -34,7 +34,7 @@
 <p class="lead-sm">bull-board is the default BullMQ UI for good reasons: it is free, MIT, actively maintained and mounts inside the Node server you already run. Bullpane is a standalone dashboard for the point where you need more than a viewer: search inside job data, a real view of BullMQ Pro groups, reads that stay cheap on a production Redis and, in Pro, a team behind a login with roles and an audit trail.</p>
 
 <div class="callout">
-<p><strong>Short answer.</strong> Keep bull-board if you want it inside your app behind the auth you already have, if you are on Bull 3/4, or if you run BullMQ 6 on PostgreSQL. Pick Bullpane if you need to find a job by what is in it, you run BullMQ Pro groups, or more than one person operates the queues and you need to know who did what.</p>
+<p><strong>Short answer.</strong> Keep bull-board if you want it inside your app behind the auth you already have, or if you are on Bull 3/4. Pick Bullpane if you need to find a job by what is in it, you run BullMQ Pro groups, or more than one person operates the queues and you need to know who did what.</p>
 </div>
 
 <h2>Side by side</h2>
@@ -47,7 +47,7 @@
 <tr><td>Runs inside your own Express / Fastify / Nest / Hono app</td><td class="hl"><i class="pill no">–</i><small>separate container</small></td><td><i class="pill yes">✓</i></td></tr>
 <tr><td>Standalone Docker image</td><td class="hl"><i class="pill yes">✓</i></td><td><i class="pill yes">✓</i></td></tr>
 <tr><td>Bull 3/4 (not MQ)</td><td class="hl"><i class="pill no">–</i></td><td><i class="pill yes">✓</i></td></tr>
-<tr><td>BullMQ 6 on PostgreSQL</td><td class="hl"><i class="pill no">–</i><small>not yet</small></td><td><i class="pill yes">✓</i></td></tr>
+<tr><td>BullMQ 6 on PostgreSQL</td><td class="hl"><i class="pill yes">✓</i><small>since 0.6.0; PgBouncer, TLS, read-only role</small></td><td><i class="pill yes">✓</i></td></tr>
 <tr><td>Search inside job data</td><td class="hl"><i class="pill yes">✓</i><small>bounded, resumable</small></td><td><i class="pill no">–</i><small>queue names only</small></td></tr>
 <tr><td>BullMQ Pro groups</td><td class="hl"><i class="pill yes">✓</i><small>per-group status, concurrency, rate limit</small></td><td><i class="pill yes">✓</i><small>group jobs in counts, group id per job</small></td></tr>
 <tr><td>Payload truncated inside Redis before it is sent</td><td class="hl"><i class="pill yes">✓</i></td><td><i class="pill no">–</i><small>trim with a formatter, after the read</small></td></tr>
@@ -67,7 +67,7 @@
 <h2>Where bull-board is the better choice</h2>
 <ul>
 <li><strong>It lives inside your app.</strong> Mount it on a route of the Express, Fastify, Koa, Hapi, NestJS, Hono, H3 or Elysia server you already deploy and it inherits your login. No second service to run. Bullpane is always its own container.</li>
-<li><strong>Wider backend support.</strong> bull-board supports Bull 3/4 and BullMQ 6 on its PostgreSQL backend. Bullpane reads BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey only.</li>
+<li><strong>Bull 3/4.</strong> bull-board still reads the old Bull. Bullpane reads BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey, and BullMQ 6 on Postgres.</li>
 <li><strong>Cheapest possible login.</strong> Its Docker image takes <code>BULL_BOARD_USER</code> and <code>BULL_BOARD_PASSWORD</code>. Bullpane's free edition has no login at all, on purpose: you put it on a private network or behind your proxy, or you use Pro.</li>
 <li><strong>It is the default.</strong> Around 3,500 stars and years of answers on the internet. If a viewer is all you need, that matters.</li>
 </ul>

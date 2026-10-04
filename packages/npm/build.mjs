@@ -2,7 +2,7 @@
  * Assembles the publishable `bullpane` npm package in ./out:
  *
  *   out/package.json      generated: name, version (from the root), bin, and the
- *                         third-party dependencies of server + inspector + shared
+ *                         third-party dependencies of server + inspectors + shared
  *   out/bin/bullpane.mjs  the CLI
  *   out/dist/server.mjs   apps/server bundled with the workspace packages
  *   out/dist/lua/         the inspector's scripts (loaded relative to the bundle)
@@ -34,7 +34,17 @@ if (!process.argv.includes("--no-web")) {
 if (!existsSync(path.join(repo, "apps/web/dist/index.html"))) throw new Error("apps/web/dist is missing: build the web first");
 
 const root = read("package.json");
-const manifests = ["apps/server/package.json", "packages/redis-inspector/package.json", "packages/shared/package.json"].map(read);
+// Every workspace package the server bundles. A missing one would leave its
+// third-party dependencies out of the published package: `pg` (Postgres
+// backend) is required at runtime by bullmq itself for writes, so it must be
+// installed, not bundled.
+const manifests = [
+  "apps/server/package.json",
+  "packages/inspector/package.json",
+  "packages/redis-inspector/package.json",
+  "packages/pg-inspector/package.json",
+  "packages/shared/package.json",
+].map(read);
 const dependencies = {};
 for (const m of manifests) {
   for (const [name, range] of Object.entries(m.dependencies ?? {})) {
@@ -75,8 +85,8 @@ const pkg = {
   name: "bullpane",
   version: root.version,
   description:
-    "Self-hosted dashboard for BullMQ and BullMQ Pro: queues, jobs, failures, metrics, Redis health, flows and Pro groups. A bull-board alternative you can run with npx.",
-  keywords: ["bullmq", "bullmq-pro", "bull", "dashboard", "ui", "queue", "redis", "jobs", "monitoring", "bull-board", "admin", "self-hosted"],
+    "Self-hosted dashboard for BullMQ and BullMQ Pro, on Redis or on BullMQ 6's Postgres backend: queues, jobs, failures, metrics, server health, flows and Pro groups. A bull-board alternative you can run with npx.",
+  keywords: ["bullmq", "bullmq-pro", "bull", "dashboard", "ui", "queue", "redis", "postgres", "postgresql", "jobs", "monitoring", "bull-board", "admin", "self-hosted"],
   homepage: "https://bullpane.com",
   repository: { type: "git", url: "git+https://github.com/madmorett/bullpane.git" },
   bugs: "https://github.com/madmorett/bullpane/issues",

@@ -3,6 +3,11 @@
  * the tarball into an empty directory outside the monorepo, start the bin and
  * check the server answers, migrates its SQLite and serves the UI.
  *
+ * With BULLPANE_NPM_SMOKE_PG_URL set, it also runs `bullpane --postgres <url>`
+ * against BullMQ data seeded with the bullmq and pg the package installed, and
+ * reads and WRITES through it: a write is bullmq requiring `pg` on its own, the
+ * thing a bundle would get wrong.
+ *
  *   node build.mjs && node smoke.mjs
  */
 import { execSync, spawn } from "node:child_process";
@@ -46,6 +51,59 @@ try {
   } finally {
     child.kill("SIGTERM");
   }
+  if (process.env.BULLPANE_NPM_SMOKE_PG_URL) await postgresSmoke(bin, process.env.BULLPANE_NPM_SMOKE_PG_URL);
 } finally {
   rmSync(dir, { recursive: true, force: true });
+}
+
+async function postgresSmoke(bin, pgUrl) {
+  const req = (await import("node:module")).createRequire(path.join(dir, "package.json"));
+  const pg = req("pg");
+  const { Queue, createPostgresBackend, runMigrations } = req("bullmq");
+  const schema = `npm_smoke_${Math.random().toString(36).slice(2, 7)}`;
+  const admin = new pg.Client({ connectionString: pgUrl });
+  await admin.connect();
+  const pgPort = port + 1;
+  try {
+    await runMigrations(admin, schema);
+    const q = new Queue("orders", { connection: { connectionString: pgUrl, schema } }, createPostgresBackend);
+    for (let i = 0; i < 3; i++) await q.add("order", { i });
+    await q.close();
+
+    const env = { ...process.env };
+    delete env.DATABASE_URL;
+    const child = spawn(bin, ["--port", String(pgPort), "--data-dir", path.join(dir, "data-pg"), "--postgres", pgUrl, "--schema", schema], {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let log = "";
+    child.stdout.on("data", (d) => (log += d));
+    child.stderr.on("data", (d) => (log += d));
+    const api = (p, init) => fetch(`http://127.0.0.1:${pgPort}/api${p}`, init).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+    try {
+      let conns = null;
+      for (let i = 0; i < 60 && !conns?.length; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        conns = await api("/connections").then((r) => r.body).catch(() => null);
+      }
+      const c = conns?.[0];
+      if (!c || c.kind !== "postgres" || !c.status?.ok) throw new Error(`postgres connection: ${JSON.stringify(c)}\n${log}`);
+      const queue = await api(`/connections/${c.id}/queues/orders`);
+      if (queue.body?.counts?.waiting !== 3) throw new Error(`read: ${JSON.stringify(queue.body)}`);
+      const added = await api(`/connections/${c.id}/queues/orders/jobs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "from-npx", data: { ok: true } }),
+      });
+      if (added.status !== 201 && added.status !== 200) throw new Error(`write (bullmq + pg from the package): ${added.status} ${JSON.stringify(added.body)}\n${log}`);
+      const removed = await api(`/connections/${c.id}/queues/orders/jobs/${added.body.id}`, { method: "DELETE" });
+      if (removed.status !== 200) throw new Error(`remove: ${removed.status} ${JSON.stringify(removed.body)}`);
+      console.log(`npm smoke ok: bullpane@${version} --postgres (read, write, remove)`);
+    } finally {
+      child.kill("SIGTERM");
+    }
+  } finally {
+    await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`).catch(() => undefined);
+    await admin.end();
+  }
 }

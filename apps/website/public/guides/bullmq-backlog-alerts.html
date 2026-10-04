@@ -132,7 +132,7 @@ setInterval(() =&gt; Promise.all(queues.map(check)).catch(console.error), 60_000
 </ul>
 
 <h2>Doing this in Bullpane</h2>
-<p>Bullpane Pro has alert rules that send to Slack or a webhook, with cooldowns and a resolved message, scoped to a queue, a folder, a connection or every queue at once. For backlogs today it has a <em>waiting above</em> rule, which counts waiting and prioritized jobs and leaves paused queues out, next to failure count, failure rate and p95 processing time. The oldest-job and time-to-drain signals in this guide are not rules in Bullpane yet; until they are, the checker above runs fine next to it.</p>
+<p>Bullpane Pro has alert rules that send to Slack or a webhook, with cooldowns and a resolved message, scoped to a queue, a folder, a connection or every queue at once, for queues on Redis and on BullMQ 6's Postgres backend. For backlogs today it has a <em>waiting above</em> rule, which counts waiting and prioritized jobs and leaves paused queues out, next to failure count, failure rate and p95 processing time. The oldest-job and time-to-drain signals in this guide are not rules in Bullpane yet; until they are, the checker above runs fine next to it.</p>
 <p><a class="btn primary" href="/#install">Install Bullpane</a> <a class="btn" href="/#pricing">See Pro pricing</a></p>
 
 <h2>Sources</h2>

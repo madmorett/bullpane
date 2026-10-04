@@ -18,12 +18,15 @@ const { version } = JSON.parse(readFileSync(path.join(root, "package.json"), "ut
 const HELP = `Bullpane ${version} — self-hosted dashboard for BullMQ and BullMQ Pro
 
 Usage
-  npx bullpane [--redis <url>] [options]
+  npx bullpane [--redis <url> | --postgres <url>] [options]
 
 Options
   --redis <url>          Redis your BullMQ workers use, added as a connection
                          (e.g. redis://localhost:6379). More can be added in the UI.
   --prefix <prefix>      BullMQ prefix of that connection (default: bull)
+  --postgres <url>       Postgres of BullMQ 6's Postgres backend, added as a
+                         connection (e.g. postgres://user:pass@localhost:5432/app)
+  --schema <schema>      Schema BullMQ created its tables in (default: bullmq)
   --port <port>          HTTP port (default: 3000, or $PORT)
   --host <host>          Interface to listen on (default: 127.0.0.1). The free
                          edition has no login: only use 0.0.0.0 on a private network.
@@ -41,6 +44,8 @@ try {
     options: {
       redis: { type: "string" },
       prefix: { type: "string" },
+      postgres: { type: "string" },
+      schema: { type: "string" },
       port: { type: "string" },
       host: { type: "string" },
       "data-dir": { type: "string" },
@@ -81,6 +86,28 @@ set("BULLPANE_READ_ONLY", args["read-only"] ? "true" : undefined);
 set("WEB_DIST", undefined, path.join(root, "web"));
 set("PUBLIC_URL", undefined, `http://localhost:${env.PORT}`);
 set("NODE_ENV", undefined, "production");
+
+if (args.redis && args.postgres) {
+  console.error("--redis and --postgres are one connection each: pass one, add the other in the UI");
+  process.exit(2);
+}
+
+/** host:port, never the password */
+const nameFrom = (url) => {
+  const u = new URL(url);
+  return `${u.hostname}${u.port ? `:${u.port}` : ""}`;
+};
+
+if (args.postgres) {
+  let name;
+  try {
+    name = nameFrom(args.postgres);
+  } catch {
+    console.error(`--postgres must be a URL like postgres://user:pass@localhost:5432/app`);
+    process.exit(2);
+  }
+  env.BULLPANE_CONNECTIONS = JSON.stringify([{ name, kind: "postgres", url: args.postgres, prefix: args.schema ?? "bullmq" }]);
+}
 
 if (args.redis) {
   let name = "Redis";
