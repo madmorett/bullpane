@@ -53,9 +53,27 @@ export function isRedisConnectionError(err: unknown): boolean {
   return CONNECTION_ERROR_PATTERNS.some((p) => p.test(message));
 }
 
+/**
+ * Postgres SQLSTATE 42501: the connection's role may read but not write (a
+ * read-only role is a sensible way to point a dashboard at production). Said
+ * as what it is, not as a 409 about the job.
+ */
+function isPermissionDenied(err: unknown): boolean {
+  const code = typeof err === "object" && err !== null ? (err as { code?: string }).code : undefined;
+  return code === "42501" || /permission denied for (table|schema|function|sequence|relation)/i.test(errorMessage(err));
+}
+
 export function mapInspectorError(err: unknown): HttpError {
   if (err instanceof HttpError) return err;
   if (isRedisConnectionError(err)) return redisUnavailable(err);
+  if (isPermissionDenied(err)) {
+    return new HttpError(
+      403,
+      "database_permission_denied",
+      `The database refused the action: ${errorMessage(err)}. This connection's role can read but not write; ` +
+        "give it the same rights your workers have to use actions from Bullpane.",
+    );
+  }
   const message = errorMessage(err);
   if (NOT_FOUND_PATTERNS.some((p) => p.test(message))) return notFound("Job");
   return conflict(message);

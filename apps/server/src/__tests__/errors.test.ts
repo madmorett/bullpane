@@ -89,6 +89,11 @@ describe("inspector error mapping", () => {
     expect(mapInspectorError(new Error("connect ECONNREFUSED")).status).toBe(502);
     expect(mapInspectorError(new Error("Missing key for job 42. finished")).status).toBe(404);
     expect(mapInspectorError(new Error("Job 42 is not in the failed state. retryJob"))).toMatchObject({ status: 409, error: "conflict" });
+    const pgDenied = Object.assign(new Error("permission denied for table job"), { code: "42501" });
+    expect(mapInspectorError(pgDenied)).toMatchObject({ status: 403, error: "database_permission_denied" });
+    // Postgres connection failures are 502 like Redis ones
+    expect(mapInspectorError(Object.assign(new Error('password authentication failed for user "app"'), { code: "28P01" })).status).toBe(502);
+    expect(mapInspectorError(new Error("postgres_schema_missing: no BullMQ schema")).status).toBe(502);
     const passthrough = notFound("Queue");
     expect(mapInspectorError(passthrough)).toBe(passthrough);
   });

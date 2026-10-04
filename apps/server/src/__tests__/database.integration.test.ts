@@ -16,7 +16,7 @@
  * fails if it is down.
  */
 import { generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInspectorPool } from "@bullpane/redis-inspector";
@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../app";
 import { loadConfig } from "../config";
 import { createDatabase, type Database } from "../db";
-import { runMigrations } from "../db/migrate";
+import { MIGRATIONS_DIR, runMigrations } from "../db/migrate";
 import { signLicense } from "../license";
 import { DrizzleMcpStore } from "../ee/mcp/store";
 import { DrizzleSettingsStore } from "../services/settings-store";
@@ -189,6 +189,21 @@ describe.each(targets)("$name: the server on a real database", (target) => {
     const list = await ok<Array<{ id: string; name: string; queueFilter: string | null }>>("GET", "/connections");
     expect(list.map((x) => x.name)).toEqual(["Alpha", "Beta", "Gamma"]);
     expect(list[2]?.queueFilter).toBe("pay*");
+  });
+
+  it("free edition: a Postgres connection keeps its kind and schema", async () => {
+    // Nothing listens on port 1: the row must be stored even though the probe fails.
+    const pg = await ok<{ id: string; kind: string; prefix: string; status: { ok: boolean } }>("POST", "/connections", {
+      name: "Jobs PG",
+      kind: "postgres",
+      url: "postgres://app:secret@127.0.0.1:1/app",
+      prefix: "jobs",
+    });
+    expect(pg).toMatchObject({ kind: "postgres", prefix: "jobs", status: { ok: false } });
+    const row = await app.ctx.connections.getRow(pg.id);
+    expect(row.kind).toBe("postgres");
+    expect((await call("PATCH", `/connections/${pg.id}`, { url: "redis://127.0.0.1:6379" })).statusCode).toBe(400);
+    await ok("DELETE", `/connections/${pg.id}`);
   });
 
   it("free edition: reorders inside a transaction", async () => {
@@ -644,5 +659,65 @@ describe.each(targets)("$name: the server on a real database", (target) => {
     expect(await ok<unknown[]>("GET", "/folders")).toEqual(before.folders);
     expect(await alertRules()).toEqual(before.alerts);
     expect(await ok("GET", "/settings/attention")).toEqual(before.attention);
+  });
+});
+
+/**
+ * An install that ran 0.5.1 already has connections, all Redis, and no `kind`
+ * column. Upgrading must add the column and leave every existing row a Redis
+ * connection, on both dialects.
+ */
+describe.each(targets)("$name: upgrading a 0.5.1 database adds the connection kind", (target) => {
+  const KIND_MIGRATION = { sqlite: "0003_connection_kind.sql", mysql: "0010_connection_kind.sql" } as const;
+  let env: Record<string, string>;
+  let teardown: () => Promise<void>;
+  let database: Database;
+
+  beforeAll(async () => {
+    ({ env, teardown } = await target.setup());
+    database = createDatabase(loadConfig({ SESSION_SECRET, LOG_LEVEL: "silent", ...env }, { warn: () => undefined }).database);
+  }, 60_000);
+
+  afterAll(async () => {
+    await database?.close().catch(() => undefined);
+    await teardown();
+  });
+
+  it("existing rows become redis connections and keep working", async () => {
+    // 1. the database as 0.5.1 left it: every migration except the kind one
+    const dialectDir = path.join(MIGRATIONS_DIR, database.dialect);
+    const before = mkdtempSync(path.join(tmpdir(), "bullpane-mig-"));
+    for (const f of readdirSync(dialectDir)) {
+      if (f !== KIND_MIGRATION[database.dialect]) copyFileSync(path.join(dialectDir, f), path.join(before, f));
+    }
+    await runMigrations(database, quietLog, before);
+    rmSync(before, { recursive: true, force: true });
+    const now = database.dialect === "sqlite" ? Date.now() : new Date();
+    await database.exec(
+      "INSERT INTO connections (id, name, url, prefix, cluster, queue_filter, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ["old-1", "Production", REDIS_URL, "bull", 0, null, 0, now],
+    );
+
+    // 2. the upgrade
+    const { applied } = await runMigrations(database, quietLog);
+    expect(applied).toEqual([KIND_MIGRATION[database.dialect]]);
+    const [row] = await database.rows("SELECT kind, prefix FROM connections WHERE id = 'old-1'");
+    expect(row).toMatchObject({ kind: "redis", prefix: "bull" });
+
+    // 3. the app reads it as a Redis connection
+    const cfg = loadConfig({ SESSION_SECRET, DEMO_MODE: "false", LOG_LEVEL: "silent", ...env }, { warn: () => undefined });
+    const pool = createInspectorPool({ discoveryTtlMs: 30_000, previewBytes: 2048 });
+    const app = await buildApp({ config: cfg, db: database.db, pool, logger: false, serveWeb: false });
+    await app.ctx.edition.load();
+    await app.ready();
+    try {
+      const res = await app.inject({ method: "GET", url: "/api/connections" });
+      expect(res.json()).toEqual([expect.objectContaining({ id: "old-1", kind: "redis", prefix: "bull", name: "Production" })]);
+    } finally {
+      app.ctx.alertsEngine.stop();
+      app.ctx.edition.stop();
+      await app.close();
+      await pool.closeAll();
+    }
   });
 });

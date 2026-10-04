@@ -366,6 +366,47 @@ describe.skipIf(!available)("PgInspector (real Postgres)", () => {
     expect(await inspector.discoverQueues({ force: true })).not.toContain("writes");
   });
 
+  it("a read-only role (USAGE + SELECT only) can read everything, and writes fail with a permission error", async () => {
+    const role = `${SCHEMA}_ro`;
+    await admin.query(`DROP ROLE IF EXISTS ${role}`);
+    await admin.query(`CREATE ROLE ${role} LOGIN PASSWORD 'ro-pass'`);
+    await admin.query(`GRANT USAGE ON SCHEMA "${SCHEMA}" TO ${role}`);
+    await admin.query(`GRANT SELECT ON ALL TABLES IN SCHEMA "${SCHEMA}" TO ${role}`);
+    const url = new globalThis.URL(URL);
+    url.username = role;
+    url.password = "ro-pass";
+    const ro = new PgInspector({ id: "ro", kind: "postgres", url: url.toString(), prefix: SCHEMA });
+    // a worker connected under the OTHER role, so its session belongs to someone else
+    const w = worker("ro-idle", async () => undefined, { name: "other-role" });
+    try {
+      expect((await ro.ping()).ok).toBe(true);
+      expect(await ro.discoverQueues()).toContain("emails");
+      expect((await ro.getQueueStats(["orders"])).orders?.counts.waiting).toBeGreaterThan(0);
+      expect((await ro.getJobs("emails", "failed", { start: 0, end: 10, order: "desc" })).total).toBeGreaterThanOrEqual(0);
+      expect((await ro.searchJobs("orders", "waiting", "needle", { limit: 5 })).jobs).toHaveLength(1);
+      expect(await ro.getJobTree("assemble", flowRootId)).not.toBeNull();
+      expect((await ro.getSchedulers("reports", { start: 0, end: 10 })).total).toBeGreaterThanOrEqual(0);
+      const info = await ro.serverInfo();
+      expect(info.databaseSizeBytes).toBeGreaterThan(0);
+      // workers of another role: pg_stat_activity hides some columns, application_name included?
+      let seen = 0;
+      for (let i = 0; i < 50 && seen === 0; i++) {
+        const fresh = new PgInspector({ id: "ro2", kind: "postgres", url: url.toString(), prefix: SCHEMA });
+        seen = (await fresh.getQueueSetup("ro-idle")).workers?.count ?? 0;
+        await fresh.close();
+        if (seen === 0) await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(seen).toBe(1);
+      await expect(ro.addJob("orders", "x", {})).rejects.toThrow(/permission denied/);
+    } finally {
+      await w.close(true);
+      await ro.close();
+      await admin.query(`REVOKE ALL ON ALL TABLES IN SCHEMA "${SCHEMA}" FROM ${role}`);
+      await admin.query(`REVOKE ALL ON SCHEMA "${SCHEMA}" FROM ${role}`);
+      await admin.query(`DROP ROLE IF EXISTS ${role}`);
+    }
+  });
+
   it("the pool keeps one inspector per id and replaces it when the target changes", async () => {
     const pool = new PgInspectorPool();
     const a = pool.get({ id: "x", kind: "postgres", url: URL, prefix: SCHEMA });
