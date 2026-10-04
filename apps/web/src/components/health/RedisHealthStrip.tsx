@@ -45,7 +45,7 @@ export function RedisHealthStrip({ className }: { className?: string }) {
   const collapsible = health.length > INLINE_MAX;
 
   return (
-    <section aria-label="Redis health" className={cn("space-y-2", className)}>
+    <section aria-label="Server health" className={cn("space-y-2", className)}>
       {critical.length > 0 && <CriticalBanner items={critical} />}
 
       <div className="card px-2 py-1.5">
@@ -53,7 +53,7 @@ export function RedisHealthStrip({ className }: { className?: string }) {
           <Activity className={cn("size-3.5 shrink-0 text-fg-subtle", paused && "opacity-50")} aria-hidden />
 
           {isLoading && health.length === 0 ? (
-            <span className="min-w-0 flex-1 text-[11px] text-fg-subtle">Reading Redis health…</span>
+            <span className="min-w-0 flex-1 text-[11px] text-fg-subtle">Reading server health…</span>
           ) : error != null && health.length === 0 ? (
             <span className="min-w-0 flex-1 truncate text-[11px] text-danger">Could not load health: {errorMessage(error)}</span>
           ) : collapsible ? (
@@ -68,7 +68,7 @@ export function RedisHealthStrip({ className }: { className?: string }) {
           )}
 
           {paused && (
-            <Tooltip content="Monitoring is paused — the dashboard is sending no INFO commands. These are the last numbers received.">
+            <Tooltip content="Monitoring is paused — the dashboard is sending no health reads. These are the last numbers received.">
               <span className="flex shrink-0 cursor-help items-center gap-1 text-[11px] text-warning">
                 <Pause className="size-3" aria-hidden />
                 paused
@@ -184,7 +184,7 @@ function AggregateLine({
             <Metric
               label="cmd/s"
               value={agg.commandsPerSec == null ? "–" : formatRate(agg.commandsPerSec, "")}
-              tip={agg.commandsPerSec == null ? "No rate yet — needs two INFO samples. This is not zero." : "Summed across every connection"}
+              tip={agg.commandsPerSec == null ? "No rate yet — needs two INFO samples. This is not zero." : "Redis commands, summed across every Redis connection"}
             />
             <Metric
               label="cpu"

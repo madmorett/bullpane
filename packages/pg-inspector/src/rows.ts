@@ -73,8 +73,12 @@ export function progressOf(v: unknown): JobSummary["progress"] {
   return JSON.stringify(v);
 }
 
+/**
+ * BullMQ's Postgres backend writes `attempts: 0` into opts when the job did not
+ * set any (Redis leaves the field out). Both mean "one try"; the DTO says null.
+ */
 function attemptsOf(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
 }
 
 /** A row selected with `summaryColumns()`. */

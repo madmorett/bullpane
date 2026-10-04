@@ -32,12 +32,12 @@ export function RedisHealthPanel({ big, className, headless }: RedisHealthPanelP
   const agg = aggregate(health);
 
   return (
-    <section id={HEALTH_PANEL_ID} aria-label="Redis health" className={cn("scroll-mt-16", className)}>
+    <section id={HEALTH_PANEL_ID} aria-label="Server health" className={cn("scroll-mt-16", className)}>
       {!headless && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="flex items-center gap-1.5 text-sm font-semibold text-fg">
             <Activity className="size-4 text-fg-subtle" aria-hidden />
-            Redis health
+            Server health
           </h2>
           {agg.critical > 0 && (
             <Badge variant="danger" size="xs">
@@ -78,7 +78,7 @@ export function RedisHealthPanel({ big, className, headless }: RedisHealthPanelP
       {paused && (
         <p className="mb-2 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
           <Pause className="size-3.5 shrink-0" aria-hidden />
-          Monitoring paused. The dashboard is sending no INFO commands to Redis. Numbers below are the last
+          Monitoring paused. The dashboard is sending no health reads to your servers. Numbers below are the last
           frame received.
         </p>
       )}
@@ -101,7 +101,7 @@ export function RedisHealthPanel({ big, className, headless }: RedisHealthPanelP
             compact
             icon={<ServerCrash />}
             title="Nothing to monitor"
-            description="Health shows up once a Redis connection is configured."
+            description="Health shows up once a connection is configured."
           />
         </div>
       ) : (
@@ -125,8 +125,8 @@ function PauseToggle({ paused, onChange }: { paused: boolean; onChange: (next: b
     <Tooltip
       content={
         paused
-          ? "Resume polling. One INFO per connection every 3s."
-          : "Stop the dashboard's own Redis traffic immediately."
+          ? "Resume polling. One health read per connection every 3s."
+          : "Stop the dashboard's own health traffic immediately."
       }
     >
       <Button
@@ -142,14 +142,14 @@ function PauseToggle({ paused, onChange }: { paused: boolean; onChange: (next: b
   );
 }
 
-/** What this view costs the Redis it is watching. Said out loud, on purpose. */
+/** What this view costs the servers it is watching. Said out loud, on purpose. */
 export function HealthFootnote() {
   return (
     <p className="mt-2 text-[11px] leading-relaxed text-fg-subtle">
-      One INFO command per connection every 3s. INFO is O(1). The server shares and rate-limits the
-      sample, so extra browser tabs add no extra load. See{" "}
+      One read per connection every 3s: INFO on Redis (O(1)), one pg_stat_* query on Postgres. The server
+      shares and rate-limits the sample, so extra browser tabs add no extra load. See{" "}
       <code className="font-mono text-fg-muted">docs/PRODUCTION-TRIAL.md</code> before pointing this at a
-      production Redis.
+      production server.
     </p>
   );
 }

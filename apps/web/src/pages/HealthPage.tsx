@@ -23,11 +23,11 @@ export function HealthPage() {
   return (
     <Page wide>
       <PageHeader
-        title="Redis health monitor"
+        title="Health monitor"
         description={
           paused
-            ? "Paused — the dashboard is sending nothing to Redis."
-            : "One INFO per connection every 3 seconds, sampled on the server and shared across tabs."
+            ? "Paused — the dashboard is sending nothing to your servers."
+            : "One health read per connection every 3 seconds (INFO on Redis, pg_stat_* on Postgres), sampled on the server and shared across tabs."
         }
         actions={
           lastSampleAt != null && !paused ? (
@@ -88,8 +88,8 @@ function HistoryTable({ health }: { health: ConnectionHealth }) {
           <tr>
             <Th>Time</Th>
             <Th align="right">Latency</Th>
-            <Th align="right">Memory</Th>
-            <Th align="right">Commands/s</Th>
+            <Th align="right">Memory / DB size</Th>
+            <Th align="right">Cmd or tx /s</Th>
             <Th align="right">CPU</Th>
             <Th align="right">Clients</Th>
           </tr>
@@ -97,7 +97,7 @@ function HistoryTable({ health }: { health: ConnectionHealth }) {
         <tbody>
           {shown.length === 0 ? (
             <TableMessage colSpan={6}>
-              No samples yet{health.ok ? "" : " — Redis is unreachable"}
+              No samples yet{health.ok ? "" : " — the server is unreachable"}
             </TableMessage>
           ) : (
             shown.map((p) => (
@@ -139,7 +139,7 @@ function HistoryTable({ health }: { health: ConnectionHealth }) {
 
 function NoRate() {
   return (
-    <Tooltip content="No rate for this sample — it was the first one, or Redis had just restarted. Not zero.">
+    <Tooltip content="No rate for this sample — it was the first one, or the server had just restarted. Not zero.">
       <span className="cursor-help text-fg-subtle">—</span>
     </Tooltip>
   );

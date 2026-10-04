@@ -11,6 +11,25 @@ The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
+## [Unreleased]
+
+### Added
+
+- **BullMQ on Postgres.** BullMQ 6 can keep its queues in PostgreSQL, and
+  Bullpane now reads and operates them: add a connection of kind *Postgres*
+  (or `"kind": "postgres"` in `BULLPANE_CONNECTIONS`) with the database URL and
+  the schema (BullMQ's default, `bullmq`). Queues, counts, job lists, search,
+  job detail, logs, schedulers, flows, metrics, alerts and every action work as
+  on Redis. Requires the schema written by BullMQ ≥ 6.0.3; Bullpane never runs
+  migrations on your database. See `docs/POSTGRES.md`.
+- **Postgres health card**: connections against `max_connections`,
+  transactions/sec, database and table sizes, and a warning when BullMQ's
+  `event` table (never trimmed by BullMQ 6) passes 1 GiB.
+
+### Changed
+
+- The health monitor is now "Server health": its wording no longer assumes Redis.
+
 ## [0.5.1] — 2026-10-04
 
 ### Added

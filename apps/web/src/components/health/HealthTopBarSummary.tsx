@@ -37,7 +37,7 @@ export function HealthTopBarSummary({ className }: { className?: string }) {
     <Tooltip content={tip} side="bottom">
       <Link
         to={routes.health}
-        aria-label="Redis health monitor"
+        aria-label="Health monitor"
         className={cn(
           "hidden items-center gap-1.5 rounded-md border border-border bg-bg px-2 py-1 text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg md:flex",
           bad && "border-danger/50 text-danger",

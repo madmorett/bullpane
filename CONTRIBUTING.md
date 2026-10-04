@@ -31,8 +31,10 @@ Without that variable the suite runs on SQLite only. To develop against MySQL:
 
 ## Ground rules
 
-1. **Every read of a customer's Redis goes through `packages/redis-inspector`.**
-   No `KEYS`, one round trip per read (Lua / pipeline), truncate inside Redis.
+1. **Every read of a customer's Redis goes through `packages/redis-inspector`,
+   every read of a customer's Postgres through `packages/pg-inspector`.**
+   No `KEYS`, one round trip per read (Lua / pipeline / one SQL statement),
+   truncate on the server side, and on Postgres pin `state` in every job query.
    See "Performance contract" in `docs/ARCHITECTURE.md`. A PR that adds an
    O(queue size) command to a hot path will be asked to change.
 2. **Writes use the official `bullmq` library.** Do not reimplement retry,

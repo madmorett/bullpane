@@ -37,7 +37,7 @@ export function QueueSetupPanel({ connectionId, queue, className }: { connection
         <span className="text-xs font-semibold tracking-wider text-fg-subtle uppercase">Setup</span>
         {!open && data && <Summary data={data} />}
         {data?.rateLimitedNow && <ThrottledPill ttlMs={data.rateLimitedNow.ttlMs} since={setup.dataUpdatedAt} />}
-        <span className="ml-auto text-[11px] text-fg-subtle">from Redis · refreshes every 10 s</span>
+        <span className="ml-auto text-[11px] text-fg-subtle">from the server · refreshes every 10 s</span>
       </button>
 
       {open && (
@@ -144,8 +144,8 @@ function SetupGrid({ data, since }: { data: QueueSetup; since: number }) {
         </Item>
 
         <Item icon={<Boxes />} label="Batch">
-          <Tooltip content="Batching is a Worker option (worker.opts.batch); BullMQ does not persist it in Redis, so it cannot be read from here." side="bottom">
-            <Unknown className="cursor-help underline decoration-dotted underline-offset-2">not observable from Redis</Unknown>
+          <Tooltip content="Batching is a Worker option (worker.opts.batch); BullMQ does not persist it in Redis or Postgres, so it cannot be read from here." side="bottom">
+            <Unknown className="cursor-help underline decoration-dotted underline-offset-2">not stored by BullMQ</Unknown>
           </Tooltip>
         </Item>
 

@@ -35,7 +35,7 @@ function useCrumbs(): Crumb[] {
     if (params.tab) crumbs.push({ label: TAB_LABEL[params.tab] ?? params.tab[0].toUpperCase() + params.tab.slice(1) });
     return crumbs;
   }
-  if (pathname.startsWith("/health")) return [...crumbs, { label: "Redis health" }];
+  if (pathname.startsWith("/health")) return [...crumbs, { label: "Health" }];
   if (pathname.startsWith("/alerts")) return [...crumbs, { label: "Alerts" }];
   if (pathname.startsWith("/users")) return [...crumbs, { label: "Users" }];
   if (pathname.startsWith("/audit")) return [...crumbs, { label: "Audit log" }];

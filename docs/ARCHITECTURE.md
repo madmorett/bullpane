@@ -14,7 +14,9 @@ bullpane/
 │   └── simulator/       Generates realistic BullMQ (and fake Pro group) traffic for the live demo.
 ├── packages/
 │   ├── shared/          Types + zod schemas shared by everything. THE contract.
-│   └── redis-inspector/ ioredis + Lua scripts. All reads of a customer's Redis go through here.
+│   ├── inspector/       The backend-neutral `Inspector` interface the server codes against.
+│   ├── redis-inspector/ ioredis + Lua scripts. All reads of a customer's Redis go through here.
+│   └── pg-inspector/    SQL over BullMQ 6's Postgres schema. All reads of a customer's Postgres go here.
 ├── scripts/gen-license.ts   Ed25519 keypair + offline license signing (vendor side).
 ├── apps/license-api/        Cloudflare Worker at api.bullpane.com: activates subscription
 │                            keys at the store (Creem) and signs 7-day leases.
@@ -29,12 +31,14 @@ bullpane/
 Browser ──HTTP/JSON──> Fastify (apps/server)
                          │  auth (cookie session) · role check · pro-feature gate
                          ├──> SQLite or MySQL (users, sessions, connections, folders, alerts, flow edges, settings)
-                         └──> InspectorPool (packages/redis-inspector)
-                                └──> ioredis per connection ──EVALSHA──> customer Redis
+                         └──> InspectorPool (apps/server/src/services/inspectorPool.ts)
+                                ├──> RedisInspector: ioredis per connection ──EVALSHA──> customer Redis
+                                └──> PgInspector: pg pool per connection ──SQL──> customer Postgres (BullMQ 6)
 ```
 
-* The server never touches Redis directly. Everything goes through `Inspector`
-  (`packages/redis-inspector/src/types.ts`).
+* The server never touches Redis or Postgres directly. Everything goes through
+  `Inspector` (`packages/inspector/src/types.ts`); a connection's `kind` picks
+  the implementation, and nothing above the pool knows which one it got.
 * The inspector never touches the database. It is stateless apart from connection caches.
 * The web UI only talks to `/api/*`. It polls; there is no websocket in v1
   (polling with a Lua-backed counts endpoint is one EVALSHA per queue, cheap enough).
@@ -112,6 +116,34 @@ no dashboard. Rules, enforced in `redis-inspector`:
 6. **Cluster safe.** Each script touches keys of exactly one queue (same hash tag).
 7. **Connections fail fast.** `connectTimeout 5 s`, `maxRetriesPerRequest 1`,
    `enableOfflineQueue false`. A dead Redis produces a red badge, not a hung dashboard.
+
+## Postgres backend (BullMQ 6)
+
+BullMQ 6 can store queues in PostgreSQL. `packages/pg-inspector` implements the
+same `Inspector` against BullMQ's own schema (frozen for all of 6.x). The rules
+above, read for SQL:
+
+1. **One statement per read.** Multi-queue reads pass the queue names as an
+   array (`unnest($1::text[])`), never one query per queue.
+2. **Every job query pins `state`.** BullMQ's job indexes are partial and
+   state-scoped; a query without the state predicate reads the whole queue.
+   Counts are per-state scalar subqueries so each one is an index-only scan.
+3. **Truncate in SQL.** `left(data::text, previewBytes)`, and payloads above
+   `listFieldCapBytes` are never cast to text (`pg_column_size` reads the
+   stored size without detoasting).
+4. **Pages walk the index, then join.** The page's ids come off the state's
+   partial index (`OFFSET` over a narrow index), and only that page is joined to
+   `job`. True keyset pagination needs a cursor in `getJobs`; that is the next
+   step for very deep pages (offset 39k on 1M rows: 133 ms).
+5. **Discovery is complete from the first call**: `meta` ∪ a loose index scan
+   over `job`'s primary key (one probe per queue), so flow-only queues with no
+   meta row are listed too.
+6. **Writes use the official bullmq API** with `createPostgresBackend`.
+7. **The dashboard never migrates a customer's schema.** It checks it with
+   BullMQ's `assertSchemaCompatibility` and says `postgres_schema_missing` when
+   it is not there.
+
+Model differences and what they cost the customer's database: `docs/POSTGRES.md`.
 
 ## How alerts measure (and what they refuse to measure)
 

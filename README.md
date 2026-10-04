@@ -57,6 +57,15 @@ your Redis:
 Measured command by command in [deploy/ecs/REDIS-SAFETY.md](deploy/ecs/REDIS-SAFETY.md),
 and held to it by the harness in [docs/STRESS-TEST.md](docs/STRESS-TEST.md).
 
+### BullMQ on Postgres
+
+BullMQ 6 can keep queues in PostgreSQL. Add a connection of kind **Postgres**
+and Bullpane reads BullMQ's own schema with the same rules: one SQL statement
+per read, every job query on its partial index, payloads truncated in SQL, and
+writes through the official bullmq API. It never runs migrations on your
+database. Details, costs and the differences from Redis:
+[docs/POSTGRES.md](docs/POSTGRES.md).
+
 ## Quick start
 
 ```sh
@@ -207,7 +216,9 @@ apps/simulator/            Demo traffic generator + the stress harness.
 apps/website/              bullpane.com (static, Cloudflare Worker).
 apps/license-api/          api.bullpane.com — activates keys, signs leases (Cloudflare Worker).
 packages/shared/           Types + zod schemas. The contract between everything.
+packages/inspector/        The backend-neutral Inspector contract the server codes against.
 packages/redis-inspector/  ioredis + Lua. Every read of a customer's Redis goes here.
+packages/pg-inspector/     SQL over BullMQ 6's Postgres schema. Every read of a customer's Postgres goes here.
 scripts/gen-license.ts     Ed25519 keypair + license signing (vendor side).
 Dockerfile                 Multi-stage; targets `runner` (dashboard) and `simulator`.
 docker-compose.yml         app on SQLite; COMPOSE_PROFILES=mysql adds MySQL (bring your own Redis).

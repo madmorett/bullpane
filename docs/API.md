@@ -31,11 +31,11 @@ Pro column: the feature that gates the route (402 in free edition).
 | DELETE | /license | admin | | → `Edition`. Releases the activation at the store (best effort) |
 | POST | /license/refresh | admin | | → `Edition`. Re-checks a subscription key now; never fails, see `license.status` |
 | GET | /connections | viewer | | → `RedisConnection[]` (url redacted, `status` included) |
-| POST | /connections | admin | | `CreateConnectionInput` → `RedisConnection` |
+| POST | /connections | admin | | `CreateConnectionInput` → `RedisConnection`. `kind` is `"redis"` (default) or `"postgres"` (BullMQ 6); for Postgres `prefix` is the schema (default `bullmq`) and `url` is `postgres://…` |
 | POST | /connections/test | admin | | `testConnectionSchema` → `PingResult` |
-| PATCH | /connections/:id | admin | | `UpdateConnectionInput` → `RedisConnection` |
+| PATCH | /connections/:id | admin | | `UpdateConnectionInput` → `RedisConnection` (`kind` cannot change; the URL is checked against the stored kind) |
 | DELETE | /connections/:id | admin | | → `{ ok }` |
-| GET | /connections/:id/overview | viewer | | → `{ info: RedisServerInfo, queues: QueueSummary[], status: ConnectionStatus, hiddenCount: number }` |
+| GET | /connections/:id/overview | viewer | | → `{ info: ServerInfo (RedisServerInfo, or PostgresServerInfo with backend "postgres"), queues: QueueSummary[], status: ConnectionStatus, hiddenCount: number }` |
 | GET | /connections/:id/queues | viewer | | `?refresh=1` forces rediscovery, `?includeHidden=1` keeps hidden queues in → `QueueSummary[]` |
 | GET | /connections/:id/hidden-queues | viewer | | → `HiddenQueue[]` (queue name, when, who) |
 | POST | /connections/:id/hidden-queues | operator | | `hideQueueSchema` (`{ queueName }`) → `HiddenQueue[]` (201, idempotent) |
