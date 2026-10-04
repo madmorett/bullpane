@@ -1,0 +1,16 @@
+{
+  "name": "@bullpane/npm",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Builds the publishable `bullpane` npm package (npx bullpane) into ./out.",
+  "type": "module",
+  "scripts": {
+    "bundle": "node build.mjs",
+    "smoke": "node smoke.mjs",
+    "typecheck": "true",
+    "test": "true"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

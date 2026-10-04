@@ -2,6 +2,11 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://bullpane.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
   <url><loc>https://bullpane.com/changelog</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://bullpane.com/guides/</loc><lastmod>2026-10-04</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bullpane.com/guides/bullmq-monitoring-dashboard</loc><lastmod>2026-10-04</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://bullpane.com/guides/bullmq-backlog-alerts</loc><lastmod>2026-10-04</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://bullpane.com/guides/bullmq-stalled-jobs</loc><lastmod>2026-10-04</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://bullpane.com/guides/bullmq-job-scheduler-promote</loc><lastmod>2026-10-04</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
   <url><loc>https://bullpane.com/vs/bull-board</loc><lastmod>2026-09-27</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://bullpane.com/vs/taskforce</loc><lastmod>2026-09-27</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://bullpane.com/vs/queuedash</loc><lastmod>2026-09-27</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>

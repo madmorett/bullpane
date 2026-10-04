@@ -1,0 +1,49 @@
+# Publishes `bullpane` to npm (npx bullpane) for every release tag, from the
+# same commit the Docker images are built from.
+#
+# Auth is npm Trusted Publishing (OIDC): no token, no 2FA prompt. Configure it
+# once on npmjs.com → bullpane → Settings → Trusted Publisher → GitHub Actions,
+# repository madmorett/bullpane, workflow `npm.yml`. A repository secret
+# NPM_TOKEN, if present, is used instead.
+name: npm package
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write # npm provenance: the package page links back to this run
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm >= 11.5.1; Node 22 ships npm 10.
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: node packages/npm/build.mjs
+      - run: node packages/npm/smoke.mjs
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(node -p "require('./packages/npm/out/package.json').version")
+          test "v${VERSION}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != package ${VERSION}"; exit 1; }
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/npm/out
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "bullpane@${VERSION}" version >/dev/null 2>&1; then echo "bullpane@${VERSION} is already on npm"; exit 0; fi
+          # Without NPM_TOKEN, npm authenticates through the workflow's OIDC token.
+          if [ -z "$NODE_AUTH_TOKEN" ]; then unset NODE_AUTH_TOKEN; fi
+          npm publish --access public --provenance

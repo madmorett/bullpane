@@ -3,7 +3,25 @@
 <h1>Changelog</h1>
 <p class="updated">Last updated 4 October 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.5.1</code>, <code>:0.5</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>bullpane/bullpane:0.5.2</code> (also on <code>ghcr.io/madmorett/bullpane</code>), <code>:0.5</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-5-2">0.5.2</h2>
+    <span class="release-date">4 October 2026</span>
+  </div>
+  <p class="release-note">Two new ways to run it: Docker Hub and npx.</p>
+  <h3>Added</h3>
+  <ul>
+    <li><strong>Docker Hub.</strong> The image is also published as <code>bullpane/bullpane</code>, same tags and platforms: <code>docker run -d -p 3000:3000 -v bullpane-data:/data bullpane/bullpane</code>.</li>
+    <li><strong><code>npx bullpane</code>.</strong> The same dashboard without Docker, for a quick look: <code>npx bullpane --redis redis://localhost:6379</code>. Listens on 127.0.0.1 and keeps its SQLite in <code>~/.bullpane</code>.</li>
+  </ul>
+  <h3>Fixed</h3>
+  <ul>
+    <li><strong>A blank page after upgrading.</strong> The page that loads the UI was cached for an hour, so a browser that had the previous version open asked for files the upgrade had removed. It is now always revalidated.</li>
+    <li><code>npx bullpane</code> no longer prints a deprecation warning on first run.</li>
+  </ul>
+</article>
 
 <article class="release">
   <div class="release-head">

@@ -47,6 +47,10 @@ jobs:
       # typecheck does not catch a broken Vite build (missing asset, bad import
       # in a lazy chunk), and a broken build only shows up at release time.
       - run: pnpm build
+      # `npx bullpane`: bundle the server, install the packed tarball outside the
+      # monorepo and boot it. Catches a path the bundle cannot resolve (Lua,
+      # migrations, UI) or a dependency missing from the generated package.json.
+      - run: node packages/npm/build.mjs --no-web && node packages/npm/smoke.mjs
 
   # End to end on BullMQ's Postgres backend: the real server, real workers and a
   # real browser (apps/smoke). The load phase is left to local runs before a

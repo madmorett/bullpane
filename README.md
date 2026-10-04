@@ -69,8 +69,11 @@ database. Details, costs and the differences from Redis:
 ## Quick start
 
 ```sh
-docker run -d -p 3000:3000 -v bullpane-data:/data ghcr.io/madmorett/bullpane
+docker run -d -p 3000:3000 -v bullpane-data:/data bullpane/bullpane
 ```
+
+No Docker? `npx bullpane --redis redis://localhost:6379` runs the same
+dashboard on your machine (Node 20+, listens on 127.0.0.1, data in `~/.bullpane`).
 
 No database to set up: the dashboard keeps its own data (connections,
 settings, and on Pro users, alerts and the audit log) in a SQLite file in

@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BullMQ stalled jobs: what they are and how to find them</title><meta name="description" content="A stalled BullMQ job is an active job whose worker lost its lock. Why it happens, why the job can run twice, how to find stalled jobs in Redis and in code, and the worker settings that control it. Checked against BullMQ 6.3.4."><meta property="og:title" content="BullMQ stalled jobs: what they are and how to find them"><meta property="og:type" content="article"><meta property="og:url" content="https://bullpane.com/guides/bullmq-stalled-jobs"><meta property="og:image" content="https://bullpane.com/shots/queue-failed.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="Stalled is not a job state. What a stalled BullMQ job really is, why it runs twice, and how to find one."><link rel="canonical" href="https://bullpane.com/guides/bullmq-stalled-jobs"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "BullMQ stalled jobs: what they are and how to find them",
+      "url": "https://bullpane.com/guides/bullmq-stalled-jobs",
+      "datePublished": "2026-10-04",
+      "dateModified": "2026-10-04",
+      "author": { "@type": "Person", "name": "Matheus Morett", "url": "https://madmorett.com/" },
+      "about": { "@type": "SoftwareApplication", "name": "BullMQ", "url": "https://bullmq.io/" },
+      "proficiencyLevel": "Intermediate"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "What is a stalled job in BullMQ?", "acceptedAnswer": { "@type": "Answer", "text": "An active job whose worker stopped renewing its lock before the lock expired, usually because the worker process died or its event loop was blocked for longer than lockDuration (30 seconds by default). Stalled is not a job state: getState() still returns active until the stalled-job check moves the job back to wait." } },
+        { "@type": "Question", "name": "Why did my BullMQ job run twice?", "acceptedAnswer": { "@type": "Answer", "text": "Most often because it stalled. When the lock expires, the stalled-job check moves the job back to wait and another worker processes it again, even if the first run had already done part of the work. The job hash field stc (job.stalledCounter) is incremented each time this happens, so a value above 0 is the proof." } },
+        { "@type": "Question", "name": "How do I find stalled jobs in BullMQ?", "acceptedAnswer": { "@type": "Answer", "text": "Listen to the stalled event on Worker or QueueEvents, read job.stalledCounter on a job, or look at the Redis SET <prefix>:<queue>:stalled, which holds the active job ids being checked between two rounds of the stalled-job check." } },
+        { "@type": "Question", "name": "What does 'job stalled more than allowable limit' mean?", "acceptedAnswer": { "@type": "Answer", "text": "The job stalled more times than the worker's maxStalledCount (1 by default). In BullMQ 6 it is moved back to wait marked to fail, and fails with that reason when a worker picks it up. Jobs produced by a job scheduler are never failed for stalling." } }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>BullMQ stalled jobs: what they are and how to find them</h1>
+<p class="updated">Checked against BullMQ 6.3.4 on 4 October 2026 · <a href="/guides/">All guides</a></p>
+
+<p class="lead-sm">A queue shows <em>active: 8</em>. Three of those eight have no worker behind them anymore, and nothing in BullMQ's states tells you which. That is a stalled job: the most common reason a BullMQ job runs twice, and the one that is hardest to see.</p>
+
+<div class="callout">
+<p><strong>Short answer.</strong> A stalled job is an <code>active</code> job whose worker stopped renewing its lock. BullMQ notices on its next stalled-job check, moves the job back to <code>wait</code> and another worker runs it again. Stalled is not a state, so you find it through the <code>stalled</code> event, <code>job.stalledCounter</code>, or the <code>&lt;prefix&gt;:&lt;queue&gt;:stalled</code> SET in Redis.</p>
+</div>
+
+<h2>How a job stalls</h2>
+<p>When a worker takes a job, it writes a lock key next to it (<code>bull:payments:42:lock</code>) that expires after <code>lockDuration</code>, 30 seconds by default. While the job runs, the worker renews that lock every <code>lockRenewTime</code>, half of <code>lockDuration</code> by default.</p>
+<p>The job stalls when the lock expires before it is renewed. In practice there are three causes:</p>
+<ul>
+<li><strong>The worker process died</strong>: a deploy that kills pods without draining, an out-of-memory kill, a crash.</li>
+<li><strong>The event loop was blocked</strong> for longer than <code>lockDuration</code>. The renewal is a timer on the same thread as your processor, so 40 seconds of synchronous work (parsing a huge file, a CPU-heavy loop) starves it.</li>
+<li><strong>The worker lost Redis</strong> long enough for the lock to run out.</li>
+</ul>
+
+<h2>What BullMQ does about it</h2>
+<p>Every worker runs a stalled-job check every <code>stalledInterval</code> (30 seconds by default). It is one Lua script, <code>moveStalledJobsToWait</code>, and it works in two passes:</p>
+<ol>
+<li>It puts every id currently in <code>active</code> into a SET, <code>&lt;prefix&gt;:&lt;queue&gt;:stalled</code>.</li>
+<li>On the next round, every id still in that SET whose <code>:lock</code> key is gone is really stalled. BullMQ removes it from <code>active</code>, increments the job's <code>stc</code> field, pushes it back to <code>wait</code>, emits a <code>stalled</code> event and clears the SET.</li>
+</ol>
+<p>Then the job runs again. If it already sent half the emails or charged the card before the worker died, those side effects happen twice. BullMQ is at-least-once: <strong>a processor that can stall must be idempotent</strong>.</p>
+<p>A job that stalls more than <code>maxStalledCount</code> times (1 by default) is not retried forever. In BullMQ 6 the script marks it to fail and still moves it to <code>wait</code>; when a worker picks it up, it fails with <code>job stalled more than allowable limit</code>. Jobs produced by a <a href="/guides/bullmq-job-scheduler-promote">job scheduler</a> are the exception: they are never failed for stalling.</p>
+
+<h2>Why you cannot see it in the job states</h2>
+<p><code>stalled</code> is not one of BullMQ's job states. <code>job.getState()</code> on a stalled job returns <code>active</code>, and <code>getJobCounts()</code> counts it as active. A dashboard that only shows states shows you a healthy-looking <em>active: 8</em> while three of them are dead.</p>
+
+<h2>How to find stalled jobs</h2>
+<p><strong>In code</strong>, listen for the event. On a worker it fires in the process that recovered the job; <code>QueueEvents</code> sees it from anywhere:</p>
+<pre><code>import { QueueEvents } from "bullmq";
+
+const events = new QueueEvents("payments", { connection });
+events.on("stalled", ({ jobId }) =&gt; {
+  logger.warn({ jobId }, "job stalled: its worker lost the lock, it will run again");
+});</code></pre>
+<p><strong>On a job</strong>, <code>stalledCounter</code> is the durable trace. Anything above 0 is the answer to "why did this run twice?":</p>
+<pre><code>const job = await queue.getJob("42");
+if (job.stalledCounter &gt; 0) {
+  console.log(`job 42 stalled ${job.stalledCounter} time(s)`);
+}</code></pre>
+<p><strong>In Redis</strong>, the SET holds the active ids being checked between two rounds. It is a transient reading, but it is O(1) to count:</p>
+<pre><code>SCARD bull:payments:stalled</code></pre>
+
+<h2>How to make it stop</h2>
+<ul>
+<li><strong>Drain workers on shutdown.</strong> Call <code>await worker.close()</code> on <code>SIGTERM</code> so active jobs finish before the process exits, and give the pod a grace period longer than your longest job.</li>
+<li><strong>Do not block the event loop.</strong> Move CPU-heavy work to a <a href="https://docs.bullmq.io/guide/workers/sandboxed-processors" rel="noopener">sandboxed processor</a> or a worker thread, or break it into steps that yield.</li>
+<li><strong>Raise <code>lockDuration</code></strong> only for jobs that really need long synchronous stretches. A longer lock also means a dead worker's job waits longer before it is picked up again.</li>
+<li><strong>Make processors idempotent</strong>, because some stalls will always happen: an idempotency key per side effect, or a check of what was already done before doing it.</li>
+</ul>
+
+<h2>Seeing it in Bullpane</h2>
+<p>Bullpane does not invent a "stalled" tab, because that would contradict BullMQ's model. On a queue's <em>active</em> tab it warns how many of those jobs are stalled right now ("3 of these are stalled (worker lost the lock)"), read in the same Redis round trip as the counts. In the job list, every job that ever stalled carries a badge with its <code>stalledCounter</code>, so the job that ran twice is visible without digging through logs.</p>
+<p><a class="btn primary" href="/#install">Run Bullpane on your queues</a> <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a></p>
+
+<h2>Sources</h2>
+<ul>
+<li>BullMQ 6.3.4 source: <code>commands/moveStalledJobsToWait-9.lua</code> (the two-pass check, <code>stc</code>, the stall limit and the scheduler exception) and <code>classes/worker.js</code> (defaults: <code>lockDuration</code> 30000, <code>stalledInterval</code> 30000, <code>maxStalledCount</code> 1).</li>
+<li><a href="https://docs.bullmq.io/guide/jobs/stalled" rel="noopener">BullMQ docs: Stalled jobs</a></li>
+</ul>
+<p class="lead-sm" style="margin-top:24px">Something here wrong for your BullMQ version? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> and it gets fixed.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px;flex-wrap:wrap"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/guides/">Guides</a><a href="/vs/bull-board">vs bull-board</a><a href="/vs/taskforce">vs Taskforce</a><a href="/vs/queuedash">vs QueueDash</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

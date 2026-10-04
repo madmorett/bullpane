@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Promoting a BullMQ job scheduler job skips the next run</title><meta name="description" content="Promoting the delayed job of a BullMQ job scheduler (upsertJobScheduler) runs the next iteration early, and the scheduler then skips it. Why it happens in the BullMQ source, how to reproduce it, and how to run the job now without losing a run. Checked against BullMQ 6.3.4."><meta property="og:title" content="Promoting a BullMQ job scheduler job skips the next run"><meta property="og:type" content="article"><meta property="og:url" content="https://bullpane.com/guides/bullmq-job-scheduler-promote"><meta property="og:image" content="https://bullpane.com/shots/job.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="job.promote() on a job scheduler's delayed job silently drops a run. Why, and what to do instead."><link rel="canonical" href="https://bullpane.com/guides/bullmq-job-scheduler-promote"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Promoting a BullMQ job scheduler job skips the next run",
+      "url": "https://bullpane.com/guides/bullmq-job-scheduler-promote",
+      "datePublished": "2026-10-04",
+      "dateModified": "2026-10-04",
+      "author": { "@type": "Person", "name": "Matheus Morett", "url": "https://madmorett.com/" },
+      "about": { "@type": "SoftwareApplication", "name": "BullMQ", "url": "https://bullmq.io/" },
+      "proficiencyLevel": "Intermediate"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Why does promoting a BullMQ job scheduler job skip a run?", "acceptedAnswer": { "@type": "Answer", "text": "A job scheduler keeps exactly one delayed job: its next run. Promoting it runs that next iteration now, and when the worker picks it up BullMQ schedules the following iteration from the promoted job's original scheduled time, not from now. So the iteration you promoted is not replaced, and nothing runs at its original time." } },
+        { "@type": "Question", "name": "How do I run a BullMQ job scheduler job now without skipping a run?", "acceptedAnswer": { "@type": "Answer", "text": "Do not promote the scheduler's delayed job. Leave it where it is and add a one-off job with the same name and data through queue.add, without the repeat and jobId options. The copy runs now and the scheduled iteration still runs at its time." } },
+        { "@type": "Question", "name": "How do I know if a BullMQ job was produced by a job scheduler?", "acceptedAnswer": { "@type": "Answer", "text": "Its repeatJobKey is set to the scheduler id, and its id looks like repeat:<schedulerId>:<timestamp>." } }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Promoting a BullMQ job scheduler job skips the next run</h1>
+<p class="updated">Checked against BullMQ 6.3.4 on 4 October 2026 · <a href="/guides/">All guides</a></p>
+
+<p class="lead-sm">A daily import runs at 06:40. One morning it failed upstream, the data was fixed by 10:00, and someone promoted the scheduler's delayed job to run the import again right away. It ran. The next morning, nothing ran at all.</p>
+
+<div class="callout">
+<p><strong>Short answer.</strong> The delayed job of a job scheduler <em>is</em> its next run. <code>job.promote()</code> runs tomorrow's iteration today, and BullMQ schedules the one after it from that job's original time, so tomorrow is skipped. To run it now without losing a run, leave the scheduled job alone and <code>queue.add</code> a one-off copy.</p>
+</div>
+
+<h2>What a job scheduler keeps in Redis</h2>
+<p>A scheduler created with <code>queue.upsertJobScheduler(id, { pattern: "40 6 * * *" }, template)</code> does not store a list of future runs. It keeps exactly one delayed job, with an id like <code>repeat:daily-import:1791182400000</code>: the next iteration, scheduled for its timestamp. Its <code>repeatJobKey</code> points back to the scheduler.</p>
+<p>The iteration after it does not exist yet. A worker creates it when it picks this one up.</p>
+
+<h2>Why promoting skips a run</h2>
+<p>When a worker starts a job that belongs to a scheduler, it calls <code>upsertJobScheduler</code> again to create the next iteration, passing the job's own scheduled time as <code>prevMillis</code> (<code>classes/worker.js</code>). The scheduler then computes the next run from whichever is later, now or that time (<code>classes/job-scheduler.js</code>):</p>
+<pre><code>const prevMillis = opts.prevMillis || 0;
+now = prevMillis &lt; now ? now : prevMillis;</code></pre>
+<p>For a job that ran on time, both are the same moment and nothing is lost. For a promoted job, <code>prevMillis</code> is tomorrow at 06:40, which is later than now. So the next run is computed from tomorrow 06:40: the day after tomorrow. The iteration you promoted was tomorrow's, it already ran, and nothing replaces it.</p>
+<p>The same happens with <code>every</code> schedules: promote an hourly job and the next hour is skipped.</p>
+
+<h2>Reproduce it</h2>
+<pre><code>import { Queue, Worker } from "bullmq";
+
+const queue = new Queue("imports", { connection });
+await queue.upsertJobScheduler("daily-import", { pattern: "40 6 * * *" }, { name: "import" });
+
+const [next] = await queue.getDelayed();       // repeat:daily-import:&lt;tomorrow 06:40&gt;
+await next.promote();                          // runs tomorrow's import now
+
+new Worker("imports", async () =&gt; {}, { connection });
+// After it runs, the scheduler's next job is the day AFTER tomorrow.</code></pre>
+
+<h2>What to do instead</h2>
+<p>If you want an extra run now and the schedule untouched, do not move the scheduled job. Add a one-off copy with the same name and data:</p>
+<pre><code>const [scheduled] = await queue.getDelayed();
+if (scheduled.repeatJobKey) {
+  // Drop the options that tie the job to the scheduler and to its time.
+  const { repeat, jobId, repeatJobKey, prevMillis, delay, timestamp, ...opts } = scheduled.opts;
+  await queue.add(scheduled.name, scheduled.data, opts);   // runs now
+  // `scheduled` stays delayed: tomorrow 06:40 still runs.
+}</code></pre>
+<p>Promoting is still the right call in one case: when you want to <em>move</em> the next run earlier, so it runs now <em>instead of</em> at its time. That is a decision, not a side effect, and it should be made knowingly.</p>
+
+<h2>How Bullpane handles it</h2>
+<p>We hit this in production with a daily import, which is how Bullpane learned to ask. Promoting a job that a scheduler produced opens a choice:</p>
+<ul>
+<li><strong>Run a copy now</strong>: a one-off copy runs now and the scheduled run still happens. This is the default, for single and bulk promote alike.</li>
+<li><strong>Promote and skip the next run</strong>: BullMQ's own promote. The scheduled run happens now instead, and the scheduler continues with the one after it.</li>
+</ul>
+<p>Regular delayed jobs are promoted as before. Both choices are recorded in the audit log in Pro.</p>
+<p><a class="btn primary" href="/#install">Run Bullpane on your queues</a> <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a></p>
+
+<h2>Sources</h2>
+<ul>
+<li>BullMQ 6.3.4 source: <code>classes/worker.js</code> (the worker calls <code>upsertJobScheduler</code> with <code>override: false</code> and the job's id as producer) and <code>classes/job-scheduler.js</code> (<code>now = prevMillis &lt; now ? now : prevMillis</code>).</li>
+<li><a href="https://docs.bullmq.io/guide/job-schedulers" rel="noopener">BullMQ docs: Job Schedulers</a></li>
+<li><a href="https://github.com/madmorett/bullpane/pull/3" rel="noopener">The Bullpane fix (#3)</a>, with a regression test that reproduces BullMQ's behavior against a real Redis.</li>
+</ul>
+<p class="lead-sm" style="margin-top:24px">Something here wrong for your BullMQ version? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> and it gets fixed.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px;flex-wrap:wrap"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/guides/">Guides</a><a href="/vs/bull-board">vs bull-board</a><a href="/vs/taskforce">vs Taskforce</a><a href="/vs/queuedash">vs QueueDash</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

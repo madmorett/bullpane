@@ -1,6 +1,6 @@
 {
   "name": "@bullpane/server",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,7 @@
     "@bullpane/redis-inspector": "workspace:*",
     "@bullpane/shared": "workspace:*",
     "@fastify/cookie": "^11.0.1",
-    "@fastify/static": "^8.0.3",
+    "@fastify/static": "^10.1.5",
     "@libsql/client": "^0.18.0",
     "@node-saml/node-saml": "^5.1.0",
     "bcryptjs": "^2.4.3",

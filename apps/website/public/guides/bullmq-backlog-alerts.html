@@ -1,0 +1,146 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Alerting on a BullMQ backlog before it hurts your throughput</title><meta name="description" content="A waiting-jobs threshold alerts too late on slow queues and too often on fast ones. How to alert on what matters for a BullMQ backlog: the age of the oldest waiting job, the time to drain the queue and workers that stopped making progress. Working code, checked against BullMQ 6.3.4."><meta property="og:title" content="Alerting on a BullMQ backlog before it hurts your throughput"><meta property="og:type" content="article"><meta property="og:url" content="https://bullpane.com/guides/bullmq-backlog-alerts"><meta property="og:image" content="https://bullpane.com/shots/alerts.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="10,000 waiting jobs can be fine and 200 can be an outage. Alert on the oldest waiting job, the time to drain and stalled progress instead."><link rel="canonical" href="https://bullpane.com/guides/bullmq-backlog-alerts"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Alerting on a BullMQ backlog before it hurts your throughput",
+      "url": "https://bullpane.com/guides/bullmq-backlog-alerts",
+      "datePublished": "2026-10-04",
+      "dateModified": "2026-10-04",
+      "author": { "@type": "Person", "name": "Matheus Morett", "url": "https://madmorett.com/" },
+      "about": { "@type": "SoftwareApplication", "name": "BullMQ", "url": "https://bullmq.io/" },
+      "proficiencyLevel": "Intermediate"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "How many waiting jobs is too many in BullMQ?", "acceptedAnswer": { "@type": "Answer", "text": "There is no fixed number. 10,000 waiting jobs on a queue that completes 5,000 a minute is two minutes of delay; 200 on a queue that completes 2 a minute is 100 minutes. Alert on the age of the oldest waiting job and on the time to drain (waiting divided by throughput) instead of on the count." } },
+        { "@type": "Question", "name": "How do I find the oldest waiting job in BullMQ?", "acceptedAnswer": { "@type": "Answer", "text": "queue.getJobs([\"wait\"], 0, 0, true) returns the oldest job in the wait list, which is also the next one a worker takes. Its wait time is now minus job.timestamp minus job.delay." } },
+        { "@type": "Question", "name": "How do I measure BullMQ throughput?", "acceptedAnswer": { "@type": "Answer", "text": "Create workers with the metrics option, then sample getMetrics(\"completed\", 0, 0).meta.count twice and divide the difference by the time between the samples. Do not sum getMetrics().data: the current minute is not in it." } },
+        { "@type": "Question", "name": "How do I detect that BullMQ workers stopped processing?", "acceptedAnswer": { "@type": "Answer", "text": "Jobs are waiting and the completed counter has not moved between two checks. That only works if the workers collect metrics; without the metrics option the counter never moves and the check fires falsely." } }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>Alerting on a BullMQ backlog before it hurts your throughput</h1>
+<p class="updated">Checked against BullMQ 6.3.4 on 4 October 2026 · <a href="/guides/">All guides</a></p>
+
+<p class="lead-sm">The first backlog alert everybody writes is "waiting above 1,000". It fires every morning on the queue that bursts 50,000 emails and drains them in ten minutes, and it never fires on the billing queue that has 200 jobs stuck behind a worker doing two a minute. The number of waiting jobs is not the problem. How long they wait is.</p>
+
+<div class="callout">
+<p><strong>Short answer.</strong> Alert on three things instead of a count: the <strong>age of the oldest waiting job</strong> (what your users feel), the <strong>time to drain</strong> the backlog at the current throughput, and <strong>no progress</strong>: jobs waiting while nothing completes. Skip paused queues, require two bad readings in a row, and turn on <code>metrics</code> in your workers or there is no throughput to measure.</p>
+</div>
+
+<h2>Why a count threshold fails</h2>
+<p>Ten thousand waiting jobs on a queue that completes 5,000 a minute is two minutes of delay. Two hundred on a queue that completes two a minute is a hundred minutes. Any single threshold is too low for the first queue and too high for the second, and setting one per queue just moves the guessing.</p>
+
+<h2>The three signals</h2>
+<ul>
+<li><strong>Oldest waiting job.</strong> <code>queue.getJobs(["wait"], 0, 0, true)</code> returns the oldest job in the wait list, which is the next one a worker takes. Now minus <code>job.timestamp</code> minus <code>job.delay</code> is how long it has been ready and not picked up. Compare it with how late that work is allowed to be: five minutes for emails, thirty seconds for a checkout webhook.</li>
+<li><strong>Time to drain.</strong> Waiting jobs divided by jobs completed per minute: how far behind the queue is right now. If it keeps growing between checks, jobs arrive faster than you process them and only more workers fix it.</li>
+<li><strong>No progress.</strong> Jobs are waiting and the completed counter has not moved since the last check. That is not a slow queue, it is a stopped one: workers crashed, scaled to zero, or all stuck. It deserves its own message because the fix is different.</li>
+</ul>
+<p>Count <code>prioritized</code> jobs in the backlog: they live in their own set and are taken before <code>wait</code>. A flood of high-priority jobs is exactly what makes the oldest ordinary job wait, and the oldest-job signal catches that starvation. Leave <code>delayed</code> out: those are not late, they are scheduled.</p>
+
+<h2>Measuring throughput correctly</h2>
+<p>Throughput comes from BullMQ's metrics, which are only collected when workers are created with <code>metrics</code>. Do not sum <code>getMetrics().data</code>: BullMQ only writes a minute into that list once a job finishes in a later minute, so the current minute is never there and a quiet queue reads zero. Sample the running total, <code>meta.count</code>, and divide by the time between samples.</p>
+<pre><code>import { Worker, MetricsTime } from "bullmq";
+
+new Worker("emails", processor, { connection, metrics: { maxDataPoints: MetricsTime.ONE_WEEK } });</code></pre>
+<p>If any deployment processes the queue without <code>metrics</code>, the jobs it completes are never counted, and the no-progress check below fires while everything is fine. Turn it on everywhere before you alert on it.</p>
+
+<h2>The checker</h2>
+<p>One function measures a queue. It makes three reads (one Lua script for the counts, one metrics point, one job), cheap enough to run every minute on every queue:</p>
+<pre><code>const previous = new Map();   // queue name -&gt; { at, completed }
+
+async function measure(queue) {
+  const [counts, metrics, [oldest]] = await Promise.all([
+    queue.getJobCounts("wait", "prioritized"),
+    queue.getMetrics("completed", 0, 0),       // meta.count is the running total of completed jobs
+    queue.getJobs(["wait"], 0, 0, true),        // the oldest waiting job
+  ]);
+  const backlog = counts.wait + counts.prioritized;
+  const now = Date.now();
+  const last = previous.get(queue.name);
+  previous.set(queue.name, { at: now, completed: metrics.meta.count });
+  if (!last) return null;                       // the first reading only sets the baseline
+
+  const perMinute = ((metrics.meta.count - last.completed) / (now - last.at)) * 60_000;
+  return {
+    backlog,
+    perMinute,
+    drainMinutes: backlog === 0 ? 0 : perMinute &gt; 0 ? backlog / perMinute : Infinity,
+    oldestWaitMinutes: oldest ? (now - oldest.timestamp - (oldest.delay ?? 0)) / 60_000 : 0,
+  };
+}</code></pre>
+<p>Another one decides. It skips paused queues, waits for two bad readings in a row so a burst does not page anyone, sends one message when a problem starts and one when it ends:</p>
+<pre><code>const LIMITS = { oldestWaitMinutes: 5, drainMinutes: 15 };
+const BREACHES_BEFORE_ALERT = 2;
+const breaches = new Map();
+const firing = new Set();
+
+function problem(m) {
+  if (m.backlog &gt; 0 &amp;&amp; m.perMinute === 0)
+    return `${m.backlog} jobs waiting and nothing completed since the last check: are the workers up?`;
+  if (m.oldestWaitMinutes &gt; LIMITS.oldestWaitMinutes)
+    return `oldest job has waited ${m.oldestWaitMinutes.toFixed(1)} min (limit ${LIMITS.oldestWaitMinutes})`;
+  if (m.drainMinutes &gt; LIMITS.drainMinutes)
+    return `${m.backlog} waiting at ${Math.round(m.perMinute)}/min: ${Math.round(m.drainMinutes)} min to drain (limit ${LIMITS.drainMinutes})`;
+  return null;
+}
+
+async function notify(text) {
+  await fetch(process.env.SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+}
+
+async function check(queue) {
+  if (await queue.isPaused()) return;          // a paused queue grows on purpose
+  const m = await measure(queue);
+  if (!m) return;
+  const issue = problem(m);
+  const count = issue ? (breaches.get(queue.name) ?? 0) + 1 : 0;
+  breaches.set(queue.name, count);
+  if (count === BREACHES_BEFORE_ALERT &amp;&amp; !firing.has(queue.name)) {
+    firing.add(queue.name);
+    await notify(`:rotating_light: ${queue.name}: ${issue}`);
+  } else if (!issue &amp;&amp; firing.has(queue.name)) {
+    firing.delete(queue.name);
+    await notify(`:white_check_mark: ${queue.name} is keeping up again`);
+  }
+}
+
+setInterval(() =&gt; Promise.all(queues.map(check)).catch(console.error), 60_000);</code></pre>
+<p>Run against a real Redis with no workers, 50 waiting jobs, then a worker coming back, it posts exactly two messages:</p>
+<pre><code>:rotating_light: emails: 50 jobs waiting and nothing completed since the last check: are the workers up?
+:white_check_mark: emails is keeping up again</code></pre>
+<p>Run it in one place, not in every worker: one checker per queue, or the same alert arrives once per replica. The state lives in memory, so a restart only costs one reading of baseline.</p>
+
+<h2>Choosing the limits</h2>
+<ul>
+<li><strong>Oldest wait</strong>: how late the slowest acceptable job may start. Ask what breaks when it is late, not what the queue usually does.</li>
+<li><strong>Time to drain</strong>: longer than your normal bursts take to clear. If a nightly import always takes 40 minutes, a 15-minute limit pages someone every night.</li>
+<li><strong>Two readings in a row</strong>, one minute apart, absorbs bursts and deploys. Go to three on queues that spike by design.</li>
+</ul>
+
+<h2>Doing this in Bullpane</h2>
+<p>Bullpane Pro has alert rules that send to Slack or a webhook, with cooldowns and a resolved message, scoped to a queue, a folder, a connection or every queue at once. For backlogs today it has a <em>waiting above</em> rule, which counts waiting and prioritized jobs and leaves paused queues out, next to failure count, failure rate and p95 processing time. The oldest-job and time-to-drain signals in this guide are not rules in Bullpane yet; until they are, the checker above runs fine next to it.</p>
+<p><a class="btn primary" href="/#install">Install Bullpane</a> <a class="btn" href="/#pricing">See Pro pricing</a></p>
+
+<h2>Sources</h2>
+<ul>
+<li>BullMQ 6.3.4 source: <code>commands/getCounts-1.lua</code>, <code>classes/queue-getters.js</code> (<code>getJobs</code>, <code>getMetrics</code>). The ordering of the wait list, the empty current minute in <code>getMetrics().data</code> and the checker above were run against a real Redis.</li>
+<li><a href="https://docs.bullmq.io/guide/metrics" rel="noopener">BullMQ docs: Metrics</a></li>
+<li>Related: <a href="/guides/bullmq-monitoring-dashboard">How to build a dashboard to monitor BullMQ</a> · <a href="/guides/bullmq-stalled-jobs">BullMQ stalled jobs</a></li>
+</ul>
+<p class="lead-sm" style="margin-top:24px">Something here wrong for your BullMQ version? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> and it gets fixed.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px;flex-wrap:wrap"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/guides/">Guides</a><a href="/vs/bull-board">vs bull-board</a><a href="/vs/taskforce">vs Taskforce</a><a href="/vs/queuedash">vs QueueDash</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

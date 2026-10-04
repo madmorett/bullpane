@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BullMQ guides: production problems and how to see them</title><meta name="description" content="Guides to running BullMQ in production: building a monitoring dashboard, alerting on a backlog, stalled jobs and job schedulers that skip a run. Each one checked against the BullMQ source."><meta property="og:title" content="BullMQ guides"><meta property="og:type" content="website"><meta property="og:url" content="https://bullpane.com/guides/"><meta property="og:image" content="https://bullpane.com/shots/overview.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="BullMQ problems that show up in production, each checked against the BullMQ source."><link rel="canonical" href="https://bullpane.com/guides/"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css">
+</head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>BullMQ guides</h1>
+<p class="lead-sm">BullMQ problems that show up in production and are hard to see from the job states alone. Each guide is checked against the BullMQ source and says which version it was checked on.</p>
+
+<h2><a href="/guides/bullmq-monitoring-dashboard">How to build a dashboard to monitor BullMQ</a></h2>
+<p>What a BullMQ dashboard has to show, the call behind each number and what it costs Redis, a Prometheus export that does not break the scrape, and when to use a ready-made dashboard instead.</p>
+
+<h2><a href="/guides/bullmq-backlog-alerts">Alerting on a BullMQ backlog before it hurts your throughput</a></h2>
+<p>Why "waiting above 1,000" alerts at the wrong time, and working code that alerts on the oldest waiting job, the time to drain and workers that stopped making progress.</p>
+
+<h2><a href="/guides/bullmq-stalled-jobs">BullMQ stalled jobs: what they are and how to find them</a></h2>
+<p>Stalled is not a job state. Why a job loses its lock, why it runs twice, how to find stalled jobs in Redis and in code, and the worker settings that control it.</p>
+
+<h2><a href="/guides/bullmq-job-scheduler-promote">Promoting a BullMQ job scheduler job skips the next run</a></h2>
+<p>The scheduler's delayed job is its next run. Promoting it runs that run early and drops it from the schedule. Why, in the BullMQ source, and how to run it now without losing one.</p>
+
+<p class="lead-sm" style="margin-top:32px">Hit a BullMQ problem that deserves a guide? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a>.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px;flex-wrap:wrap"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/guides/">Guides</a><a href="/vs/bull-board">vs bull-board</a><a href="/vs/taskforce">vs Taskforce</a><a href="/vs/queuedash">vs QueueDash</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>

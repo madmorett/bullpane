@@ -144,6 +144,12 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       cacheControl: true,
       maxAge: "1h",
       immutable: false,
+      // index.html names the hashed bundles of the running version. Cached for
+      // an hour, it survives an upgrade and asks for bundles that are gone: a
+      // blank page until the cache expires. Everything else keeps the 1 h.
+      setHeaders(reply, filePath) {
+        if (path.basename(filePath) === "index.html") reply.header("cache-control", "no-cache");
+      },
     });
   }
 
@@ -153,7 +159,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       return reply.status(404).send({ error: "not_found", message: `Route ${request.method} ${request.url} not found` });
     }
     if (serveWeb && (request.method === "GET" || request.method === "HEAD")) {
-      return reply.header("cache-control", "no-cache").sendFile("index.html");
+      // `cacheControl: false`: otherwise the plugin's 1 h max-age replaces this header.
+      return reply.header("cache-control", "no-cache").sendFile("index.html", { cacheControl: false });
     }
     return reply.status(404).send({ error: "not_found", message: "Not found" });
   });

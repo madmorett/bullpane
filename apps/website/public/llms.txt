@@ -26,8 +26,10 @@ BullMQ 4, 5 and 6 on Redis, Redis Cluster and Valkey; BullMQ Pro (groups, per-gr
 ## Install
 
 ```
-docker run -p 3000:3000 -v bullpane-data:/data ghcr.io/madmorett/bullpane:latest
+docker run -p 3000:3000 -v bullpane-data:/data bullpane/bullpane
 ```
+
+Without Docker (Node 20+): `npx bullpane --redis redis://localhost:6379`, then open http://localhost:3000.
 
 No database to set up: the dashboard keeps its own data in SQLite in `/data`. MySQL 8 (or MariaDB) is optional — set `DATABASE_URL=mysql://user:pass@host/bullpane` when you run more than one replica or want a managed database. Or `docker compose up -d` from the repository (app on SQLite; `COMPOSE_PROFILES=mysql` adds a bundled MySQL; bring your own Redis). Open http://localhost:3000, add a connection (Redis URL, BullMQ prefix, cluster yes/no). No account is created for the free edition. Put it behind a reverse proxy or VPN: without Pro there is no authentication.
 
@@ -44,6 +46,10 @@ Pro: login and roles (admin / operator / viewer, enforced on every API call; use
 - [Website](https://bullpane.com): product, pricing, FAQ
 - [Live demo](https://demo.bullpane.com): the free edition, read-only, against a simulated busy Redis; no login
 - [Changelog](https://bullpane.com/changelog)
+- [How to build a dashboard to monitor BullMQ](https://bullpane.com/guides/bullmq-monitoring-dashboard)
+- [Alerting on a BullMQ backlog before it hurts your throughput](https://bullpane.com/guides/bullmq-backlog-alerts)
+- [BullMQ stalled jobs: what they are and how to find them](https://bullpane.com/guides/bullmq-stalled-jobs)
+- [Promoting a BullMQ job scheduler job skips the next run](https://bullpane.com/guides/bullmq-job-scheduler-promote)
 - [Bullpane vs bull-board](https://bullpane.com/vs/bull-board)
 - [Bullpane vs Taskforce.sh](https://bullpane.com/vs/taskforce)
 - [Bullpane vs QueueDash](https://bullpane.com/vs/queuedash)

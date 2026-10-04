@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>How to build a dashboard to monitor BullMQ</title><meta name="description" content="What a BullMQ monitoring dashboard has to show, the BullMQ call behind each number and what it costs Redis, how to export it to Prometheus without breaking the scrape, and when to use a ready-made dashboard instead. Checked against BullMQ 6.3.4."><meta property="og:title" content="How to build a dashboard to monitor BullMQ"><meta property="og:type" content="article"><meta property="og:url" content="https://bullpane.com/guides/bullmq-monitoring-dashboard"><meta property="og:image" content="https://bullpane.com/shots/overview.jpg"><meta name="twitter:card" content="summary_large_image"><meta property="og:description" content="The numbers a BullMQ dashboard needs, the call behind each one, and the traps: metrics that read zero, a Prometheus export that fails the scrape, and KEYS on production."><link rel="canonical" href="https://bullpane.com/guides/bullmq-monitoring-dashboard"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230b0d12%27/%3E%3Cpath d=%27M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z%27 fill=%27%23f5a524%27/%3E%3C/svg%3E"><link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "How to build a dashboard to monitor BullMQ",
+      "url": "https://bullpane.com/guides/bullmq-monitoring-dashboard",
+      "datePublished": "2026-10-04",
+      "dateModified": "2026-10-04",
+      "author": { "@type": "Person", "name": "Matheus Morett", "url": "https://madmorett.com/" },
+      "about": { "@type": "SoftwareApplication", "name": "BullMQ", "url": "https://bullmq.io/" },
+      "proficiencyLevel": "Intermediate"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "What should a BullMQ dashboard show?", "acceptedAnswer": { "@type": "Answer", "text": "Per queue: jobs by state, throughput and failure rate, the age of the oldest waiting job, stalled jobs, whether the queue is paused and how many workers are connected. Per Redis: memory against maxmemory, the eviction policy (it must be noeviction) and evicted keys." } },
+        { "@type": "Question", "name": "Why does BullMQ getMetrics return an empty data array?", "acceptedAnswer": { "@type": "Answer", "text": "Two reasons. Metrics are only collected when the Worker is created with the metrics option. And the per-minute data list only receives a minute once a job finishes in a later minute, so the current minute is never in data. meta.count, the running total, is always current: sample it twice and divide by the time between samples." } },
+        { "@type": "Question", "name": "How do I export BullMQ metrics to Prometheus?", "acceptedAnswer": { "@type": "Answer", "text": "Queue.exportPrometheusMetrics() returns the exposition text for one queue. For several queues, do not concatenate the strings: the HELP and TYPE lines repeat and Prometheus rejects the whole scrape. Group the lines by metric name first." } },
+        { "@type": "Question", "name": "How do I list all BullMQ queues without KEYS?", "acceptedAnswer": { "@type": "Answer", "text": "Every BullMQ queue has a <prefix>:<queue>:meta hash. SCAN with MATCH <prefix>:*:meta in batches finds them without blocking Redis the way KEYS does." } }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<nav class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#171b24"/><path d="M8 8h9a5 5 0 0 1 0 10H8zM8 18h10a5 5 0 0 1 0 10H8z" fill="#f5a524"/></svg>Bullpane</a><div class="nav-links"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/#pricing">Pricing</a><a href="/changelog">Changelog</a></div></div></nav><main class="legal"><div class="wrap">
+<h1>How to build a dashboard to monitor BullMQ</h1>
+<p class="updated">Checked against BullMQ 6.3.4 on 4 October 2026 · <a href="/guides/">All guides</a></p>
+
+<p class="lead-sm">Most BullMQ dashboards show job counts per state and stop there. Counts tell you how many jobs exist. They do not tell you whether the queue keeps up, whether a worker died holding jobs, or whether Redis is about to delete your data. This guide lists what a dashboard has to show, the BullMQ call behind each number and what it costs Redis.</p>
+
+<div class="callout">
+<p><strong>Short answer.</strong> Per queue: counts by state, throughput, failure rate, the age of the oldest waiting job, stalled jobs, paused, workers. Per Redis: memory, eviction policy, evicted keys. Read them with bounded calls, never <code>KEYS</code>, and turn on <code>metrics</code> in your workers, or there is no throughput to show.</p>
+</div>
+
+<h2>What to show, and how to read it</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Signal</th><th>Why it matters</th><th>How to read it</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td>Jobs by state</td><td>The baseline: waiting, active, delayed, failed, completed, prioritized, paused.</td><td><code>queue.getJobCounts()</code></td><td>One Lua script, an <code>LLEN</code> or <code>ZCARD</code> per state.</td></tr>
+<tr><td>Throughput</td><td>Whether the queue keeps up. Counts cannot answer this.</td><td><code>getMetrics("completed")</code>, see the trap below</td><td>Cheap with a bounded range.</td></tr>
+<tr><td>Failure rate</td><td>Failures over finished jobs in a window, not the size of the <code>failed</code> set.</td><td><code>getMetrics("failed")</code> against <code>getMetrics("completed")</code></td><td>Same.</td></tr>
+<tr><td>Oldest waiting job</td><td>The delay your users feel. The best single latency number.</td><td><code>queue.getJobs(["wait"], 0, 0, true)</code></td><td>One job.</td></tr>
+<tr><td>Stalled jobs</td><td>Active jobs whose worker is gone. Invisible in the states. <a href="/guides/bullmq-stalled-jobs">Guide</a></td><td><code>SCARD &lt;prefix&gt;:&lt;queue&gt;:stalled</code>, <code>job.stalledCounter</code></td><td>O(1).</td></tr>
+<tr><td>Paused</td><td>A paused queue has a growing backlog on purpose. Do not alert on it.</td><td><code>queue.isPaused()</code></td><td>O(1).</td></tr>
+<tr><td>Workers connected</td><td>Zero workers and a backlog is an outage.</td><td><code>queue.getWorkersCount()</code></td><td><code>CLIENT LIST</code>; some managed Redis services block it.</td></tr>
+<tr><td>Redis memory and eviction</td><td>Any policy other than <code>noeviction</code> lets Redis delete job keys under memory pressure, which corrupts queues.</td><td><code>INFO memory</code> and <code>INFO stats</code>: <code>used_memory</code>, <code>maxmemory</code>, <code>maxmemory_policy</code>, <code>evicted_keys</code></td><td>O(1).</td></tr>
+</tbody>
+</table>
+</div>
+<p>BullMQ itself checks the eviction policy when it connects and prints <code>IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"</code>. That warning scrolls by once in a log. A dashboard should keep it on screen.</p>
+
+<h2>The metrics trap: <code>data</code> is empty</h2>
+<p>Throughput and failure rate come from BullMQ's metrics, and two things make them read zero:</p>
+<ul>
+<li><strong>Metrics are opt-in, per worker.</strong> Nothing is collected unless the worker that finishes the job was created with <code>metrics</code>. If two deployments process the same queue and only one has it, the other one's jobs are never counted.</li>
+<li><strong>The current minute is never in <code>data</code>.</strong> <code>getMetrics()</code> returns per-minute counts in <code>data</code>, newest first, but BullMQ only writes a minute into that list once a job finishes in a <em>later</em> minute. Read during a busy minute, or on a quiet queue, and <code>data</code> is empty.</li>
+</ul>
+<p><code>meta.count</code>, the running total, is always current. Sample it twice and divide:</p>
+<pre><code>import { Worker, MetricsTime } from "bullmq";
+
+new Worker("payments", processor, {
+  connection,
+  metrics: { maxDataPoints: MetricsTime.ONE_WEEK },   // one point per minute, kept for a week
+});
+
+// elsewhere, on a timer:
+const { meta } = await queue.getMetrics("completed", 0, 0);   // 0, 0: read one point, not the whole list
+const perMinute = ((meta.count - last.count) / (Date.now() - last.at)) * 60_000;
+last = { count: meta.count, at: Date.now() };</code></pre>
+
+<h2>Rules that keep the dashboard from hurting production</h2>
+<ul>
+<li><strong>Never <code>KEYS</code>.</strong> It blocks Redis for the whole keyspace. Every queue has a <code>&lt;prefix&gt;:&lt;queue&gt;:meta</code> hash; find them with <code>SCAN</code>:
+<pre><code>async function discoverQueues(redis, prefix = "bull") {
+  const names = new Set();
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.scan(cursor, "MATCH", `${prefix}:*:meta`, "COUNT", 1000);
+    for (const key of keys) names.add(key.slice(prefix.length + 1, -":meta".length));
+    cursor = next;
+  } while (cursor !== "0");
+  return [...names];
+}</code></pre>
+Cache the result for a while. Queues are created rarely; the scan does not need to run on every refresh.</li>
+<li><strong>Always pass a range.</strong> <code>getJobs</code>, <code>getMetrics</code> and the job lists all default to ranges that can mean "everything". A failed set with 200,000 jobs is not a list to render.</li>
+<li><strong>Do not load payloads in lists.</strong> Job data can be megabytes. Show the payload when someone opens the job, not on every row.</li>
+<li><strong>Read-only by default.</strong> A dashboard that can retry, drain and obliterate needs a login and an audit trail, or it should not have those buttons.</li>
+</ul>
+
+<h2>Option 1: Prometheus and Grafana</h2>
+<p>If you already run Prometheus, <code>queue.exportPrometheusMetrics()</code> gives the exposition text for one queue: <code>bullmq_job_count</code> per state, plus completed and failed totals. One trap: concatenating it for several queues repeats the <code>HELP</code> and <code>TYPE</code> lines, and Prometheus rejects the whole scrape (<code>second HELP line for metric name "bullmq_job_count"</code>). Group the lines by metric first:</p>
+<pre><code>function mergePrometheus(texts) {
+  const families = new Map();   // metric name -&gt; { meta, samples }
+  for (const line of texts.join("\n").split("\n")) {
+    if (!line) continue;
+    const name = line.startsWith("#") ? line.split(" ")[2] : line.slice(0, line.search(/[{ ]/));
+    const family = families.get(name) ?? { meta: new Set(), samples: [] };
+    families.set(name, family);
+    if (line.startsWith("#")) family.meta.add(line);
+    else family.samples.push(line);
+  }
+  return [...families.values()].flatMap((f) =&gt; [...f.meta, ...f.samples]).join("\n") + "\n";
+}
+
+http.createServer(async (req, res) =&gt; {
+  if (req.url !== "/metrics") return res.writeHead(404).end();
+  const texts = await Promise.all(queues.map((q) =&gt; q.exportPrometheusMetrics({ env: "production" })));
+  res.writeHead(200, { "content-type": "text/plain; version=0.0.4" }).end(mergePrometheus(texts));
+}).listen(9464);</code></pre>
+<p>Two things it does not cover: the oldest waiting job and stalled jobs are not in the export, so add your own gauges for them. And <code>exportPrometheusMetrics</code> reads the whole per-minute metrics list on every scrape to use one counter from it. With a week of retention that is up to 10,080 entries per queue, per scrape: keep the scrape interval sensible.</p>
+<p>Grafana then gives you graphs and alerting. It does not give you the jobs: when the failure rate spikes, you still need somewhere to see which jobs failed and why.</p>
+
+<h2>Option 2: embed bull-board</h2>
+<p><a href="https://github.com/felixmosh/bull-board" rel="noopener">bull-board</a> mounts inside your Express, Fastify, NestJS or Hono app, behind the auth you already have. It is the quickest way to see jobs, retry them and read a stack trace. It is a viewer: no throughput, no failure rate over time, no alerts, no search inside job data. <a href="/vs/bull-board">Full comparison</a>.</p>
+
+<h2>Option 3: a dashboard that already does this</h2>
+<p>Bullpane covers most of this guide out of the box: every queue with counts, success rate and throughput charts, stalled jobs on the <em>active</em> tab, Redis memory, eviction policy and evicted keys, and the jobs themselves with search inside job data. Reads follow the rules above (no <code>KEYS</code>, one round trip per read, payloads truncated inside Redis), so it is safe to point at production. It runs next to your stack, no database to set up:</p>
+<pre><code>docker run -d -p 3000:3000 -v bullpane-data:/data bullpane/bullpane
+# or, without Docker:
+npx bullpane --redis redis://localhost:6379</code></pre>
+<p><a class="btn primary" href="/#install">Install the free edition</a> <a class="btn" href="https://demo.bullpane.com" rel="noopener">Open the live demo</a></p>
+
+<h2>Sources</h2>
+<ul>
+<li>BullMQ 6.3.4 source: <code>commands/getCounts-1.lua</code>, <code>classes/queue-getters.js</code> (<code>getMetrics</code>, <code>getWorkers</code>, <code>exportPrometheusMetrics</code>), <code>classes/redis-connection.js</code> (the eviction policy warning).</li>
+<li><a href="https://docs.bullmq.io/guide/metrics" rel="noopener">BullMQ docs: Metrics</a> · <a href="https://docs.bullmq.io/guide/going-to-production" rel="noopener">Going to production</a></li>
+<li>The Prometheus merge was checked with <code>promtool check metrics</code>.</li>
+</ul>
+<p class="lead-sm" style="margin-top:24px">Something here wrong for your BullMQ version? Write to <a href="mailto:hello@bullpane.com">hello@bullpane.com</a> and it gets fixed.</p>
+</div></main>
+<footer><div class="wrap"><div>© <span id="y"></span> Bullpane · Built by <a href="https://www.linkedin.com/in/matheusmorett/" rel="noopener">Matheus Morett</a>.</div><div style="display:flex;gap:18px;flex-wrap:wrap"><a href="mailto:hello@bullpane.com">hello@bullpane.com</a><a href="/guides/">Guides</a><a href="/vs/bull-board">vs bull-board</a><a href="/vs/taskforce">vs Taskforce</a><a href="/vs/queuedash">vs QueueDash</a><a href="/changelog">Changelog</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div></div></footer><script>document.getElementById("y").textContent=new Date().getFullYear();</script></body></html>
