@@ -1,6 +1,6 @@
 # Bullpane
 
-> Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. It runs as one Docker container next to your stack, reads the Redis your workers already use, and shows queues, jobs, failures, progress, logs, schedulers, flows, Redis health and BullMQ Pro groups. The free edition does everything bull-board does and has no login at all. Pro (USD 39/month or USD 390/year, one installation, unlimited users) adds login with roles, SSO, alerts, folders, the flow graph and an audit log.
+> Bullpane is a fast, self-hosted dashboard for BullMQ and BullMQ Pro. It runs as one Docker container next to your stack, reads the Redis your workers already use, and shows queues, jobs, failures, progress, logs, schedulers, flows, Redis health and BullMQ Pro groups. The free edition does everything bull-board does and has no login at all. Pro (USD 39/month or USD 390/year, one installation, unlimited users) adds login with roles, SSO, alerts, folders, the flow graph, an audit log and an MCP server (Claude or any MCP client with OAuth reads and operates queues as the signed-in user, within their role).
 
 Built by Matheus Morett (CTO at Monest, 100M+ BullMQ jobs a day in production). Open core: the free edition is MIT; the Pro features are in the same repository under a source-available commercial license and are unlocked by a license key. Same author as the BullMQ libraries bullmq-outbox and bullmq-fanout.
 
@@ -37,7 +37,7 @@ Configuration is by environment variables: `DATABASE_URL`, `PORT`, `PUBLIC_URL`,
 
 Free: unlimited connections and queues; every job state; job detail with data, options, return value, stack trace, logs and progress; add / retry / promote / remove / discard jobs (single or bulk); pause (with a reason kept in the audit log), resume, clean, retry-all, drain, obliterate; search inside job data; job schedulers per queue and per connection; flow tree per job; BullMQ Pro groups; per-minute completed/failed metrics; Redis health monitor; command palette; hidden queues.
 
-Pro: login and roles (admin / operator / viewer, enforced on every API call; users are disabled, never deleted); SSO over OIDC and SAML 2.0; alerts per queue or folder to Slack or any webhook; folders; the connection-wide flow graph; append-only audit log with CSV export. Pro features are visible in the free edition with a lock, never hidden.
+Pro: login and roles (admin / operator / viewer, enforced on every API call; users are disabled, never deleted); SSO over OIDC and SAML 2.0; alerts per queue or folder to Slack or any webhook; folders; the connection-wide flow graph; append-only audit log with CSV export; MCP server at `<PUBLIC_URL>/mcp` with OAuth 2.1 sign-in, read or read & write per user, capped by role and an admin ceiling, every write audited, drain/obliterate never run from MCP. Pro features are visible in the free edition with a lock, never hidden.
 
 ## Links
 

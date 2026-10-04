@@ -11,12 +11,13 @@ The public page at [bullpane.com/changelog](https://bullpane.com/changelog) is
 written from this file — when you add an entry here, mirror it there
 (`apps/website/public/changelog.html`).
 
-## [Unreleased]
+## [0.5.0] — 2026-10-04
 
 ### Added
 
-- **MCP for Claude (Pro).** Paste `<PUBLIC_URL>/mcp` into claude.ai, Claude
-  Desktop or Claude Code, sign in with your Bullpane login or SSO, and pick
+- **MCP server (Pro).** Paste `<PUBLIC_URL>/mcp` into Claude (claude.ai, Claude
+  Desktop, Claude Code) or any MCP client that supports OAuth, sign in with your
+  Bullpane login or SSO, and pick
   **read** or **read & write** on the consent screen. A client acts as you: what
   you cannot do in the dashboard it cannot do either, because every tool is the
   same `/api` call the dashboard makes. Effective access is the lowest of the
@@ -26,7 +27,7 @@ written from this file — when you add an entry here, mirror it there
   obliterate are never run from MCP: the client gets a link that opens the
   confirmation dialog. OAuth 2.1 with PKCE, dynamic client registration and
   rotating refresh tokens; connected clients can be disconnected from Settings.
-  claude.ai and Claude Desktop need `PUBLIC_URL` to be public HTTPS.
+  Cloud-hosted clients (claude.ai, Claude Desktop) need `PUBLIC_URL` to be public HTTPS.
 
 ### Fixed
 

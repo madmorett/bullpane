@@ -192,7 +192,7 @@ footer a { color: var(--fg-muted); }
   margin: 0; background: #07090d; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
   box-shadow: 0 30px 80px rgba(0,0,0,.5);
 }
-.frame img { display: block; width: 100%; height: auto; }
+.frame img, .frame video { display: block; width: 100%; height: auto; }
 .hero-shot { margin: 44px 0 0; }
 .showcase .sub { margin-bottom: 8px; }
 .show {

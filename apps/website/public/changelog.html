@@ -3,7 +3,23 @@
 <h1>Changelog</h1>
 <p class="updated">Last updated 4 October 2026</p>
 
-<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.4.0</code>, <code>:0.4</code>, <code>:latest</code>.</p>
+<p class="lead-sm">Every version of Bullpane and what it changed for you. Docker images are published per version: <code>ghcr.io/madmorett/bullpane:0.5.0</code>, <code>:0.5</code>, <code>:latest</code>.</p>
+
+<article class="release">
+  <div class="release-head">
+    <h2 id="v0-5-0">0.5.0</h2>
+    <span class="release-date">4 October 2026</span>
+  </div>
+  <p class="release-note">Bullpane is now an MCP server: your queues, inside your AI.</p>
+  <h3>Added</h3>
+  <ul>
+    <li><strong>MCP server (Pro).</strong> Paste <code>&lt;PUBLIC_URL&gt;/mcp</code> into Claude (claude.ai, Claude Desktop, Claude Code) or any MCP client that supports OAuth, sign in with your Bullpane login or SSO, and pick <em>read</em> or <em>read &amp; write</em>. The client acts as you, through the same API as the dashboard: access is the lowest of the admin&rsquo;s ceiling (Settings &rarr; MCP, off by default), what you approved and your role, re-checked on every call, so a viewer never writes. Writes are in the audit log with <code>via: mcp</code>. Drain, clean and obliterate are never run from MCP: the client gets a link that opens the confirmation dialog. Cloud-hosted clients need <code>PUBLIC_URL</code> to be public HTTPS.</li>
+  </ul>
+  <h3>Fixed</h3>
+  <ul>
+    <li><strong>Promoting a job scheduler&rsquo;s delayed job no longer skips the next run.</strong> Promoting one now asks: run a copy now and keep the next run, or promote it and skip the next run. The API and bulk promote default to the copy. Thanks to Matheus Carvalho for the report and the fix.</li>
+  </ul>
+</article>
 
 <article class="release">
   <div class="release-head">

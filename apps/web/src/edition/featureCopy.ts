@@ -62,10 +62,10 @@ export const FEATURE_COPY: Record<ProFeature, FeatureCopy> = {
     ],
   },
   mcp: {
-    title: "MCP for Claude",
-    tagline: "Ask Claude why the payments queue is failing, and let it retry the jobs — as you, with your role.",
+    title: "MCP",
+    tagline: "Ask your AI why the payments queue is failing, and let it retry the jobs — as you, with your role.",
     bullets: [
-      "Connect claude.ai, Claude Desktop or Claude Code; sign in with your Bullpane login or SSO",
+      "Claude or any MCP client with OAuth; sign in with your Bullpane login or SSO",
       "Read or read & write: the admin sets the ceiling, a viewer can never write",
       "Every action lands in the audit log; drain and obliterate stay in the dashboard",
     ],

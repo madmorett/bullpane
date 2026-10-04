@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bullpane MCP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0d12; --bg-2: #11141b; --bg-3: #171b24; --line: #232937;
+    --fg: #e6e9f0; --muted: #9aa3b5; --subtle: #6b7488;
+    --amber: #f5a524; --pro: #b48cff;
+    /* the app's own tokens, for the dashboard mock */
+    --app-surface: #12151a; --app-surface-2: #191d24; --app-surface-3: #222730; --app-border: #252a33;
+    --app-accent: #5b8def; --ok: #3fb950; --bad: #f85149; --wait: #e3b341; --act: #58a6ff; --delayed: #a371f7;
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --serif: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  #stage {
+    position: relative; width: 1600px; height: 900px; overflow: hidden;
+    background: radial-gradient(1200px 700px at 78% -10%, rgba(91,141,239,.10), transparent 60%),
+                radial-gradient(900px 600px at -10% 110%, rgba(245,165,36,.08), transparent 60%), var(--bg);
+    color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  .abs { position: absolute; }
+  .mono { font-family: var(--mono); }
+
+  /* ---------- title / end ---------- */
+  #title, #end, #rule { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .kicker { font-family: var(--mono); font-size: 18px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+  .h1 { font-family: var(--display); font-weight: 700; font-size: 92px; line-height: 1.02; letter-spacing: -.03em; margin-top: 18px; }
+  .h1 em { font-family: var(--serif); font-weight: 400; font-style: italic; color: var(--amber); letter-spacing: -.01em; }
+  .sub { margin-top: 22px; font-size: 26px; color: var(--muted); max-width: 980px; line-height: 1.45; }
+  .logo { display: inline-flex; align-items: center; gap: 14px; font-family: var(--display); font-weight: 700; font-size: 40px; }
+  .logo-mark { width: 60px; height: 60px; border-radius: 14px; background: #0b0d10; box-shadow: 0 0 0 1px #353c48; display: grid; place-items: center; }
+  .pro { font-family: var(--mono); font-size: 15px; letter-spacing: .1em; color: var(--pro); border: 1px solid rgba(180,140,255,.45); background: rgba(180,140,255,.1); padding: 4px 10px; border-radius: 999px; }
+
+  /* ---------- split ---------- */
+  #split { inset: 0; }
+  .pane { position: absolute; top: 56px; bottom: 56px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+  #chat { left: 56px; width: 640px; background: #14161c; }
+  #app { left: 728px; right: 56px; background: var(--app-surface); }
+  .pane-bar { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--line); font-size: 16px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #2b303b; }
+  .pane-title { margin-left: 8px; color: var(--fg); font-weight: 600; }
+
+  /* chat */
+  #chat-body { position: absolute; top: 52px; left: 0; right: 0; bottom: 84px; overflow: hidden; padding: 0 26px; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 36px); mask-image: linear-gradient(to bottom, transparent 0, #000 36px); }
+  #chat-scroll { position: absolute; left: 26px; right: 26px; top: 0; display: flex; flex-direction: column; gap: 14px; padding-top: 24px; }
+  .msg { font-size: 19px; line-height: 1.5; }
+  .msg.user { align-self: flex-end; max-width: 80%; background: #262a33; padding: 12px 16px; border-radius: 16px 16px 4px 16px; }
+  .msg.ai { color: #e9ebf1; max-width: 96%; }
+  .msg.ai .who { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin-bottom: 4px; font-weight: 600; letter-spacing: .02em; }
+  .ai-mark { width: 18px; height: 18px; border-radius: 6px; background: linear-gradient(135deg, #d97757, #c4623f); }
+  code.k { font-family: var(--mono); font-size: 16px; background: #22262f; padding: 1px 6px; border-radius: 6px; color: #f0c48a; }
+  .tool { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 15.5px; color: var(--muted); background: #191c23; border: 1px solid var(--line); padding: 9px 12px; border-radius: 10px; align-self: flex-start; }
+  .tool .name { color: var(--fg); }
+  .tool .args { color: var(--subtle); }
+  .tool .st { width: 18px; height: 18px; display: grid; place-items: center; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #3a4150; border-top-color: var(--amber); }
+  .tick { color: var(--ok); font-weight: 700; }
+  .connect { display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 16px; background: #1d2230; border: 1px solid #2f3a55; color: #cfd8ee; padding: 9px 14px; border-radius: 10px; }
+  .linkchip { display: inline-block; margin-top: 10px; font-family: var(--mono); font-size: 15px; color: #8fb4ff; background: #172036; border: 1px solid #2a3d66; padding: 8px 12px; border-radius: 10px; }
+  #composer { position: absolute; left: 22px; right: 22px; bottom: 20px; height: 48px; border-radius: 14px; background: #1b1e25; border: 1px solid var(--line); display: flex; align-items: center; padding: 0 16px; color: var(--subtle); font-size: 17px; }
+  .caret { display: inline-block; width: 2px; height: 22px; background: var(--fg); margin-left: 2px; vertical-align: -4px; }
+
+  /* app */
+  .app-crumb { font-size: 15px; color: var(--muted); }
+  .app-crumb b { color: var(--fg); font-weight: 600; }
+  #app-body { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; padding: 26px 28px; }
+  .qhead { display: flex; align-items: baseline; gap: 14px; }
+  .qname { font-family: var(--mono); font-size: 28px; font-weight: 600; }
+  .qkey { font-family: var(--mono); font-size: 15px; color: var(--subtle); }
+  .counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 20px; }
+  .count { background: var(--app-surface-2); border: 1px solid var(--app-border); border-radius: 12px; padding: 14px 16px; }
+  .count .lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .count .sw { width: 9px; height: 9px; border-radius: 50%; }
+  .count .num { font-family: var(--mono); font-size: 30px; font-weight: 600; margin-top: 6px; }
+  .count.hl { box-shadow: 0 0 0 2px var(--bad), 0 0 40px rgba(248,81,73,.25); }
+  .rows { margin-top: 18px; border: 1px solid var(--app-border); border-radius: 12px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 70px 150px 1fr 120px; gap: 12px; align-items: center; padding: 11px 16px; font-size: 15px; border-top: 1px solid var(--app-border); }
+  .row:first-child { border-top: 0; background: var(--app-surface-2); color: var(--subtle); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  .row .id { font-family: var(--mono); color: var(--app-accent); }
+  .row .reason { font-family: var(--mono); font-size: 14px; color: #ff9b95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .ago { color: var(--subtle); text-align: right; }
+  .audit { margin-top: 18px; }
+  .audit-h { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); margin-bottom: 10px; }
+  .audit-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 12px; background: var(--app-surface-2); border: 1px solid var(--app-border); font-size: 16px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: #2c3a5a; color: #cfe0ff; display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+  .via { font-family: var(--mono); font-size: 13px; color: var(--amber); border: 1px solid rgba(245,165,36,.45); background: rgba(245,165,36,.1); padding: 2px 8px; border-radius: 999px; }
+  .ok-pill { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--ok); }
+
+  /* consent (inside the app pane) */
+  .veil { position: absolute; inset: 0; background: rgba(6,8,11,.66); backdrop-filter: blur(3px); display: grid; place-items: center; }
+  .card { width: 520px; background: #ffffff; color: #1b1f24; border-radius: 16px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.5); font-family: var(--sans); }
+  .card h3 { margin: 0; font-size: 22px; }
+  .card p { margin: 6px 0 0; font-size: 15px; color: #57606a; }
+  .opt { margin-top: 12px; border: 1px solid #e1e4e8; background: #f1f3f5; border-radius: 10px; padding: 12px 14px; }
+  .opt b { display: block; font-size: 16px; }
+  .opt span { font-size: 14px; color: #57606a; }
+  .opt.sel { border-color: #2f6feb; background: #eaf1fe; }
+  .btns { display: flex; gap: 10px; margin-top: 20px; }
+  .btn { flex: 1; text-align: center; padding: 11px; border-radius: 9px; font-weight: 600; font-size: 15px; }
+  .btn.ghost { color: #57606a; }
+  .btn.primary { background: #2f6feb; color: white; }
+  .btn.danger { background: #d73a37; color: white; }
+  .dark-card { width: 540px; background: #161a21; color: var(--fg); border: 1px solid var(--app-border); border-radius: 16px; padding: 26px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .dark-card h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 21px; }
+  .dark-card p { margin: 8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .input { margin-top: 16px; border: 1px solid #353c48; border-radius: 9px; padding: 11px 12px; font-family: var(--mono); color: var(--subtle); font-size: 15px; }
+
+  .cursor { position: absolute; width: 26px; height: 26px; pointer-events: none; }
+  .ring { position: absolute; width: 60px; height: 60px; border-radius: 50%; border: 3px solid rgba(47,111,235,.7); }
+
+  /* rule */
+  .rule-line { font-family: var(--mono); font-size: 40px; display: flex; align-items: center; gap: 18px; margin-top: 30px; }
+  .chip { font-family: var(--sans); font-size: 26px; padding: 14px 22px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-3); }
+  .chip small { display: block; font-family: var(--mono); font-size: 14px; color: var(--subtle); margin-top: 4px; }
+  .facts { margin-top: 44px; display: flex; gap: 40px; font-size: 22px; color: var(--muted); }
+  .facts span::before { content: "✓ "; color: var(--ok); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 1. title -->
+  <div id="title" class="abs">
+    <div class="kicker">Bullpane · MCP</div>
+    <div class="h1">Your queues, <em>inside</em> your AI.</div>
+    <div class="sub">Sign in with your Bullpane account. Ask in plain words. Your AI acts as you, within your role, and everything lands in the audit log.</div>
+  </div>
+
+  <!-- 2. split -->
+  <div id="split" class="abs">
+    <div id="chat" class="pane">
+      <div class="pane-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="pane-title">Claude</span><span style="margin-left:auto" class="mono" id="conn-badge">bullpane · not connected</span></div>
+      <div id="chat-body"><div id="chat-scroll">
+        <div class="msg user" id="m1"></div>
+        <div class="msg ai" id="m2"><div class="who"><span class="ai-mark"></span>Claude</div><span id="m2t"></span><div><span class="connect" id="m2c">🔐 Connect Bullpane</span></div></div>
+        <div class="tool" id="t1"><span class="st" id="t1s"></span><span class="name">list_queues</span><span class="args">connection: prod</span></div>
+        <div class="tool" id="t2"><span class="st" id="t2s"></span><span class="name">search_jobs</span><span class="args">payments · failed · "declined"</span></div>
+        <div class="msg ai" id="m3"><div class="who"><span class="ai-mark"></span>Claude</div><span id="m3t"></span></div>
+        <div class="msg user" id="m4"></div>
+        <div class="tool" id="t3"><span class="st" id="t3s"></span><span class="name">bulk_job_action</span><span class="args">retry × 37</span></div>
+        <div class="msg ai" id="m5"><div class="who"><span class="ai-mark"></span>Claude</div><span id="m5t"></span></div>
+        <div class="msg user" id="m6"></div>
+        <div class="tool" id="t4"><span class="st" id="t4s"></span><span class="name">request_destructive_action</span><span class="args">obliterate</span></div>
+        <div class="msg ai" id="m7"><div class="who"><span class="ai-mark"></span>Claude</div><span id="m7t"></span><div><span class="linkchip" id="m7l">bullpane.acme.com/…/payments?confirm=obliterate</span></div></div>
+      </div></div>
+      <div id="composer"><span id="composer-text">Reply to Claude…</span></div>
+    </div>
+
+    <div id="app" class="pane">
+      <div class="pane-bar">
+        <span class="logo-mark" style="width:28px;height:28px;border-radius:7px"><svg viewBox="0 0 32 32" width="20" height="20"><rect x="7" y="8" width="18" height="4" rx="2" fill="#5b8def"/><rect x="7" y="14" width="13" height="4" rx="2" fill="#5b8def" opacity=".75"/><rect x="7" y="20" width="8" height="4" rx="2" fill="#5b8def" opacity=".5"/><circle cx="24" cy="22" r="3" fill="#f85149"/></svg></span>
+        <span class="pane-title">Bullpane</span><span class="pro" style="font-size:11px;padding:2px 8px">PRO</span>
+        <span class="app-crumb" style="margin-left:18px">prod › <b>payments</b></span>
+        <span style="margin-left:auto" class="app-crumb">ana@acme.com · admin</span>
+      </div>
+      <div id="app-body">
+        <div class="qhead"><span class="qname">payments</span><span class="qkey">bull:payments</span></div>
+        <div class="counts">
+          <div class="count"><div class="lbl"><span class="sw" style="background:var(--wait)"></span>waiting</div><div class="num" id="c-wait">12</div></div>
+          <div class="count"><div class="lbl"><span class="sw" style="background:var(--act)"></span>active</div><div class="num" id="c-act">3</div></div>
+          <div class="count" id="c-failed-box"><div class="lbl"><span class="sw" style="background:var(--bad)"></span>failed</div><div class="num" id="c-failed" style="color:#ff8a84">37</div></div>
+          <div class="count"><div class="lbl"><span class="sw" style="background:var(--delayed)"></span>delayed</div><div class="num">4</div></div>
+          <div class="count"><div class="lbl"><span class="sw" style="background:var(--ok)"></span>completed</div><div class="num" id="c-done">18,204</div></div>
+        </div>
+        <div class="rows" id="rows">
+          <div class="row"><span>id</span><span>name</span><span>failed reason</span><span style="text-align:right">when</span></div>
+          <div class="row"><span class="id">9312</span><span>charge</span><span class="reason">card_declined: processing_error</span><span class="ago">2m ago</span></div>
+          <div class="row"><span class="id">9307</span><span>charge</span><span class="reason">card_declined: processing_error</span><span class="ago">3m ago</span></div>
+          <div class="row"><span class="id">9301</span><span>charge</span><span class="reason">card_declined: processing_error</span><span class="ago">5m ago</span></div>
+          <div class="row"><span class="id">9288</span><span>charge</span><span class="reason">card_declined: processing_error</span><span class="ago">7m ago</span></div>
+        </div>
+        <div class="audit" id="audit">
+          <div class="audit-h">Audit log</div>
+          <div class="audit-row" id="audit-row"><span class="avatar">A</span><span><b>ana@acme.com</b> retried 37 jobs in bulk · <span class="mono" style="font-size:14px">payments</span></span><span class="via">via MCP · Claude</span><span class="ok-pill">37 ok</span></div>
+        </div>
+      </div>
+
+      <div class="veil" id="consent">
+        <div class="card">
+          <h3>Connect Claude to Bullpane</h3>
+          <p>It will act as <b style="color:#1b1f24">ana@acme.com</b> (admin).</p>
+          <div class="opt" id="opt-read"><b>Read only</b><span>See connections, queues, jobs, logs and schedulers.</span></div>
+          <div class="opt" id="opt-write"><b>Read &amp; write</b><span>Also retry, promote, remove and add jobs, pause queues.</span></div>
+          <div class="btns"><div class="btn ghost">Cancel</div><div class="btn primary" id="allow">Allow</div></div>
+        </div>
+      </div>
+
+      <div class="veil" id="obliterate">
+        <div class="dark-card">
+          <h3><span style="color:var(--bad)">▲</span> Obliterate queue</h3>
+          <p>Deletes <b style="color:var(--fg)">payments</b> and every job in it. This cannot be undone.</p>
+          <div class="input">Type payments to confirm</div>
+          <div class="btns"><div class="btn" style="color:var(--muted)">Cancel</div><div class="btn danger">Obliterate</div></div>
+        </div>
+      </div>
+
+      <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M4 2 L20 13 L12.5 14.5 L16.5 22 L13.5 23.3 L9.6 15.8 L4 20 Z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      <div class="ring" id="ring"></div>
+    </div>
+  </div>
+
+  <!-- 3. rule -->
+  <div id="rule" class="abs">
+    <div class="kicker">Access, re-checked on every call</div>
+    <div class="rule-line">
+      <span style="color:var(--muted)">min(</span>
+      <span class="chip" id="r1">admin ceiling<small>off · read · write</small></span>
+      <span style="color:var(--subtle)">,</span>
+      <span class="chip" id="r2">your choice<small>on the consent screen</small></span>
+      <span style="color:var(--subtle)">,</span>
+      <span class="chip" id="r3">your role<small>viewer never writes</small></span>
+      <span style="color:var(--muted)">)</span>
+    </div>
+    <div class="facts" id="facts"><span>Same API as the dashboard</span><span>Every write audited</span><span>Destructive = human confirms</span></div>
+  </div>
+
+  <!-- 4. end -->
+  <div id="end" class="abs">
+    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 32 32" width="42" height="42"><rect x="7" y="8" width="18" height="4" rx="2" fill="#5b8def"/><rect x="7" y="14" width="13" height="4" rx="2" fill="#5b8def" opacity=".75"/><rect x="7" y="20" width="8" height="4" rx="2" fill="#5b8def" opacity=".5"/><circle cx="24" cy="22" r="3" fill="#f85149"/></svg></span>Bullpane <span class="pro">PRO</span></div>
+    <div class="h1" style="font-size:76px;margin-top:30px">Your queues, <em>inside</em> your AI.</div>
+    <div class="sub" style="font-family:var(--mono);font-size:24px">MCP · Claude and any MCP client with OAuth</div>
+    <div class="sub" style="margin-top:34px;color:var(--fg);font-size:30px;font-family:var(--display);font-weight:600">bullpane.com</div>
+  </div>
+</div>
+
+<script>
+const DURATION = 31;
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const out = (x) => 1 - Math.pow(1 - x, 3);
+/** fade in over [a, a+d], out over [b-d, b] */
+const win = (t, a, b, d = 0.45) => Math.min(out(p(t, a, a + d)), 1 - ease(p(t, b - d, b)));
+function show(el, o, dy = 0, scale = 1) {
+  el.style.opacity = o;
+  el.style.transform = `translateY(${(1 - o) * dy}px) scale(${scale})`;
+}
+function typed(text, t, a, cps = 42) {
+  const n = Math.floor(clamp((t - a) * cps, 0, text.length));
+  return text.slice(0, n);
+}
+const html = (s) => s.replace(/`([^`]+)`/g, '<code class="k">$1</code>');
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+
+const M1 = "Why is the payments queue failing?";
+const M2 = "I need access to your Bullpane first.";
+const M3 = "37 `charge` jobs failed since 14:02, all with `card_declined: processing_error` from the card processor. It looks transient: nothing failed in the last 4 minutes.";
+const M4 = "Retry them.";
+const M5 = "Done: 37 jobs are back in waiting. It's in Bullpane's audit log, as you.";
+const M6 = "Now obliterate the queue.";
+const M7 = "Not from here, even for an admin. Obliterating is permanent, so Bullpane wants you to confirm it yourself:";
+
+function msg(el, t, a) {
+  el.style.display = t >= a ? "" : "none";
+  if (t >= a) show(el, out(p(t, a, a + 0.35)), 12);
+}
+function tool(id, t, a, done) {
+  msg($(id), t, a);
+  $(id + "s").innerHTML = t < done ? '<span class="spin" style="transform:rotate(' + (t * 720) + 'deg)"></span>' : '<span class="tick">✓</span>';
+}
+function aiText(id, text, t, a, cps = 55) {
+  const s = typed(text, t, a, cps);
+  // close an open backtick while typing so the half-word renders plainly
+  $(id).innerHTML = html((s.split("`").length % 2 === 0) ? s + "`" : s);
+}
+
+window.renderAt = function (t) {
+  // ---- scene visibility
+  show($("title"), win(t, 0, 3.4), 20);
+  const splitO = win(t, 3.0, 24.9);
+  $("split").style.opacity = splitO;
+  $("split").style.transform = `scale(${0.985 + 0.015 * splitO})`;
+  show($("rule"), win(t, 24.6, 28.3), 20);
+  show($("end"), out(p(t, 28.1, 28.8)), 20);
+
+  // ---- composer: the user types, then sends
+  const composing = [[3.6, M1, 5.2], [14.6, M4, 15.4], [19.9, M6, 21.0]];
+  let comp = null;
+  for (const [a, text, sent] of composing) if (t >= a && t < sent) comp = { text: typed(text, t, a, 30) };
+  $("composer-text").innerHTML = comp ? comp.text + '<span class="caret"></span>' : "Reply to Claude…";
+  $("composer-text").style.color = comp ? "var(--fg)" : "var(--subtle)";
+
+  // ---- chat
+  $("m1").textContent = M1; msg($("m1"), t, 5.2);
+  msg($("m2"), t, 5.6); $("m2t").textContent = typed(M2, t, 5.7, 60);
+  $("m2c").style.opacity = out(p(t, 6.2, 6.5));
+  $("m2c").style.boxShadow = t > 6.4 && t < 6.9 ? "0 0 0 3px rgba(143,180,255,.45)" : "none";
+  tool("t1", t, 10.0, 10.8);
+  tool("t2", t, 10.9, 11.8);
+  msg($("m3"), t, 12.0); aiText("m3t", M3, t, 12.1, 60);
+  $("m4").textContent = M4; msg($("m4"), t, 15.4);
+  tool("t3", t, 15.9, 17.0);
+  msg($("m5"), t, 18.2); aiText("m5t", M5, t, 18.3, 60);
+  $("m6").textContent = M6; msg($("m6"), t, 21.0);
+  tool("t4", t, 21.5, 22.2);
+  msg($("m7"), t, 22.4); $("m7t").textContent = typed(M7, t, 22.5, 70);
+  $("m7l").style.opacity = out(p(t, 23.6, 23.9));
+  $("conn-badge").textContent = t >= 9.0 ? "bullpane · read & write" : "bullpane · not connected";
+  $("conn-badge").style.color = t >= 9.0 ? "var(--ok)" : "var(--subtle)";
+
+  // keep the newest message in view
+  const body = $("chat-body").clientHeight, content = $("chat-scroll").scrollHeight;
+  $("chat-scroll").style.transform = `translateY(${-Math.max(0, content - body + 10)}px)`;
+
+  // ---- app pane
+  // consent card
+  const consentO = win(t, 6.6, 9.2, 0.35);
+  $("consent").style.opacity = consentO;
+  $("consent").firstElementChild.style.transform = `translateY(${(1 - consentO) * 24}px)`;
+  $("opt-read").classList.toggle("sel", t < 7.7);
+  $("opt-write").classList.toggle("sel", t >= 7.7);
+
+  // the failed tile lights up while Claude looks at it
+  $("c-failed-box").classList.toggle("hl", t >= 10.9 && t < 17.2);
+  // retry: failed 37 → 0, waiting 12 → 49, then workers drain it
+  const r = ease(p(t, 16.2, 17.2));
+  $("c-failed").textContent = fmt(37 * (1 - r));
+  $("c-failed").style.color = r >= 1 ? "var(--fg)" : "#ff8a84";
+  const drain = ease(p(t, 17.4, 21));
+  $("c-wait").textContent = fmt(12 + 37 * r - 30 * drain);
+  $("c-done").textContent = fmt(18204 + 30 * drain);
+  $("c-act").textContent = t > 17.4 && t < 21 ? "8" : "3";
+  $("rows").style.opacity = 1 - ease(p(t, 16.6, 17.2)) * 0.75;
+  // audit row
+  const aO = out(p(t, 17.6, 18.1));
+  $("audit").style.opacity = aO;
+  $("audit-row").style.transform = `translateX(${(1 - aO) * 40}px)`;
+  $("audit-row").style.boxShadow = t > 17.8 && t < 19.4 ? "0 0 0 2px rgba(245,165,36,.55)" : "none";
+
+  // obliterate dialog, opened by the link
+  const oO = win(t, 24.0, 25.0, 0.3);
+  $("obliterate").style.opacity = t < 24.6 ? out(p(t, 24.0, 24.3)) : oO;
+
+  // cursor: to "Read & write", then "Allow"; later to the link
+  const cur = $("cursor"), ring = $("ring");
+  const pts = [
+    [7.0, 560, 640], [7.6, 440, 470], [8.2, 540, 500], // consent: write option, then Allow (app-pane coords)
+  ];
+  let cx = 560, cy = 640, co = 0;
+  if (t >= 6.8 && t < 9.1) {
+    co = Math.min(out(p(t, 6.8, 7.1)), 1 - ease(p(t, 8.8, 9.1)));
+    const a = pts[0], b = pts[1], c = pts[2];
+    if (t < b[0]) { const k = ease(p(t, a[0], b[0])); cx = a[1] + (b[1] - a[1]) * k; cy = a[2] + (b[2] - a[2]) * k; }
+    else { const k = ease(p(t, b[0] + 0.3, c[0] + 0.3)); cx = b[1] + (c[1] - b[1]) * k; cy = b[2] + (c[2] - b[2]) * k; }
+  }
+  cur.style.opacity = co; cur.style.left = cx + "px"; cur.style.top = cy + "px";
+  const clicks = [7.65, 8.55];
+  let rO = 0, rS = 0.4;
+  for (const c of clicks) if (t >= c && t < c + 0.45) { const k = p(t, c, c + 0.45); rO = 1 - k; rS = 0.4 + k * 0.9; }
+  ring.style.opacity = rO * co; ring.style.left = cx - 30 + 6 + "px"; ring.style.top = cy - 30 + 4 + "px"; ring.style.transform = `scale(${rS})`;
+  $("allow").style.filter = t >= 8.55 && t < 8.8 ? "brightness(1.25)" : "none";
+
+  // ---- rule chips arrive one by one
+  ["r1", "r2", "r3"].forEach((id, i) => show($(id), out(p(t, 25.0 + i * 0.35, 25.4 + i * 0.35)), 16));
+  $("facts").style.opacity = out(p(t, 26.3, 26.8));
+};
+
+window.DURATION = DURATION;
+const q = new URLSearchParams(location.search);
+if (q.has("t")) window.renderAt(Number(q.get("t")));
+else {
+  // live preview: loop in real time
+  const t0 = performance.now();
+  const loop = () => { window.renderAt(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); };
+  document.fonts.ready.then(loop);
+}
+</script>
+</body>
+</html>

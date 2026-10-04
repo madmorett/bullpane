@@ -113,12 +113,25 @@ simulator refills it. Details in [docs/DEMO.md](docs/DEMO.md).
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what, when, from which IP — persisted, filterable, CSV | – | ✓ |
 | SSO (OIDC + SAML 2.0), configured by your own admin in the UI | – | ✓ |
-| MCP: Claude reads and operates queues as the signed-in user (read or read & write) | – | ✓ |
+| MCP server: Claude or any MCP client reads and operates queues as the signed-in user | – | ✓ |
 
 USD 39/month or 390/year, one installation, unlimited users. Pro features are
 **visible in the free edition with a lock icon, never hidden**. Gating lives in
 exactly two places: `requireFeature()` on the server (HTTP 402) and
 `useEdition()` on the web.
+
+### MCP: your queues, inside your AI
+
+<img src="https://bullpane.com/media/mcp.gif" alt="Claude connected to Bullpane over MCP: signing in, finding failed jobs, retrying them as the user with an audit row, and being refused an obliterate that goes back to the dashboard" width="880">
+
+Bullpane is an MCP server. Add `<PUBLIC_URL>/mcp` to Claude (claude.ai, Claude
+Desktop, Claude Code) or any MCP client that supports OAuth, sign in with your
+Bullpane login or SSO, and pick read or read & write. The client acts as you,
+through the same API as the dashboard: access is the lowest of the admin's
+ceiling (Settings → MCP, off by default), what you approved and your role, so a
+viewer never writes. Every write is in the audit log with `via: mcp`; drain,
+clean and obliterate are never run from MCP, the client gets a link to confirm
+them in the dashboard. Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#mcp-the-same-api-as-the-same-person).
 
 ### The audit log, specifically
 

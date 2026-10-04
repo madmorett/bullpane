@@ -53,10 +53,11 @@ function McpManager() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-sm font-semibold text-fg">MCP for Claude</h2>
+        <h2 className="text-sm font-semibold text-fg">MCP</h2>
         <p className="mt-1 max-w-2xl text-xs text-fg-muted">
-          Connect Claude to this Bullpane. Each person signs in with their own Bullpane login (or SSO) and picks read or read &amp; write.
-          A client acts as that person, with their role: what they cannot do in the dashboard, Claude cannot do either. Every change
+          Connect your AI to this Bullpane: Claude, or any MCP client that supports OAuth. Each person signs in with their own Bullpane
+          login (or SSO) and picks read or read &amp; write. A client acts as that person, with their role: what they cannot do in the
+          dashboard, the client cannot do either. Every change
           is in the audit log, and draining, cleaning or obliterating a queue always comes back here for a human to confirm.
         </p>
       </div>
@@ -89,8 +90,9 @@ function McpManager() {
           <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-fg">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
             <span>
-              claude.ai and Claude Desktop connect from Anthropic's cloud, so they need this URL to be public HTTPS. It looks private
-              (check <span className="font-mono">PUBLIC_URL</span>). Claude Code connects from your machine and works on a private network.
+              Cloud-hosted clients such as claude.ai and Claude Desktop connect from their provider's servers, so they need this URL to be
+              public HTTPS. It looks private (check <span className="font-mono">PUBLIC_URL</span>). Clients that run on your machine, such as
+              Claude Code, work on a private network.
             </span>
           </div>
         )}
@@ -105,6 +107,10 @@ function McpManager() {
               <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px]">claude mcp add --transport http bullpane {endpoint}</code>
               , then run <code className="font-mono">/mcp</code> to sign in.
             </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-fg">Any other MCP client</dt>
+            <dd>Add the server URL as a remote (HTTP) MCP server. The client registers itself and opens this Bullpane to sign in.</dd>
           </div>
         </dl>
       </div>

@@ -267,7 +267,7 @@ docs/API.md, "Hidden queues".
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what to which queue, persisted + CSV export | – | ✓ |
 | SSO: OIDC + SAML 2.0, configured by the customer's admin in the UI | – | ✓ |
-| MCP: Claude reads and operates queues as the signed-in user | – | ✓ |
+| MCP server: Claude or any MCP client reads and operates queues as the signed-in user | – | ✓ |
 
 Gating is one function on the server (`requireFeature(feature)`) returning HTTP 402
 `{ error: "pro_required", feature }`, and one hook on the web (`useEdition()`), so the UI
@@ -411,7 +411,8 @@ changes so the public playground can't be broken.
 
 ## MCP: the same API, as the same person
 
-`/mcp` lets Claude (claude.ai, Claude Desktop, Claude Code) read and operate queues.
+`/mcp` lets an AI client read and operate queues: Claude (claude.ai, Claude Desktop,
+Claude Code) or any MCP client that supports OAuth.
 Pro, because it only makes sense with accounts: the client acts as a person.
 
 **One rule for the MCP and the dashboard.** A tool never reaches into the inspector.
@@ -467,10 +468,10 @@ A new password or disabling the user deletes their grants, like their sessions.
 **Stateless transport.** Streamable HTTP with JSON responses only: no SSE stream and
 no `Mcp-Session-Id`, so any replica answers any call and nothing lives in memory.
 
-**Reachability is the operator's catch.** claude.ai and Claude Desktop call `/mcp`
-from Anthropic's cloud, so they need `PUBLIC_URL` to be public HTTPS; `Settings → MCP`
-warns when it looks private. Claude Code connects from the user's machine and works
-on a private network.
+**Reachability is the operator's catch.** Cloud-hosted clients (claude.ai, Claude
+Desktop) call `/mcp` from their provider's servers, so they need `PUBLIC_URL` to be
+public HTTPS; `Settings → MCP` warns when it looks private. Clients that run on the
+user's machine (Claude Code) work on a private network.
 
 ## Roles
 
