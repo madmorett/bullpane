@@ -90,6 +90,16 @@ const SETUP_CACHE_MS = 10_000;
  * a count from before it.
  */
 const STATS_CACHE_MS = 2_000;
+/**
+ * Above this many rows a count is "big": still exact, but reused for longer —
+ * TTL grows with the size, from STATS_CACHE_MS at LARGE_COUNT to
+ * LARGE_COUNT_MAX_TTL_MS at 3M rows and beyond. Counting 10M completed jobs every
+ * 2 s would keep one core of the customer's database busy just to refresh a
+ * number nobody reads to the unit; once a minute costs ~1-2% of a core.
+ * Waiting/active stay fresh because they are small in any healthy queue.
+ */
+const LARGE_COUNT = 100_000;
+const LARGE_COUNT_MAX_TTL_MS = 60_000;
 const DETAIL_LOG_TAIL = 100;
 const BULK_CONCURRENCY = 8;
 const FORCE_DISCOVERY_MIN_MS = 5_000;
@@ -123,7 +133,7 @@ export class PgInspector implements Inspector {
   /** per queue + rate window; see STATS_CACHE_MS */
   private readonly statsCache = new Map<string, { at: number; value: Promise<QueueStats | undefined> }>();
   /** per queue + state, filled by stats reads and by job pages; see STATS_CACHE_MS */
-  private readonly countCache = new Map<string, { at: number; n: number }>();
+  private readonly countCache = new Map<string, { at: number; n: number; ttl: number }>();
   /** bullmq Queue per queue name, created lazily for writes only. */
   private readonly queues = new Map<string, Queue>();
   private closed = false;
@@ -305,14 +315,15 @@ export class PgInspector implements Inspector {
     return out;
   }
 
-  /** A count read in the last STATS_CACHE_MS, from stats or from a job page. */
+  /** A count still fresh for its size (see LARGE_COUNT), from stats or from a job page. */
   private cachedCount(queue: string, state: JobState): number | null {
     const c = this.countCache.get(`${queue}\u0000${state}`);
-    return c && Date.now() - c.at < STATS_CACHE_MS ? c.n : null;
+    return c && Date.now() - c.at < c.ttl ? c.n : null;
   }
 
   private rememberCount(queue: string, state: JobState, n: number): void {
-    this.countCache.set(`${queue}\u0000${state}`, { at: Date.now(), n });
+    const ttl = n < LARGE_COUNT ? STATS_CACHE_MS : Math.min(LARGE_COUNT_MAX_TTL_MS, Math.round((STATS_CACHE_MS * n) / LARGE_COUNT));
+    this.countCache.set(`${queue}\u0000${state}`, { at: Date.now(), n, ttl });
     if (this.countCache.size > 10_000) this.countCache.clear(); // bounded, whatever happens
   }
 
@@ -320,21 +331,42 @@ export class PgInspector implements Inspector {
     const out: Record<string, QueueStats> = {};
     const now = Date.now();
     const points = Math.max(STATS_METRIC_POINTS, windowMinutes);
-    const rows = await this.query<Record<string, unknown>>(SQL.QUEUE_STATS, [queueNames, now, points, now - windowMinutes * 60_000]);
+    // big counts still fresh are not recounted; their cached value fills the gap
+    const countable: JobState[] = ["waiting", "prioritized", "active", "completed", "failed", "delayed", "waiting-children"];
+    const reuse = queueNames.map((q) =>
+      countable.filter((state) => {
+        const n = this.cachedCount(q, state);
+        return n !== null && n >= LARGE_COUNT;
+      }),
+    );
+    const rows = await this.query<Record<string, unknown>>(SQL.QUEUE_STATS, [
+      queueNames,
+      now,
+      points,
+      now - windowMinutes * 60_000,
+      reuse.map((states) => states.join(",")),
+    ]);
+    const counted = (queue: string, state: JobState, value: unknown): number => {
+      if (value === null || value === undefined) return this.cachedCount(queue, state) ?? 0;
+      const n = num(value);
+      this.rememberCount(queue, state, n);
+      return n;
+    };
     for (const r of rows) {
+      const queue = String(r.queue);
       const metricsCompleted = metricPoints(r.m_completed_data);
       const metricsFailed = metricPoints(r.m_failed_data);
       const version = typeof r.version === "string" && r.version !== "" ? r.version : null;
       const stats: QueueStats = {
         counts: {
           ...EMPTY_COUNTS,
-          waiting: num(r.waiting),
-          prioritized: num(r.prioritized),
-          active: num(r.active),
-          completed: num(r.completed),
-          failed: num(r.failed),
-          delayed: num(r.delayed),
-          "waiting-children": num(r.waiting_children),
+          waiting: counted(queue, "waiting", r.waiting),
+          prioritized: counted(queue, "prioritized", r.prioritized),
+          active: counted(queue, "active", r.active),
+          completed: counted(queue, "completed", r.completed),
+          failed: counted(queue, "failed", r.failed),
+          delayed: counted(queue, "delayed", r.delayed),
+          "waiting-children": counted(queue, "waiting-children", r.waiting_children),
         },
         isPaused: r.paused === true,
         isPro: version !== null && version.startsWith("bullmq-pro"),
@@ -354,8 +386,6 @@ export class PgInspector implements Inspector {
         stalledCount: num(r.stalled),
       };
       stats.metrics = { completed: metricsCompleted.slice(-STATS_METRIC_POINTS), failed: metricsFailed.slice(-STATS_METRIC_POINTS) };
-      const queue = String(r.queue);
-      for (const [state, n] of Object.entries(stats.counts)) this.rememberCount(queue, state as JobState, n);
       out[queue] = stats;
     }
     return out;

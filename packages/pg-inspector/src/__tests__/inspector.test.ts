@@ -407,6 +407,34 @@ describe.skipIf(!available)("PgInspector (real Postgres)", () => {
     }
   });
 
+  it("a big state is counted exactly, then reused for longer; small states stay fresh", async () => {
+    await admin.query(`
+      INSERT INTO "${SCHEMA}".job (queue, id, seq, name, state, added_at_ms, finished_at_ms)
+      SELECT 'bigq', 'b' || g, nextval('"${SCHEMA}".job_seq'), 'old', 'completed', 1, 1 + g FROM generate_series(1, 300000) g`);
+    await admin.query(`VACUUM ANALYZE "${SCHEMA}".job`);
+    const big = new PgInspector({ id: "big", kind: "postgres", url: URL, prefix: SCHEMA });
+    try {
+      expect((await big.getQueueStats(["bigq"])).bigq?.counts).toMatchObject({ completed: 300_000, waiting: 0 });
+      await admin.query(`
+        INSERT INTO "${SCHEMA}".job (queue, id, seq, name, state, added_at_ms, finished_at_ms)
+        SELECT 'bigq', 'n' || s || g, nextval('"${SCHEMA}".job_seq'), 'new', s::"${SCHEMA}".job_state, 1, 1
+        FROM generate_series(1, 5) g, (VALUES ('completed'), ('waiting')) v(s)`);
+      await new Promise((r) => setTimeout(r, 2_100)); // past the per-queue stats window
+      const t0 = performance.now();
+      const reused = (await big.getQueueStats(["bigq"])).bigq?.counts;
+      const reusedMs = performance.now() - t0;
+      // 300k completed → TTL 6 s: still the cached number; waiting is small, so fresh
+      expect(reused).toMatchObject({ completed: 300_000, waiting: 5 });
+      expect((await big.getJobs("bigq", "completed", { start: 0, end: 0, order: "desc" })).total).toBe(300_000);
+      await new Promise((r) => setTimeout(r, 4_200));
+      expect((await big.getQueueStats(["bigq"])).bigq?.counts.completed).toBe(300_005);
+      expect(reusedMs).toBeLessThan(15);
+    } finally {
+      await big.close();
+      await admin.query(`DELETE FROM "${SCHEMA}".job WHERE queue = 'bigq'`);
+    }
+  });
+
   it("the pool keeps one inspector per id and replaces it when the target changes", async () => {
     const pool = new PgInspectorPool();
     const a = pool.get({ id: "x", kind: "postgres", url: URL, prefix: SCHEMA });

@@ -73,17 +73,24 @@ export function summaryColumns(alias: string, previewParam: number, capParam: nu
  * partial index of that state (an index-only scan), rather than one
  * `COUNT(*) FILTER` pass over every row of the queue.
  *
- * $1 queue names · $2 now (ms) · $3 metric points · $4 rate window start (ms)
+ * $1 queue names · $2 now (ms) · $3 metric points · $4 rate window start (ms) ·
+ * $5 per queue (aligned with $1), the states NOT to count this time, comma
+ * separated: big counts still fresh in the inspector's cache (see
+ * LARGE_COUNT). A skipped count's subquery is never executed (a CASE branch
+ * not taken), so a queue with 10M completed jobs costs nothing on most reads.
  */
+const count = (state: string, where: string) =>
+  `CASE WHEN '${state}' = ANY(string_to_array(q.skip, ',')) THEN NULL ELSE (SELECT count(*) FROM job WHERE queue = q.queue AND ${where}) END`;
+
 export const QUEUE_STATS = `
 SELECT q.queue,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'waiting' AND priority = 0) AS waiting,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'waiting' AND priority > 0) AS prioritized,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'active') AS active,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'completed') AS completed,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'failed') AS failed,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'delayed') AS delayed,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'waiting-children') AS waiting_children,
+  ${count("waiting", "state = 'waiting' AND priority = 0")} AS waiting,
+  ${count("prioritized", "state = 'waiting' AND priority > 0")} AS prioritized,
+  ${count("active", "state = 'active'")} AS active,
+  ${count("completed", "state = 'completed'")} AS completed,
+  ${count("failed", "state = 'failed'")} AS failed,
+  ${count("delayed", "state = 'delayed'")} AS delayed,
+  ${count("waiting-children", "state = 'waiting-children'")} AS waiting_children,
   -- An active job whose lock expired: the worker stopped renewing it. This is
   -- what Redis' stalled SET means, read straight off job_active_idx.
   (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'active' AND locked_until_ms < $2) AS stalled,
@@ -94,12 +101,16 @@ SELECT q.queue,
   (SELECT count FROM metrics WHERE queue = q.queue AND kind = 'failed') AS m_failed_total,
   (SELECT data[1:$3] FROM metrics WHERE queue = q.queue AND kind = 'completed') AS m_completed_data,
   (SELECT data[1:$3] FROM metrics WHERE queue = q.queue AND kind = 'failed') AS m_failed_data,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'completed' AND finished_at_ms >= $4) AS w_completed,
-  (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'failed' AND finished_at_ms >= $4) AS w_failed,
+  -- Only read when the queue has no metrics (the rate then falls back to stored
+  -- rows); a busy queue with metrics would otherwise count an hour of jobs per read.
+  CASE WHEN EXISTS (SELECT 1 FROM metrics WHERE queue = q.queue) THEN NULL
+       ELSE (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'completed' AND finished_at_ms >= $4) END AS w_completed,
+  CASE WHEN EXISTS (SELECT 1 FROM metrics WHERE queue = q.queue) THEN NULL
+       ELSE (SELECT count(*) FROM job WHERE queue = q.queue AND state = 'failed' AND finished_at_ms >= $4) END AS w_failed,
   -- removeOnComplete lives in each job's opts; one job tells whether the queue prunes.
   (SELECT opts->'removeOnComplete' FROM job WHERE queue = q.queue AND state = 'completed'
      ORDER BY finished_at_ms DESC LIMIT 1) AS remove_on_complete
-FROM unnest($1::text[]) AS q(queue)`;
+FROM unnest($1::text[], $5::text[]) AS q(queue, skip)`;
 
 /**
  * Queues = every queue with a `meta` row ∪ every queue that holds a job.
