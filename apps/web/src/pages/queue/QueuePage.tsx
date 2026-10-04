@@ -128,6 +128,28 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
 
   const [dialog, setDialog] = useState<null | "add" | "clean" | "drain" | "obliterate" | "retryAll" | "pause">(null);
   const [alertOpen, setAlertOpen] = useState(false);
+
+  /**
+   * `?confirm=drain|clean|obliterate` opens that confirmation dialog. It is the
+   * link the MCP hands back instead of running a destructive action itself, so a
+   * human reads the count and the queue name and clicks. The role check is the
+   * dialog's own (the server enforces it again); the param is dropped either way.
+   */
+  const confirmParam = sp.get("confirm");
+  useEffect(() => {
+    if (confirmParam !== "drain" && confirmParam !== "clean" && confirmParam !== "obliterate") return;
+    const allowed = confirmParam === "clean" ? isOperator : isAdmin;
+    if (allowed) setDialog(confirmParam);
+    else toast.error(`${confirmParam === "clean" ? "Cleaning" : confirmParam === "drain" ? "Draining" : "Obliterating"} a queue needs the ${confirmParam === "clean" ? "operator" : "admin"} role`);
+    setSp(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("confirm");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [confirmParam, isAdmin, isOperator, setSp]);
   const { has: hasFeature, gate } = useEdition();
   const [actionsOpen, setActionsOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);

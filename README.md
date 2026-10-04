@@ -113,6 +113,7 @@ simulator refills it. Details in [docs/DEMO.md](docs/DEMO.md).
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what, when, from which IP — persisted, filterable, CSV | – | ✓ |
 | SSO (OIDC + SAML 2.0), configured by your own admin in the UI | – | ✓ |
+| MCP: Claude reads and operates queues as the signed-in user (read or read & write) | – | ✓ |
 
 USD 39/month or 390/year, one installation, unlimited users. Pro features are
 **visible in the free edition with a lock icon, never hidden**. Gating lives in

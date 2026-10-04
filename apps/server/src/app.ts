@@ -28,6 +28,10 @@ import { FlowsService } from "./ee/services/flows";
 import { FoldersService } from "./ee/services/folders";
 import { HealthService } from "./services/health";
 import { SsoService } from "./ee/services/sso";
+import { McpCallBridge } from "./ee/mcp/internal";
+import { mcpRootRoutes } from "./ee/mcp/routes";
+import { McpService } from "./ee/mcp/service";
+import { DrizzleMcpStore, type McpStore } from "./ee/mcp/store";
 import { UsersService } from "./services/users";
 
 export interface BuildAppOptions {
@@ -37,6 +41,8 @@ export interface BuildAppOptions {
   logger?: FastifyServerOptions["logger"];
   /** serve WEB_DIST when it exists (default true) */
   serveWeb?: boolean;
+  /** tests pass a MemoryMcpStore; production uses MySQL */
+  mcpStore?: McpStore;
 }
 
 export function readVersion(): string {
@@ -79,6 +85,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   const alerts = new AlertsService(db, connections, folders);
   const audit = new AuditService(db, app.log);
   const attention = new AttentionService(new DrizzleSettingsStore(db));
+  const mcp = new McpService({ store: opts.mcpStore ?? new DrizzleMcpStore(db), settings: new DrizzleSettingsStore(db), config });
   const alertsEngine = new AlertsEngine({ config, alerts, connections, folders, edition, log: app.log });
 
   const ctx: AppContext = {
@@ -97,6 +104,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     audit,
     attention,
     sso,
+    mcp,
+    mcpCalls: new McpCallBridge(),
     version,
   };
   app.decorate("ctx", ctx);
@@ -121,6 +130,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   });
 
   await app.register(apiPlugin, { prefix: "/api" });
+  // MCP + its OAuth server live at the root: clients look for /.well-known/* at
+  // the origin and for /mcp where the user pasted it. See ee/mcp/routes.ts.
+  await app.register(mcpRootRoutes);
 
   const serveWeb = opts.serveWeb !== false && existsSync(path.join(config.webDist, "index.html"));
   if (serveWeb) {

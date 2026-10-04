@@ -37,7 +37,7 @@ export function SsoTab() {
 }
 
 /** A value the admin has to paste into their IdP. Copyable, because they will. */
-function CopyRow({ label, value }: { label: string; value: string }) {
+export function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">

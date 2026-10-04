@@ -32,6 +32,7 @@ const FlowsPage = lazy(() => import("@/ee/pages/flows/FlowsPage").then((m) => ({
 const FlowsIndexPage = lazy(() => import("@/ee/pages/flows/FlowsPage").then((m) => ({ default: m.FlowsIndexPage })));
 // Same reason: the job-level flow tree renders with React Flow too. It is free
 // edition, but most sessions never open a flow, so it stays out of the main chunk.
+const McpConsentPage = lazy(() => import("@/ee/pages/McpConsentPage").then((m) => ({ default: m.McpConsentPage })));
 const JobTreePage = lazy(() => import("@/pages/queue/JobTreePage").then((m) => ({ default: m.JobTreePage })));
 
 function Lazy({ children }: { children: React.ReactNode }) {
@@ -77,6 +78,9 @@ export function App() {
                 </RedirectIfAuthed>
               }
             />
+            {/* MCP sign-in (Pro). Outside RequireAuth: an authorize error must render
+                for someone who is not signed in; the page sends them to /login itself. */}
+            <Route path="/oauth/consent" element={<Lazy><McpConsentPage /></Lazy>} />
             <Route element={<RequireAuth />}>
               <Route element={<AppShell />}>
                 <Route index element={<OverviewPage />} />

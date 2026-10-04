@@ -2,7 +2,7 @@
  * Drizzle schema. Mirrors migrations/*.sql — the SQL files are the source of
  * truth for the database; this file is the typed view the server codes against.
  */
-import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, Role, SsoKind } from "@bullpane/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, McpGrantAccess, Role, SsoKind } from "@bullpane/shared";
 import {
   boolean,
   datetime,
@@ -222,6 +222,60 @@ export const flowEdges = mysqlTable(
   (t) => [uniqueIndex("flow_edges_unique").on(t.connectionId, t.fromQueue, t.toQueue)],
 );
 
+/** MCP OAuth — see migrations/0009_mcp.sql for why there is no access-token table. */
+export const mcpClients = mysqlTable(
+  "mcp_clients",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    redirectUris: json("redirect_uris").$type<string[]>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("mcp_clients_created_at_idx").on(t.createdAt)],
+);
+
+export const mcpAuthCodes = mysqlTable(
+  "mcp_auth_codes",
+  {
+    codeHash: varchar("code_hash", { length: 64 }).primaryKey(),
+    clientId: varchar("client_id", { length: 64 })
+      .notNull()
+      .references(() => mcpClients.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    access: varchar("access", { length: 10 }).$type<McpGrantAccess>().notNull(),
+    redirectUri: varchar("redirect_uri", { length: 2048 }).notNull(),
+    codeChallenge: varchar("code_challenge", { length: 128 }).notNull(),
+    expiresAt: datetime("expires_at", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (t) => [index("mcp_auth_codes_expires_at_idx").on(t.expiresAt)],
+);
+
+export const mcpGrants = mysqlTable(
+  "mcp_grants",
+  {
+    id: id(),
+    clientId: varchar("client_id", { length: 64 })
+      .notNull()
+      .references(() => mcpClients.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    access: varchar("access", { length: 10 }).$type<McpGrantAccess>().notNull(),
+    refreshHash: varchar("refresh_hash", { length: 64 }).notNull(),
+    prevRefreshHash: varchar("prev_refresh_hash", { length: 64 }),
+    refreshExpiresAt: datetime("refresh_expires_at", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: createdAt(),
+    lastUsedAt: datetime("last_used_at", { mode: "date", fsp: 3 }),
+  },
+  (t) => [
+    uniqueIndex("mcp_grants_refresh_hash_unique").on(t.refreshHash),
+    index("mcp_grants_prev_refresh_hash_idx").on(t.prevRefreshHash),
+    index("mcp_grants_user_id_idx").on(t.userId),
+  ],
+);
+
 export const settings = mysqlTable("settings", {
   key: varchar("key", { length: 64 }).primaryKey(),
   value: text("value").notNull(),
@@ -238,3 +292,6 @@ export type AlertRow = typeof alerts.$inferSelect;
 export type AlertEventRow = typeof alertEvents.$inferSelect;
 export type FlowEdgeRow = typeof flowEdges.$inferSelect;
 export type AuditLogRow = typeof auditLog.$inferSelect;
+export type McpClientRow = typeof mcpClients.$inferSelect;
+export type McpAuthCodeRow = typeof mcpAuthCodes.$inferSelect;
+export type McpGrantRow = typeof mcpGrants.$inferSelect;

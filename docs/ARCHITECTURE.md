@@ -267,6 +267,7 @@ docs/API.md, "Hidden queues".
 | Flow graph (detected from BullMQ flows + manual edges) | – | ✓ |
 | Audit log: who did what to which queue, persisted + CSV export | – | ✓ |
 | SSO: OIDC + SAML 2.0, configured by the customer's admin in the UI | – | ✓ |
+| MCP: Claude reads and operates queues as the signed-in user | – | ✓ |
 
 Gating is one function on the server (`requireFeature(feature)`) returning HTTP 402
 `{ error: "pro_required", feature }`, and one hook on the web (`useEdition()`), so the UI
@@ -283,7 +284,7 @@ breaks the license, and that is what a paying customer's compliance cares about.
 The boundary is by feature, not by layer:
 
 * **In `ee/`:** the alerts engine and its services, audit (service + the `onResponse`
-  hook), folders, flows, SSO (OIDC, SAML, provider admin, login flow), user admin
+  hook), folders, flows, SSO (OIDC, SAML, provider admin, login flow), MCP (`ee/mcp/`), user admin
   routes, the pages that render those features, and their tests.
 * **Outside `ee/`:** the gates themselves (`plugins/gates.ts`, `useEdition()`), license
   verification, the edition service, sessions and password login, the DB schema and
@@ -407,6 +408,69 @@ The dashboard never talks to the store directly and only ever sends the key, an
 instance label (hostname + PUBLIC_URL) and the activation id. Details: docs/PRO.md.
 `DEMO_MODE=true` unlocks Pro with a "demo" badge and blocks destructive settings
 changes so the public playground can't be broken.
+
+## MCP: the same API, as the same person
+
+`/mcp` lets Claude (claude.ai, Claude Desktop, Claude Code) read and operate queues.
+Pro, because it only makes sense with accounts: the client acts as a person.
+
+**One rule for the MCP and the dashboard.** A tool never reaches into the inspector.
+It is an `/api` call — the one the dashboard makes — run in-process through
+`app.inject` as the user who connected the client (`ee/mcp/internal.ts`). So role
+guards, zod validation, Pro gates, `BULLPANE_READ_ONLY`, demo mode and the audit hook
+apply to the MCP without it knowing they exist, and a route added later is covered by
+construction. The identity crosses over in memory: the injected request carries a
+per-process nonce and the id of an entry that lives for that one call. The bearer
+token is accepted at `/mcp` and nowhere else; `/api` never sees it.
+
+**Effective access = the lowest of three**, re-evaluated on every call:
+
+| | viewer | operator | admin |
+|---|---|---|---|
+| admin ceiling `read` | read | read | read |
+| ceiling `write`, user approved `write` | **read** | write | write |
+| ceiling `write`, user approved `read` | read | read | read |
+| ceiling `off` | – | – | – |
+
+The ceiling is `Settings → MCP` (`mcp.max_access` in `settings`, default `off`); the
+user's choice is made on the consent screen and stored on the grant; the role is read
+fresh from `users`. Re-evaluating per call is what makes lowering the ceiling, demoting
+someone or disabling them take effect on the next call rather than when a token
+expires. The injected user's role is **capped** to match: `read` acts as a viewer,
+`write` as at most an operator. An admin's Claude therefore gets a 403 from drain and
+obliterate like anyone else's.
+
+**Destructive actions are a link, not a tool.** Drain, clean and obliterate destroy
+jobs in bulk and cannot be undone. `request_destructive_action` returns
+`/c/:id/q/:queue?confirm=<action>`, which opens that confirmation dialog in the
+dashboard, where a human reads the count and the queue name and clicks.
+
+**Audit.** Writes are recorded exactly like the dashboard's — same route, same row —
+with `detail.via = "mcp"` and the client's name, so "Ana retried it" and "Ana's Claude
+retried it" are distinguishable. Reads are not audited, by the same rule as the
+dashboard's. Connecting a client (`mcp.authorize`, refusals included), disconnecting
+one (`mcp.revoke`) and changing the ceiling (`mcp.settings_update`) are audited too.
+
+**OAuth 2.1, hand-rolled** for the same reason as OIDC (a handful of hashes and one
+HMAC, not a dependency tree): protected-resource and AS metadata at `/.well-known/*`,
+dynamic client registration (public clients; redirect URIs must be https, loopback
+http or an app scheme, never with a fragment), authorization code with **PKCE S256
+mandatory**, `resource` pinned to `<PUBLIC_URL>/mcp`, `iss` in the redirect (RFC 9207).
+Unknown clients and unregistered redirect URIs are shown to the user, never redirected
+to. The consent request travels through the browser signed (HMAC, 10 min). Codes are
+single-use (60 s) and burned on the first attempt, right or wrong. Access tokens are
+signed and short (1 h) and carry only the grant id; refresh tokens rotate, and
+presenting a rotated one again deletes the whole grant — it means the token leaked.
+Codes and refresh tokens are stored as SHA-256. Schema: `migrations/0009_mcp.sql`.
+A new password or disabling the user deletes their grants, like their sessions.
+
+**Stateless transport.** Streamable HTTP with JSON responses only: no SSE stream and
+no `Mcp-Session-Id`, so any replica answers any call and nothing lives in memory.
+
+**Reachability is the operator's catch.** claude.ai and Claude Desktop call `/mcp`
+from Anthropic's cloud, so they need `PUBLIC_URL` to be public HTTPS; `Settings → MCP`
+warns when it looks private. Claude Code connects from the user's machine and works
+on a private network.
 
 ## Roles
 

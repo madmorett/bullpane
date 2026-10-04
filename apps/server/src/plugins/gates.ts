@@ -27,7 +27,7 @@ export async function blockInDemo(request: FastifyRequest, _reply: FastifyReply)
  * before it reaches a handler, so no route can be forgotten. Login and logout
  * are POSTs that change no queue state, so they stay allowed.
  */
-const WRITE_ALLOWLIST = new Set(["/api/auth/login", "/api/auth/logout"]);
+const WRITE_ALLOWLIST = new Set(["/api/auth/login", "/api/auth/logout", "/api/mcp/consent"]);
 
 /**
  * The SAML assertion comes back as an HTTP-POST from the IdP, so signing in is
@@ -41,8 +41,15 @@ const WRITE_ALLOWLIST = new Set(["/api/auth/login", "/api/auth/logout"]);
  */
 const SSO_CALLBACK = /^\/api\/auth\/sso\/[A-Za-z0-9_-]+\/callback$/;
 
-export function isLoginWrite(pathOnly: string): boolean {
-  return WRITE_ALLOWLIST.has(pathOnly) || SSO_CALLBACK.test(pathOnly);
+/**
+ * Same reasoning for MCP: approving a client on the consent screen is signing in
+ * (its write tools still hit this gate), and disconnecting one only takes access
+ * away. The ceiling in Settings → MCP is configuration and stays blocked.
+ */
+const MCP_GRANT_REVOKE = /^\/api\/mcp\/grants\/[A-Za-z0-9_-]+$/;
+
+export function isLoginWrite(pathOnly: string, method = "POST"): boolean {
+  return WRITE_ALLOWLIST.has(pathOnly) || SSO_CALLBACK.test(pathOnly) || (method === "DELETE" && MCP_GRANT_REVOKE.test(pathOnly));
 }
 
 export async function blockWrites(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
@@ -50,6 +57,6 @@ export async function blockWrites(request: FastifyRequest, _reply: FastifyReply)
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
   const pathOnly = request.url.split("?")[0] ?? request.url;
-  if (isLoginWrite(pathOnly)) return;
+  if (isLoginWrite(pathOnly, method)) return;
   throw readOnlyLocked();
 }

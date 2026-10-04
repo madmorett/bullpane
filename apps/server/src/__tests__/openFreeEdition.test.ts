@@ -9,6 +9,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 import { describe, expect, it } from "vitest";
 import { authPlugin } from "../auth/plugin";
+import { MCP_CALL_HEADER, McpCallBridge } from "../ee/mcp/internal";
 import { requireAuth, requireRole } from "../auth/guards";
 import { buildEdition } from "../services/edition";
 
@@ -28,6 +29,7 @@ async function harness(initial: Edition): Promise<Harness> {
   app.decorate("ctx", {
     edition: { getEdition: () => edition },
     sessions: { resolve: async () => null },
+    mcpCalls: new McpCallBridge(),
   } as never);
   await app.register(authPlugin);
   app.get("/who", async (request) => ({
@@ -81,6 +83,13 @@ describe("free edition without login", () => {
     const res = await app.inject({ method: "GET", url: "/who", cookies: { bullpane_session: "not-a-signed-value" } });
     // Unsigned/unknown cookie → still anonymous, never a resolved user.
     expect(res.json()).toEqual({ user: { id: ANONYMOUS_USER_ID, role: "admin" } });
+    await app.close();
+  });
+
+  it("ignores a forged MCP call header: only an in-process tool call carries a valid one", async () => {
+    const { app } = await harness(PRO);
+    const res = await app.inject({ method: "GET", url: "/authed", headers: { [MCP_CALL_HEADER]: "guessed-nonce.some-id" } });
+    expect(res.statusCode).toBe(401);
     await app.close();
   });
 });

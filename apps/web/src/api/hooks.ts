@@ -63,6 +63,12 @@ import type {
   testConnectionSchema,
   updateAlertSchema,
   updateFolderSchema,
+  McpConsentDecision,
+  McpConsentDecisionInput,
+  McpConsentInfo,
+  McpGrant,
+  McpSettings,
+  UpdateMcpSettingsInput,
 } from "@bullpane/shared";
 import { api, buildUrl, seg } from "./client";
 
@@ -195,6 +201,9 @@ export const qk = {
   users: ["users"] as const,
   ssoProviders: ["sso", "providers"] as const,
   ssoSettings: ["sso", "settings"] as const,
+  mcpSettings: ["mcp", "settings"] as const,
+  mcpGrants: (all: boolean) => ["mcp", "grants", all] as const,
+  mcpConsent: (request: string) => ["mcp", "consent", request] as const,
   attentionThresholds: ["settings", "attention"] as const,
   ssoLoginOptions: ["sso", "login-options"] as const,
   audit: (p: AuditFilters & { limit?: number }) => ["audit", p] as const,
@@ -1129,5 +1138,58 @@ export function useSetSsoSettings() {
       void qc.invalidateQueries({ queryKey: qk.ssoSettings });
       void qc.invalidateQueries({ queryKey: qk.ssoLoginOptions });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// MCP (Pro)
+// ---------------------------------------------------------------------------
+
+export function useMcpSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.mcpSettings,
+    queryFn: () => api.get<McpSettings>("/mcp/settings", { silent: [402] }),
+    enabled,
+  });
+}
+
+export function useSetMcpSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMcpSettingsInput) => api.put<McpSettings>("/mcp/settings", input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.mcpSettings }),
+  });
+}
+
+export function useMcpGrants(all: boolean, enabled = true) {
+  return useQuery({
+    queryKey: qk.mcpGrants(all),
+    queryFn: () => api.get<McpGrant[]>(`/mcp/grants${all ? "?all=1" : ""}`, { silent: [402] }),
+    enabled,
+  });
+}
+
+export function useRevokeMcpGrant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/mcp/grants/${seg(id)}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["mcp", "grants"] }),
+  });
+}
+
+export function useMcpConsent(request: string | null) {
+  return useQuery({
+    queryKey: qk.mcpConsent(request ?? ""),
+    queryFn: () => api.get<McpConsentInfo>(`/mcp/consent?request=${encodeURIComponent(request ?? "")}`),
+    enabled: !!request,
+    // The signed request expires in 10 minutes; a refetch on focus would only show that sooner.
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+}
+
+export function useMcpConsentDecision() {
+  return useMutation({
+    mutationFn: (input: McpConsentDecisionInput) => api.post<McpConsentDecision>("/mcp/consent", input),
   });
 }

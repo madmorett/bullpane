@@ -71,6 +71,12 @@ Pro column: the feature that gates the route (402 in free edition).
 | PATCH | /folders/:id | operator | folders | `updateFolderSchema` → `Folder` |
 | DELETE | /folders/:id | operator | folders | → `{ ok }` |
 | PUT | /folders/:id/queues | operator | folders | `setFolderQueuesSchema` → `Folder` |
+| GET | /mcp/settings | viewer | mcp | → `McpSettings` (`maxAccess`, the endpoint to paste, `reachableFromCloud`) |
+| PUT | /mcp/settings | admin | mcp | `updateMcpSettingsSchema` (`{ maxAccess: "off" \| "read" \| "write" }`) → `McpSettings` |
+| GET | /mcp/grants | viewer | mcp | `?all=1` (admin: every user's) → `McpGrant[]` (own by default) |
+| DELETE | /mcp/grants/:id | viewer | mcp | own grant, or any for an admin → `{ ok }` (404 otherwise) |
+| GET | /mcp/consent | viewer | mcp | `?request=<signed>` → `McpConsentInfo` |
+| POST | /mcp/consent | viewer | mcp | `mcpConsentDecisionSchema` → `McpConsentDecision` (`{ redirectTo }`) |
 | GET | /alerts | viewer | alerts | → `Alert[]` |
 | POST | /alerts | operator | alerts | `CreateAlertInput` → `Alert` |
 | PATCH | /alerts/:id | operator | alerts | `updateAlertSchema` → `Alert` |
@@ -410,3 +416,24 @@ browser mid-redirect. The detail goes to the log and the audit trail
 Users: `POST /api/users` now takes `password` as **optional**. Omitted → NULL
 `password_hash` → an SSO-only account that cannot sign in with a password at all,
 not even through the admin escape hatch.
+
+## MCP and its OAuth server (Pro)
+
+Root routes, not under `/api` (MCP clients look for them at the origin). Design:
+ARCHITECTURE.md → MCP.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | /.well-known/oauth-protected-resource (also `/mcp` suffix) | RFC 9728: `resource` = `<PUBLIC_URL>/mcp` |
+| GET | /.well-known/oauth-authorization-server | RFC 8414 |
+| POST | /oauth/register | RFC 7591, public clients only → 201 `{ client_id, … }` |
+| GET | /oauth/authorize | PKCE S256 required → 302 to `/oauth/consent?request=…` (or back to the client with `error`) |
+| POST | /oauth/token | form or JSON; `authorization_code` (+ `code_verifier`) or `refresh_token` (rotates) |
+| POST | /oauth/revoke | RFC 7009, always 200 |
+| POST | /mcp | JSON-RPC 2.0, `Authorization: Bearer`; `initialize`, `ping`, `tools/list`, `tools/call`. 401 + `WWW-Authenticate: Bearer resource_metadata=…` without a valid token |
+
+Scopes: `queues:read`, `queues:write` (a request for write; the consent screen decides).
+Tools: `list_connections`, `list_queues`, `get_queue`, `list_jobs`, `search_jobs`,
+`get_job`, `get_job_logs`, `list_schedulers`, `list_groups`, `request_destructive_action`
+(read); `add_job`, `retry_job`, `promote_job`, `remove_job`, `discard_job`,
+`bulk_job_action`, `retry_all`, `pause_queue`, `resume_queue` (write).

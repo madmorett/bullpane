@@ -43,6 +43,10 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (input.password !== undefined || input.role !== undefined || input.disabled === true) {
       // Credentials, permissions or access changed: drop that user's sessions.
       await app.ctx.sessions.destroyForUser(user.id);
+      // A new password or a disabled account also disconnects their MCP clients.
+      // A role change alone does not need to: MCP access is re-derived from the
+      // role on every call.
+      if (input.password !== undefined || input.disabled === true) await app.ctx.mcp.revokeAllForUser(user.id);
       if (user.id === actor.id) {
         // ...but keep the caller logged in with a fresh session.
         const session = await app.ctx.sessions.create(user.id);

@@ -13,6 +13,21 @@ written from this file — when you add an entry here, mirror it there
 
 ## [Unreleased]
 
+### Added
+
+- **MCP for Claude (Pro).** Paste `<PUBLIC_URL>/mcp` into claude.ai, Claude
+  Desktop or Claude Code, sign in with your Bullpane login or SSO, and pick
+  **read** or **read & write** on the consent screen. A client acts as you: what
+  you cannot do in the dashboard it cannot do either, because every tool is the
+  same `/api` call the dashboard makes. Effective access is the lowest of the
+  admin's ceiling (`Settings → MCP`: off / read / read & write, default off), what
+  you approved and your role — a viewer never writes — and it is re-checked on
+  every call. Writes are in the audit log with `via: mcp`. Drain, clean and
+  obliterate are never run from MCP: the client gets a link that opens the
+  confirmation dialog. OAuth 2.1 with PKCE, dynamic client registration and
+  rotating refresh tokens; connected clients can be disconnected from Settings.
+  claude.ai and Claude Desktop need `PUBLIC_URL` to be public HTTPS.
+
 ### Fixed
 
 - **Promoting a job scheduler's delayed job no longer skips the next run.**

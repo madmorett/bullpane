@@ -61,6 +61,15 @@ export const FEATURE_COPY: Record<ProFeature, FeatureCopy> = {
       "Require SSO for the team while admins keep a password way in",
     ],
   },
+  mcp: {
+    title: "MCP for Claude",
+    tagline: "Ask Claude why the payments queue is failing, and let it retry the jobs — as you, with your role.",
+    bullets: [
+      "Connect claude.ai, Claude Desktop or Claude Code; sign in with your Bullpane login or SSO",
+      "Read or read & write: the admin sets the ceiling, a viewer can never write",
+      "Every action lands in the audit log; drain and obliterate stay in the dashboard",
+    ],
+  },
 };
 
 export const FEATURE_ROUTE: Record<ProFeature, string> = {
@@ -71,4 +80,5 @@ export const FEATURE_ROUTE: Record<ProFeature, string> = {
   audit: "/audit",
   // SSO has no page of its own: it is a tab inside Settings.
   sso: "/settings/sso",
+  mcp: "/settings/mcp",
 };

@@ -14,6 +14,7 @@
  */
 import { anonymousUser } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
+import { MCP_CALL_HEADER } from "../ee/mcp/internal";
 import { SESSION_COOKIE } from "./sessions";
 
 export async function authPlugin(app: FastifyInstance): Promise<void> {
@@ -22,8 +23,18 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
   // (same mechanism fastify-plugin uses, without the extra dependency).
   app.decorateRequest("user", null);
   app.decorateRequest("sessionId", null);
+  app.decorateRequest("mcpCall", null);
 
   app.addHook("onRequest", async (request) => {
+    // An MCP tool call, injected in-process with the caller's (capped) identity.
+    // Checked first and exclusively: such a request carries no cookie, and the
+    // header is worthless outside this process. See ee/mcp/internal.ts.
+    const mcpCall = app.ctx.mcpCalls.resolve(request.headers[MCP_CALL_HEADER]);
+    if (mcpCall) {
+      request.user = mcpCall.user;
+      request.mcpCall = mcpCall;
+      return;
+    }
     const raw = request.cookies[SESSION_COOKIE];
     if (raw) {
       const unsigned = request.unsignCookie(raw);

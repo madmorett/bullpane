@@ -14,7 +14,7 @@ import { z } from "zod";
 
 export type Tier = "free" | "pro";
 
-export const PRO_FEATURES = ["alerts", "users", "folders", "flows", "audit", "sso"] as const;
+export const PRO_FEATURES = ["alerts", "users", "folders", "flows", "audit", "sso", "mcp"] as const;
 export type ProFeature = (typeof PRO_FEATURES)[number];
 
 /**
@@ -1447,6 +1447,12 @@ export const AUDIT_ACTIONS = [
   "auth.sso_denied",
   /** First SSO sign-in created a viewer account (auto-provisioning is on). */
   "auth.sso_provisioned",
+  // MCP
+  "mcp.settings_update",
+  /** A user approved an MCP client (Claude) on the consent screen, or refused it. */
+  "mcp.authorize",
+  /** A connected MCP client was disconnected from Settings → MCP. */
+  "mcp.revoke",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -1494,6 +1500,9 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "auth.sso_login": "signed in with SSO",
   "auth.sso_denied": "was refused by SSO (no account)",
   "auth.sso_provisioned": "joined through SSO (auto-provisioned)",
+  "mcp.settings_update": "changed the MCP access level",
+  "mcp.authorize": "connected an MCP client",
+  "mcp.revoke": "disconnected an MCP client",
 };
 
 /**
@@ -1522,6 +1531,9 @@ export const AUDIT_HIGH_RISK_ACTIONS: readonly AuditAction[] = [
   "sso.provider_delete",
   // A new account appeared without an admin creating it.
   "auth.sso_provisioned",
+  // Who an AI client can act as, and whether it can write, is an access change.
+  "mcp.settings_update",
+  "mcp.authorize",
 ];
 
 export interface AuditEntry {
@@ -1731,4 +1743,92 @@ export function redactRedisUrl(url: string): string {
   } catch {
     return url.replace(/:\/\/([^:@/]*):([^@/]*)@/, "://$1:****@");
   }
+}
+
+// ---------------------------------------------------------------------------
+// MCP (Pro) — Claude and other MCP clients reading and operating queues
+// ---------------------------------------------------------------------------
+//
+// One rule for the MCP and the dashboard: every tool is a call to an /api route,
+// made as the user who connected the client. What that user cannot do in the
+// dashboard, the client cannot do either. Docs: ARCHITECTURE.md → MCP.
+
+/**
+ * What an MCP client may do. `off` exists only as the admin's setting.
+ *  - read  : the viewer routes (queues, jobs, logs, schedulers, groups)
+ *  - write : read + the operator job and queue actions. Never drain, obliterate
+ *            or clean: for those the client gets a link to confirm in the dashboard.
+ */
+export const MCP_ACCESS_LEVELS = ["off", "read", "write"] as const;
+export type McpAccessLevel = (typeof MCP_ACCESS_LEVELS)[number];
+export type McpGrantAccess = Exclude<McpAccessLevel, "off">;
+
+const MCP_ACCESS_RANK: Record<McpAccessLevel, number> = { off: 0, read: 1, write: 2 };
+
+/** The most a user of this role can grant: a viewer can only ever read. */
+export function mcpRoleCeiling(role: Role): McpGrantAccess {
+  return hasRole(role, "operator") ? "write" : "read";
+}
+
+/**
+ * Effective access = the lowest of the admin's ceiling, what the user chose on
+ * the consent screen and what their role allows. Computed on every call, so a
+ * lower ceiling, a demoted role or a disabled user takes effect at once.
+ */
+export function mcpEffectiveAccess(ceiling: McpAccessLevel, granted: McpGrantAccess, role: Role): McpAccessLevel {
+  const levels = [ceiling, granted, mcpRoleCeiling(role)];
+  return levels.reduce((min, l) => (MCP_ACCESS_RANK[l] < MCP_ACCESS_RANK[min] ? l : min));
+}
+
+export interface McpSettings {
+  /** the admin's ceiling for every MCP client on this install. Default off. */
+  maxAccess: McpAccessLevel;
+  /** the URL to paste into Claude: `${PUBLIC_URL}/mcp` */
+  endpoint: string;
+  /**
+   * false when PUBLIC_URL is plain http or a loopback/private host: claude.ai and
+   * Claude Desktop connect from Anthropic's cloud and cannot reach it. Claude Code,
+   * which connects from the user's machine, still can.
+   */
+  reachableFromCloud: boolean;
+}
+
+export const updateMcpSettingsSchema = z.object({ maxAccess: z.enum(MCP_ACCESS_LEVELS) });
+export type UpdateMcpSettingsInput = z.infer<typeof updateMcpSettingsSchema>;
+
+/** One approved client: a consent, and the refresh-token family behind it. */
+export interface McpGrant {
+  id: string;
+  clientName: string;
+  /** host of the redirect URI, e.g. "claude.ai" or "localhost" */
+  redirectHost: string;
+  access: McpGrantAccess;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** What the consent screen shows. `request` is the signed authorize request. */
+export interface McpConsentInfo {
+  clientName: string;
+  redirectHost: string;
+  /** what the client asked for (scope), before any ceiling */
+  requested: McpGrantAccess;
+  maxAccess: McpAccessLevel;
+  /** the most this user can approve: min(maxAccess, role ceiling) */
+  allowed: McpAccessLevel;
+}
+
+export const mcpConsentDecisionSchema = z.object({
+  request: z.string().min(1).max(4096),
+  approve: z.boolean(),
+  access: z.enum(["read", "write"]).default("read"),
+});
+export type McpConsentDecisionInput = z.input<typeof mcpConsentDecisionSchema>;
+
+export interface McpConsentDecision {
+  /** where the browser goes next: the client's redirect URI with code or error */
+  redirectTo: string;
 }

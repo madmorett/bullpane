@@ -101,6 +101,10 @@ const ROUTE_ACTIONS: Record<string, AuditAction> = {
   // license
   "PUT /api/license": "license.set",
   "DELETE /api/license": "license.remove",
+  // MCP (Pro)
+  "PUT /api/mcp/settings": "mcp.settings_update",
+  "POST /api/mcp/consent": "mcp.authorize",
+  "DELETE /api/mcp/grants/:id": "mcp.revoke",
   // auth. login → login_failed is patched by the handler on a bad password.
   "POST /api/auth/login": "auth.login",
   "POST /api/auth/logout": "auth.logout",
@@ -240,7 +244,9 @@ export function registerAuditHook(app: FastifyInstance): void {
       jobId: patch.jobId ?? paramString(request.params, "jobId"),
       result,
       errorMessage: result === "error" ? (request.auditError ?? `HTTP ${status}`) : null,
-      detail: patch.detail ?? null,
+      // An MCP tool call is the same route as the dashboard's, so the same row;
+      // `via` is what tells "Ana retried it" from "Ana's Claude retried it".
+      detail: request.mcpCall ? { ...(patch.detail ?? {}), via: "mcp", mcpClient: request.mcpCall.clientName } : (patch.detail ?? null),
       ip: clientIp(request),
       userAgent: typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null,
     });

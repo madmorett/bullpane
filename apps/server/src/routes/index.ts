@@ -21,6 +21,7 @@ import { queueRoutes } from "./queues";
 import { settingsRoutes } from "./settings";
 import { setupRoutes } from "./setup";
 import { ssoRoutes } from "../ee/routes/sso";
+import { mcpRoutes } from "../ee/routes/mcp";
 import { userRoutes } from "../ee/routes/users";
 
 export async function apiPlugin(app: FastifyInstance): Promise<void> {
@@ -55,4 +56,5 @@ export async function apiPlugin(app: FastifyInstance): Promise<void> {
   await app.register(userRoutes);
   await app.register(auditRoutes);
   await app.register(settingsRoutes);
+  await app.register(mcpRoutes);
 }

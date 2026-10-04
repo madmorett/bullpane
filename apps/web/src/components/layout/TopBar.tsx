@@ -14,6 +14,8 @@ import { ConnectionStatusDot } from "@/components/ConnectionStatusDot";
 import { HealthTopBarSummary } from "@/components/health/HealthTopBarSummary";
 import { useEdition } from "@/edition/useEdition";
 
+const TAB_LABEL: Record<string, string> = { sso: "SSO", mcp: "MCP" };
+
 interface Crumb {
   label: string;
   to?: string;
@@ -29,7 +31,8 @@ function useCrumbs(): Crumb[] {
   const crumbs: Crumb[] = [{ label: "Overview", to: routes.home }];
   if (pathname.startsWith("/settings")) {
     crumbs.push({ label: "Settings", to: routes.settings() });
-    if (params.tab) crumbs.push({ label: params.tab[0].toUpperCase() + params.tab.slice(1) });
+    // Acronyms keep their case: "SSO", "MCP", not "Sso", "Mcp".
+    if (params.tab) crumbs.push({ label: TAB_LABEL[params.tab] ?? params.tab[0].toUpperCase() + params.tab.slice(1) });
     return crumbs;
   }
   if (pathname.startsWith("/health")) return [...crumbs, { label: "Redis health" }];
