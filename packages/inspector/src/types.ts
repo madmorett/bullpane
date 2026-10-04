@@ -1,19 +1,19 @@
 /**
- * Public contract of the redis inspector. The server codes against THIS file.
- * Implementation lives in inspector.ts / pool.ts / lua/*.lua.
+ * The contract every queue backend implements. The server codes against THIS
+ * file and never against a concrete inspector; `@bullpane/redis-inspector` and
+ * `@bullpane/pg-inspector` are the two implementations.
  *
- * Performance rules (non-negotiable):
- *  - Never call KEYS. Discovery uses SCAN with MATCH `${prefix}:*:meta`, bounded per pass.
- *  - One round trip per read operation: counts, job pages and job detail are Lua scripts
- *    loaded once with `defineCommand` (EVALSHA). Multi-queue reads are pipelined.
- *  - List views truncate `data`/`returnvalue` inside Lua (previewBytes) so we never
- *    ship megabytes of payload for a table row.
- *  - Search is a bounded, resumable scan (maxScanPerCall) inside Lua using plain
- *    string.find (no patterns). Never scans a whole state in one call.
- *  - Reads never mutate. Writes go through the official `bullmq` Queue/Job API so we
- *    inherit its exact atomic Lua semantics (retry, promote, remove, clean, drain, ...).
- *  - All keys of one queue share the same hash tag in cluster mode, so every script
- *    touches keys of exactly one queue.
+ * Performance rules (non-negotiable), stated per backend in ARCHITECTURE.md:
+ *  - One round trip per read. Redis: one EVALSHA (pipelined across queues).
+ *    Postgres: one SQL statement (CTEs, never N queries in a loop).
+ *  - Nothing unbounded: Redis never calls KEYS and every SCAN has a budget;
+ *    Postgres pins `state` in every job query so the partial indexes are used.
+ *  - List views truncate `data`/`returnvalue` on the server side (Lua or SQL),
+ *    so we never ship megabytes of payload for a table row.
+ *  - Reads never mutate. Writes go through the official `bullmq` Queue/Job API
+ *    so we inherit its exact atomic semantics (retry, promote, remove, clean, ...).
+ *  - Redis cluster: all keys of one queue share the same hash tag, so every
+ *    script touches keys of exactly one queue.
  */
 import type {
   BulkJobAction,
@@ -32,14 +32,20 @@ import type {
   SchedulerPromoteMode,
   QueueCounts,
   QueueMetrics,
-  RedisServerInfo,
+  ConnectionKind,
+  ServerInfo,
 } from "@bullpane/shared";
 
 export interface InspectorConnectionConfig {
   /** stable id (the connection row id) used to key the pool */
   id: string;
+  /** which backend the queues live in. default "redis" */
+  kind?: ConnectionKind;
   url: string;
-  /** BullMQ prefix, default "bull" */
+  /**
+   * The namespace of the queues: the Redis key prefix (default "bull") or the
+   * Postgres schema (default "bullmq"). See DEFAULT_NAMESPACE.
+   */
   prefix?: string;
   cluster?: boolean;
   /** optional glob for discovery, e.g. "payments-*" */
@@ -211,12 +217,12 @@ export type CleanableState =
   | "prioritized";
 
 export interface Inspector {
-  readonly config: Required<Pick<InspectorConnectionConfig, "id" | "url" | "prefix" | "cluster">> &
+  readonly config: Required<Pick<InspectorConnectionConfig, "id" | "kind" | "url" | "prefix" | "cluster">> &
     InspectorConnectionConfig;
 
   // --- connection ---------------------------------------------------------
   ping(): Promise<PingResult>;
-  serverInfo(): Promise<RedisServerInfo>;
+  serverInfo(): Promise<ServerInfo>;
   close(): Promise<void>;
 
   // --- discovery ----------------------------------------------------------

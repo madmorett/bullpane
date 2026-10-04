@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Database, Pencil, Plug, Plus, Trash2, XCircle } from "lucide-react";
-import { createConnectionSchema, type CreateConnectionInput, type RedisConnection } from "@bullpane/shared";
+import { type ConnectionKind, createConnectionSchema, type CreateConnectionInput, DEFAULT_NAMESPACE, type RedisConnection } from "@bullpane/shared";
 import { routes } from "@/lib/routes";
 import { useConnections, useCreateConnection, useDeleteConnection, useTestConnection, useUpdateConnection, type PingResult } from "@/api/hooks";
 import { errorMessage } from "@/api/client";
@@ -48,7 +48,7 @@ export function ConnectionsTab() {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs text-fg-muted">
-          Each connection points at one Redis (or cluster) with a BullMQ key prefix. Queues are discovered with <span className="font-mono">SCAN</span>, never <span className="font-mono">KEYS</span>.
+          Each connection points at one Redis (or cluster) with a BullMQ key prefix, or at the Postgres schema of BullMQ 6's Postgres backend. On Redis, queues are discovered with <span className="font-mono">SCAN</span>, never <span className="font-mono">KEYS</span>.
         </p>
         {isAdmin && (
           <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => setDialog({ connection: null })} disabled={demo} title={demo ? "Locked in the demo" : undefined}>
@@ -64,7 +64,7 @@ export function ConnectionsTab() {
             <tr>
               <Th>Name</Th>
               <Th>URL</Th>
-              <Th>Prefix</Th>
+              <Th>Prefix / schema</Th>
               <Th>Filter</Th>
               <Th>Status</Th>
               <Th>Added</Th>
@@ -82,7 +82,7 @@ export function ConnectionsTab() {
             {connections.data && list.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <EmptyState compact icon={<Database />} title="No connections" description={isAdmin ? "Add your first Redis connection." : "Ask an admin to add one."} />
+                  <EmptyState compact icon={<Database />} title="No connections" description={isAdmin ? "Add your first Redis or Postgres connection." : "Ask an admin to add one."} />
                 </td>
               </tr>
             )}
@@ -92,6 +92,11 @@ export function ConnectionsTab() {
                   <Link to={routes.connection(c.id)} className="hover:underline">
                     {c.name}
                   </Link>
+                  {c.kind === "postgres" && (
+                    <Badge variant="outline" size="xs" className="ml-1.5">
+                      postgres
+                    </Badge>
+                  )}
                   {c.cluster && (
                     <Badge variant="outline" size="xs" className="ml-1.5">
                       cluster
@@ -138,7 +143,7 @@ export function ConnectionsTab() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title={`Remove "${deleting?.name}"`}
-        description="Only the dashboard entry is removed. Nothing in Redis is touched. Folders and alerts pointing at this connection stop working."
+        description="Only the dashboard entry is removed. Nothing in Redis or Postgres is touched. Folders and alerts pointing at this connection stop working."
         confirmText="Remove connection"
         danger
         typeToConfirm={deleting?.name}
@@ -155,6 +160,7 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
   const test = useTestConnection();
   const [form, setForm] = useState({
     name: connection?.name ?? "",
+    kind: (connection?.kind ?? "redis") as ConnectionKind,
     url: connection ? "" : "redis://localhost:6379",
     prefix: connection?.prefix ?? "bull",
     cluster: connection?.cluster ?? false,
@@ -175,6 +181,22 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
     setForm((f) => ({ ...f, [k]: v }));
     setPing(null);
   };
+  const postgres = form.kind === "postgres";
+  /**
+   * Switching backend (new connections only) swaps the namespace default when
+   * the user has not typed one of their own, and the example URL.
+   */
+  const setKind = (kind: ConnectionKind) => {
+    setForm((f) => ({
+      ...f,
+      kind,
+      url: kind === "postgres" ? (f.url.startsWith("redis") ? "" : f.url) : f.url || "redis://localhost:6379",
+      prefix: f.prefix === DEFAULT_NAMESPACE[f.kind] || !f.prefix ? DEFAULT_NAMESPACE[kind] : f.prefix,
+      cluster: kind === "postgres" ? false : f.cluster,
+    }));
+    setErrors({});
+    setPing(null);
+  };
   const setPart = (k: keyof RedisParts, v: string | boolean) => {
     setParts((p) => ({ ...p, [k]: v }));
     setPing(null);
@@ -186,7 +208,8 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
    * stored URL, so opening Edit and pressing Save never drops the password.
    */
   const effectiveUrl = (): string => {
-    if (mode === "url") return form.url.trim();
+    // Postgres has a URL field only: a postgres:// string is how every provider hands it out.
+    if (mode === "url" || postgres) return form.url.trim();
     if (connection && !parts.password && !partsChanged(parts, initialParts)) return "";
     return urlFromParts(parts);
   };
@@ -195,8 +218,9 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
     const url = effectiveUrl();
     const raw = {
       name: form.name.trim(),
+      kind: form.kind,
       url,
-      prefix: form.prefix.trim() || "bull",
+      prefix: form.prefix.trim() || DEFAULT_NAMESPACE[form.kind],
       cluster: form.cluster,
       queueFilter: form.queueFilter.trim() || null,
     };
@@ -232,10 +256,10 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
   const runTest = () => {
     const url = effectiveUrl();
     if (!url) {
-      setErrors({ url: connection ? (mode === "url" ? "Enter the URL (with password) to test it" : "Enter the password to test the stored connection") : "URL is required" });
+      setErrors({ url: connection ? (mode === "url" || postgres ? "Enter the URL (with password) to test it" : "Enter the password to test the stored connection") : "URL is required" });
       return;
     }
-    test.mutate({ url, prefix: form.prefix.trim() || undefined, cluster: form.cluster }, { onSuccess: setPing, onError: (e) => setPing({ ok: false, error: errorMessage(e) }) });
+    test.mutate({ kind: form.kind, url, prefix: form.prefix.trim() || undefined, cluster: form.cluster }, { onSuccess: setPing, onError: (e) => setPing({ ok: false, error: errorMessage(e) }) });
   };
 
   const busy = create.isPending || update.isPending;
@@ -270,65 +294,101 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
       >
         <Input label="Name" autoFocus value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} placeholder="production" />
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-fg-muted">Redis</span>
-          <div className="inline-flex rounded-md border border-border p-0.5 text-xs" role="tablist" aria-label="How to enter the Redis address">
-            {(["fields", "url"] as const).map((m) => (
-              <button key={m} type="button" role="tab" aria-selected={mode === m} className={`rounded px-2 py-0.5 ${mode === m ? "bg-surface-3 text-fg" : "text-fg-muted hover:text-fg"}`} onClick={() => (setMode(m), setPing(null))}>
-                {m === "fields" ? "Host & password" : "Connection URL"}
-              </button>
-            ))}
-          </div>
+          <span className="text-xs font-medium text-fg-muted">Backend</span>
+          {connection ? (
+            <span className="text-xs text-fg">{postgres ? "Postgres (BullMQ 6)" : "Redis"}</span>
+          ) : (
+            <div className="inline-flex rounded-md border border-border p-0.5 text-xs" role="tablist" aria-label="Where the queues live">
+              {(["redis", "postgres"] as const).map((k) => (
+                <button key={k} type="button" role="tab" aria-selected={form.kind === k} className={`rounded px-2 py-0.5 ${form.kind === k ? "bg-surface-3 text-fg" : "text-fg-muted hover:text-fg"}`} onClick={() => setKind(k)}>
+                  {k === "redis" ? "Redis" : "Postgres (BullMQ 6)"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        {mode === "url" ? (
+        {postgres ? (
           <Input
-            label="Redis URL"
+            label="Postgres URL"
             mono
             value={form.url}
             onChange={(e) => set("url", e.target.value)}
             error={errors.url}
-            placeholder={connection ? `${connection.url} (leave empty to keep)` : "redis://:password@host:6379/0"}
-            hint="redis:// or rediss:// (TLS). Include the password; it is redacted everywhere in the UI."
+            placeholder={connection ? `${connection.url} (leave empty to keep)` : "postgres://user:password@host:5432/app"}
+            hint="The database your BullMQ workers use. Add ?sslmode=require for TLS. A read-only role is enough to browse; actions need write access."
             autoComplete="off"
             spellCheck={false}
           />
         ) : (
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
-              <Input label="Host" mono value={parts.host} onChange={(e) => setPart("host", e.target.value)} placeholder="cache.internal" autoComplete="off" spellCheck={false} />
-              <Input label="Port" mono inputMode="numeric" value={parts.port} onChange={(e) => setPart("port", e.target.value)} />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input label="Username (optional)" mono value={parts.username} onChange={(e) => setPart("username", e.target.value)} placeholder="default" autoComplete="off" spellCheck={false} />
-              <Input
-                label="Password"
-                type="password"
-                mono
-                value={parts.password}
-                onChange={(e) => setPart("password", e.target.value)}
-                placeholder={connection ? "leave empty to keep the stored one" : "optional"}
-                hint={connection ? "Stored server-side and never shown again. Changing the host or TLS needs it typed again." : "Stored server-side, redacted everywhere in the UI."}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="grid items-end gap-3 sm:grid-cols-[120px_1fr]">
-              <Input label="Database" mono inputMode="numeric" value={parts.db} onChange={(e) => setPart("db", e.target.value)} />
-              <div className="flex items-start gap-2.5 pb-1">
-                <Switch checked={parts.tls} onChange={(v) => setPart("tls", v)} label="TLS" className="mt-0.5" />
-                <button type="button" className="text-left text-xs" onClick={() => setPart("tls", !parts.tls)}>
-                  <span className="font-medium text-fg">TLS</span>
-                  <span className="text-fg-muted"> (rediss://) — required by ElastiCache with in-transit encryption, Redis Cloud, Upstash and most managed Redis.</span>
+          <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-fg-muted">Redis</span>
+            <div className="inline-flex rounded-md border border-border p-0.5 text-xs" role="tablist" aria-label="How to enter the Redis address">
+              {(["fields", "url"] as const).map((m) => (
+                <button key={m} type="button" role="tab" aria-selected={mode === m} className={`rounded px-2 py-0.5 ${mode === m ? "bg-surface-3 text-fg" : "text-fg-muted hover:text-fg"}`} onClick={() => (setMode(m), setPing(null))}>
+                  {m === "fields" ? "Host & password" : "Connection URL"}
                 </button>
-              </div>
+              ))}
             </div>
-            {errors.url && <p className="text-xs text-danger">{errors.url}</p>}
-            <p className="font-mono text-[11px] text-fg-subtle">{effectiveUrl() ? urlFromParts({ ...parts, password: parts.password ? "****" : "" }) : `${connection?.url ?? ""} (unchanged)`}</p>
           </div>
+          {mode === "url" ? (
+            <Input
+              label="Redis URL"
+              mono
+              value={form.url}
+              onChange={(e) => set("url", e.target.value)}
+              error={errors.url}
+              placeholder={connection ? `${connection.url} (leave empty to keep)` : "redis://:password@host:6379/0"}
+              hint="redis:// or rediss:// (TLS). Include the password; it is redacted everywhere in the UI."
+              autoComplete="off"
+              spellCheck={false}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                <Input label="Host" mono value={parts.host} onChange={(e) => setPart("host", e.target.value)} placeholder="cache.internal" autoComplete="off" spellCheck={false} />
+                <Input label="Port" mono inputMode="numeric" value={parts.port} onChange={(e) => setPart("port", e.target.value)} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Username (optional)" mono value={parts.username} onChange={(e) => setPart("username", e.target.value)} placeholder="default" autoComplete="off" spellCheck={false} />
+                <Input
+                  label="Password"
+                  type="password"
+                  mono
+                  value={parts.password}
+                  onChange={(e) => setPart("password", e.target.value)}
+                  placeholder={connection ? "leave empty to keep the stored one" : "optional"}
+                  hint={connection ? "Stored server-side and never shown again. Changing the host or TLS needs it typed again." : "Stored server-side, redacted everywhere in the UI."}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="grid items-end gap-3 sm:grid-cols-[120px_1fr]">
+                <Input label="Database" mono inputMode="numeric" value={parts.db} onChange={(e) => setPart("db", e.target.value)} />
+                <div className="flex items-start gap-2.5 pb-1">
+                  <Switch checked={parts.tls} onChange={(v) => setPart("tls", v)} label="TLS" className="mt-0.5" />
+                  <button type="button" className="text-left text-xs" onClick={() => setPart("tls", !parts.tls)}>
+                    <span className="font-medium text-fg">TLS</span>
+                    <span className="text-fg-muted"> (rediss://) — required by ElastiCache with in-transit encryption, Redis Cloud, Upstash and most managed Redis.</span>
+                  </button>
+                </div>
+              </div>
+              {errors.url && <p className="text-xs text-danger">{errors.url}</p>}
+              <p className="font-mono text-[11px] text-fg-subtle">{effectiveUrl() ? urlFromParts({ ...parts, password: parts.password ? "****" : "" }) : `${connection?.url ?? ""} (unchanged)`}</p>
+            </div>
+          )}
+          </>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Input label="Key prefix" mono value={form.prefix} onChange={(e) => set("prefix", e.target.value)} error={errors.prefix} hint="BullMQ default is bull" />
+          {postgres ? (
+            <Input label="Schema" mono value={form.prefix} onChange={(e) => set("prefix", e.target.value)} error={errors.prefix} hint="BullMQ default is bullmq" />
+          ) : (
+            <Input label="Key prefix" mono value={form.prefix} onChange={(e) => set("prefix", e.target.value)} error={errors.prefix} hint="BullMQ default is bull" />
+          )}
           <Input label="Queue filter (optional)" mono value={form.queueFilter} onChange={(e) => set("queueFilter", e.target.value)} error={errors.queueFilter} placeholder="payments-*" hint="Glob over queue names; limits discovery." />
         </div>
-        <Checkbox label="Redis Cluster" description="Use cluster-aware client. Each queue lives in one hash slot, so all reads stay single-node." checked={form.cluster} onChange={(e) => set("cluster", e.target.checked)} />
+        {!postgres && (
+          <Checkbox label="Redis Cluster" description="Use cluster-aware client. Each queue lives in one hash slot, so all reads stay single-node." checked={form.cluster} onChange={(e) => set("cluster", e.target.checked)} />
+        )}
 
         {ping && (
           <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${ping.ok ? "border-success/40 bg-success/10 text-success" : "border-danger/40 bg-danger/10 text-danger"}`} role="status">
@@ -337,7 +397,7 @@ function ConnectionDialog({ open, onClose, connection }: { open: boolean; onClos
               {ping.ok ? (
                 <>
                   Connected{ping.latencyMs != null && ` in ${ping.latencyMs} ms`}
-                  {ping.redisVersion && ` · Redis ${ping.redisVersion}`}
+                  {ping.redisVersion && ` · ${postgres ? "Postgres" : "Redis"} ${ping.redisVersion}`}
                   {ping.queuesFound != null && ` · ${ping.queuesFound} queues found`}
                 </>
               ) : (

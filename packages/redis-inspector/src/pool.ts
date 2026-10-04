@@ -4,7 +4,7 @@
  * closed (in the background) and a fresh one takes its place.
  */
 import { RedisInspector } from "./inspector.js";
-import type { Inspector, InspectorConnectionConfig, InspectorOptions, InspectorPool } from "./types.js";
+import type { Inspector, InspectorConnectionConfig, InspectorOptions, InspectorPool } from "@bullpane/inspector";
 
 export class RedisInspectorPool implements InspectorPool {
   private readonly inspectors = new Map<string, RedisInspector>();

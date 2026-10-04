@@ -212,7 +212,8 @@ function AggregateLine({
 }
 
 function ConnectionLine({ health, paused, className }: { health: ConnectionHealth; paused: boolean; className?: string }) {
-  const info = health.info;
+  const info = health.info && health.info.backend !== "postgres" ? health.info : null;
+  const pgInfo = health.info?.backend === "postgres" ? health.info : null;
   const down = !health.ok;
   const worst = worstLevel(health.warnings);
 
@@ -250,7 +251,25 @@ function ConnectionLine({ health, paused, className }: { health: ConnectionHealt
       </Link>
 
       {down ? (
-        <span className="min-w-0 flex-1 truncate text-[11px] text-danger">{health.error ?? "Redis is unreachable"}</span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-danger">
+          {health.error ?? (health.kind === "postgres" ? "Postgres is unreachable" : "Redis is unreachable")}
+        </span>
+      ) : health.kind === "postgres" ? (
+        <span className="flex shrink-0 items-center gap-x-3 text-[11px] text-fg-muted">
+          <Metric label="db" value={pgInfo ? formatBytes(pgInfo.databaseSizeBytes) : "–"} tip="pg_database_size of the database BullMQ lives in" />
+          <Metric
+            label="tx/s"
+            value={health.commandsPerSec == null ? "–" : formatRate(health.commandsPerSec, "")}
+            tip={health.commandsPerSec == null ? "No rate yet — needs two samples. This is not zero." : "Transactions per second, from pg_stat_database"}
+          />
+          <Metric
+            label="conn"
+            value={pgInfo ? `${pgInfo.connectedClients}/${pgInfo.maxConnections}` : "–"}
+            tip="Sessions on this database / max_connections"
+            tone={pgInfo && pgInfo.maxConnections > 0 && pgInfo.connectedClients / pgInfo.maxConnections >= 0.9 ? "danger" : undefined}
+          />
+          <Metric label="lat" value={pgInfo ? formatLatency(pgInfo.latencyMs) : "–"} tip="Round trip of the health query itself" />
+        </span>
       ) : (
         <span className="flex shrink-0 items-center gap-x-3 text-[11px] text-fg-muted">
           <Metric

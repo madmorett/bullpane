@@ -2,7 +2,7 @@
  * Process entry point: config → database (SQLite or MySQL: wait + migrate) → app → seed
  * (BULLPANE_CONNECTIONS, demo) → listen → alerts engine. Graceful shutdown on SIGINT/SIGTERM.
  */
-import { createInspectorPool } from "@bullpane/redis-inspector";
+import { createInspectorPool } from "./services/inspectorPool";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createDatabase, waitForDatabase } from "./db";

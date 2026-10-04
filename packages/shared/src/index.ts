@@ -448,16 +448,37 @@ export interface SsoTestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Redis connections
+// Connections (Redis, or Postgres since BullMQ 6)
 // ---------------------------------------------------------------------------
 
+/**
+ * Where a connection's queues live. BullMQ 6 added a PostgreSQL backend next to
+ * Redis; the same dashboard reads both through the same Inspector contract.
+ */
+export const CONNECTION_KINDS = ["redis", "postgres"] as const;
+export type ConnectionKind = (typeof CONNECTION_KINDS)[number];
+
+/**
+ * The namespace of a connection's queues. Redis: the key `prefix` BullMQ puts in
+ * front of every key ("bull"). Postgres: the schema BullMQ creates its tables in
+ * ("bullmq", BullMQ's DEFAULT_SCHEMA). Both are stored in the `prefix` field.
+ */
+export const DEFAULT_NAMESPACE: Record<ConnectionKind, string> = {
+  redis: "bull",
+  postgres: "bullmq",
+};
+
+/** A configured connection, Redis or Postgres (the type name predates Postgres). */
 export interface RedisConnection {
   id: string;
   name: string;
-  /** redis:// or rediss:// URL. Password is redacted in API responses. */
+  /** "redis" unless the connection was created for BullMQ's Postgres backend */
+  kind: ConnectionKind;
+  /** redis://, rediss:// or postgres:// URL. Password is redacted in API responses. */
   url: string;
-  /** BullMQ key prefix (default "bull") */
+  /** BullMQ key prefix (default "bull"), or the Postgres schema (default "bullmq") */
   prefix: string;
+  /** Redis Cluster. Always false for Postgres. */
   cluster: boolean;
   /** Optional hard filter for queue discovery, glob-ish, e.g. "payments-*" */
   queueFilter: string | null;
@@ -470,24 +491,71 @@ export interface RedisConnection {
 export interface ConnectionStatus {
   ok: boolean;
   latencyMs: number | null;
+  /** the server version, Redis or Postgres (the field name predates Postgres) */
   redisVersion: string | null;
   error: string | null;
   checkedAt: string;
 }
 
-export const createConnectionSchema = z.object({
+const URL_SCHEMES: Record<ConnectionKind, { test: RegExp; message: string }> = {
+  redis: { test: /^rediss?:\/\//, message: "Must start with redis:// or rediss://" },
+  postgres: { test: /^postgres(ql)?:\/\//, message: "Must start with postgres:// or postgresql://" },
+};
+
+/**
+ * A Postgres schema name BullMQ accepts unquoted-safe: it is interpolated into
+ * `search_path`, so anything else is refused here rather than at connect time.
+ */
+const PG_SCHEMA_RE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
+
+/**
+ * Cross-field rules of a connection: the URL scheme must match the kind, and a
+ * Postgres connection has a schema-shaped namespace and no cluster mode. Checks
+ * only what is present, so the same function serves create and update (the
+ * service re-checks an update against the stored kind).
+ */
+export function connectionIssues(v: {
+  kind?: ConnectionKind;
+  url?: string;
+  prefix?: string;
+  cluster?: boolean;
+}): { path: string; message: string }[] {
+  const issues: { path: string; message: string }[] = [];
+  const kind = v.kind ?? "redis";
+  if (v.url !== undefined && !URL_SCHEMES[kind].test.test(v.url)) {
+    issues.push({ path: "url", message: URL_SCHEMES[kind].message });
+  }
+  if (kind === "postgres") {
+    if (v.prefix !== undefined && !PG_SCHEMA_RE.test(v.prefix)) {
+      issues.push({ path: "prefix", message: "A Postgres schema: letters, digits and _, not starting with a digit" });
+    }
+    if (v.cluster === true) issues.push({ path: "cluster", message: "Cluster mode is Redis only" });
+  }
+  return issues;
+}
+
+const connectionFields = z.object({
   name: z.string().min(1).max(80),
-  url: z
-    .string()
-    .min(1)
-    .refine((u) => /^rediss?:\/\//.test(u), "Must start with redis:// or rediss://"),
-  prefix: z.string().min(1).max(64).default("bull"),
+  kind: z.enum(CONNECTION_KINDS).default("redis"),
+  url: z.string().min(1),
+  /** omitted → DEFAULT_NAMESPACE of the kind */
+  prefix: z.string().min(1).max(64).optional(),
   cluster: z.boolean().default(false),
   queueFilter: z.string().max(200).nullable().optional(),
 });
+
+export const createConnectionSchema = connectionFields
+  .superRefine((v, ctx) => {
+    for (const issue of connectionIssues(v)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.path], message: issue.message });
+  })
+  .transform((v) => ({ ...v, prefix: v.prefix ?? DEFAULT_NAMESPACE[v.kind] }));
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 
-export const updateConnectionSchema = createConnectionSchema.partial();
+/**
+ * `kind` cannot change on an update: moving a connection from Redis to Postgres
+ * is a different connection (different queues, different alerts history).
+ */
+export const updateConnectionSchema = connectionFields.omit({ kind: true }).partial();
 export type UpdateConnectionInput = z.infer<typeof updateConnectionSchema>;
 
 /**
@@ -501,13 +569,20 @@ export const reorderSchema = z.object({
 });
 export type ReorderInput = z.infer<typeof reorderSchema>;
 
-export const testConnectionSchema = z.object({
-  url: z.string().min(1),
-  prefix: z.string().optional(),
-  cluster: z.boolean().optional(),
-});
+export const testConnectionSchema = z
+  .object({
+    kind: z.enum(CONNECTION_KINDS).default("redis"),
+    url: z.string().min(1),
+    prefix: z.string().optional(),
+    cluster: z.boolean().optional(),
+  })
+  .superRefine((v, ctx) => {
+    for (const issue of connectionIssues(v)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.path], message: issue.message });
+  });
 
 export interface RedisServerInfo {
+  /** absent on Redis (the field predates Postgres); see ServerInfo */
+  backend?: "redis";
   redisVersion: string;
   mode: string;
   uptimeSeconds: number;
@@ -552,6 +627,44 @@ export interface RedisServerInfo {
 }
 
 /**
+ * The server-side picture of a BullMQ Postgres backend: one round trip over
+ * pg_stat_* and the sizes of BullMQ's own tables.
+ */
+export interface PostgresServerInfo {
+  backend: "postgres";
+  /** server_version, e.g. "16.4" */
+  serverVersion: string;
+  /** the schema BullMQ lives in */
+  schema: string;
+  uptimeSeconds: number;
+  /** sessions on this database (pg_stat_activity) */
+  connectedClients: number;
+  maxConnections: number;
+  /** pg_database_size of the current database */
+  databaseSizeBytes: number;
+  /** pg_total_relation_size of `job` (rows + indexes + TOAST) */
+  jobTableBytes: number;
+  /**
+   * pg_total_relation_size of `event`. BullMQ's Postgres backend has no event
+   * retention (`trimEvents()` is not implemented in 6.x), so this only grows.
+   */
+  eventTableBytes: number;
+  /** xact_commit + xact_rollback, cumulative (the server turns it into a rate) */
+  totalTransactions: number | null;
+  /** blks_hit / (blks_hit + blks_read) as a percentage */
+  cacheHitRatePct: number | null;
+  /** deadlocks, cumulative */
+  deadlocks: number | null;
+  /** latency of the round trip we just did, ms */
+  latencyMs: number;
+  /** when this snapshot was taken (ISO) */
+  sampledAt: string;
+}
+
+/** What `serverInfo()` returns: narrow with `info.backend === "postgres"`. */
+export type ServerInfo = RedisServerInfo | PostgresServerInfo;
+
+/**
  * A point-in-time health sample of one connection, for the homepage monitor.
  * Rates are computed by the SERVER between polls, because INFO only gives
  * cumulative counters; the UI would otherwise have to diff them itself.
@@ -559,10 +672,15 @@ export interface RedisServerInfo {
 export interface ConnectionHealth {
   connectionId: string;
   connectionName: string;
+  /** which backend, known even while it is unreachable and `info` is null */
+  kind: ConnectionKind;
   ok: boolean;
   error: string | null;
-  info: RedisServerInfo | null;
-  /** commands/sec derived from total_commands_processed between the last two samples */
+  info: ServerInfo | null;
+  /**
+   * commands/sec derived from total_commands_processed between the last two
+   * samples; on Postgres, transactions/sec from xact_commit + xact_rollback
+   */
   commandsPerSec: number | null;
   /** CPU cores used, derived from used_cpu_sys+user between samples (1.0 = one full core) */
   cpuCores: number | null;
@@ -593,7 +711,9 @@ export interface HealthWarning {
     | "persistence_failed"
     | "rejected_connections"
     | "latency_high"
-    | "unreachable";
+    | "unreachable"
+    | "connections_high"
+    | "event_table_large";
   message: string;
 }
 
@@ -1734,7 +1854,7 @@ export function hasRole(userRole: Role, required: Role): boolean {
   return ROLE_RANK[userRole] >= ROLE_RANK[required];
 }
 
-/** Redact the password part of a redis URL for display */
+/** Redact the password part of a connection URL (redis:// or postgres://) for display */
 export function redactRedisUrl(url: string): string {
   try {
     const u = new URL(url);

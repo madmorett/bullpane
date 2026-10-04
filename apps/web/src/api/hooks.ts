@@ -52,7 +52,7 @@ import type {
   SsoSettingsInput,
   SsoTestResult,
   UpdateSsoProviderInput,
-  RedisServerInfo,
+  ServerInfo,
   SetupStatus,
   UpdateConnectionInput,
   UpdateUserInput,
@@ -91,7 +91,7 @@ export interface PingResult extends Partial<ConnectionStatus> {
 }
 
 export interface ConnectionOverview {
-  info: RedisServerInfo;
+  info: ServerInfo;
   /** visible queues only — hidden ones are filtered out server-side */
   queues: QueueSummary[];
   status: ConnectionStatus;

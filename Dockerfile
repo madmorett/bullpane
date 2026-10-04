@@ -5,7 +5,7 @@
 #   docker build -t bullpane .                       # dashboard (default target: runner)
 #   docker build -t bullpane-sim --target simulator . # demo traffic generator
 #
-# Workspace packages (shared, redis-inspector) are consumed as TypeScript source
+# Workspace packages (shared, inspector, redis-inspector, pg-inspector) are consumed as TypeScript source
 # and the inspector loads its .lua files from disk, so the server runs through
 # `tsx` at runtime instead of a bundled dist. tsx + typescript therefore stay in
 # the runner image on purpose. Only the web UI is pre-built (static files).
@@ -33,7 +33,9 @@ COPY apps/server/package.json   apps/server/
 COPY apps/web/package.json      apps/web/
 COPY apps/simulator/package.json apps/simulator/
 COPY packages/shared/package.json          packages/shared/
+COPY packages/inspector/package.json       packages/inspector/
 COPY packages/redis-inspector/package.json packages/redis-inspector/
+COPY packages/pg-inspector/package.json    packages/pg-inspector/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -60,7 +62,9 @@ COPY apps/server/package.json    apps/server/
 COPY apps/web/package.json       apps/web/
 COPY apps/simulator/package.json apps/simulator/
 COPY packages/shared/package.json          packages/shared/
+COPY packages/inspector/package.json       packages/inspector/
 COPY packages/redis-inspector/package.json packages/redis-inspector/
+COPY packages/pg-inspector/package.json    packages/pg-inspector/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter '!@bullpane/web' --filter '!@bullpane/simulator'
 COPY packages ./packages
@@ -88,7 +92,9 @@ COPY apps/server/package.json    apps/server/
 COPY apps/web/package.json       apps/web/
 COPY apps/simulator/package.json apps/simulator/
 COPY packages/shared/package.json          packages/shared/
+COPY packages/inspector/package.json       packages/inspector/
 COPY packages/redis-inspector/package.json packages/redis-inspector/
+COPY packages/pg-inspector/package.json    packages/pg-inspector/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @bullpane/simulator...
 COPY apps/simulator ./apps/simulator

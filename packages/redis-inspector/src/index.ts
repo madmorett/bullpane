@@ -19,7 +19,7 @@ export type {
   WindowMetrics,
   WindowMetricsRequest,
   WindowRate,
-} from "./types.js";
+} from "@bullpane/inspector";
 
 export { RedisInspector } from "./inspector.js";
 export { RedisInspectorPool, createInspectorPool } from "./pool.js";

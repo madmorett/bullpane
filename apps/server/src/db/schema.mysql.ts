@@ -4,7 +4,7 @@
  * server codes against. Every change here has a twin in schema.sqlite.ts (the
  * row types are asserted equal there) and in migrations/sqlite/.
  */
-import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, McpGrantAccess, Role, SsoKind } from "@bullpane/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, ConnectionKind, McpGrantAccess, Role, SsoKind } from "@bullpane/shared";
 import {
   boolean,
   datetime,
@@ -86,6 +86,8 @@ export const ssoProviders = mysqlTable(
 export const connections = mysqlTable("connections", {
   id: id(),
   name: varchar("name", { length: 80 }).notNull(),
+  /** "redis" | "postgres" (BullMQ 6's Postgres backend). `prefix` holds the Postgres schema. */
+  kind: varchar("kind", { length: 16 }).$type<ConnectionKind>().notNull().default("redis"),
   url: text("url").notNull(),
   prefix: varchar("prefix", { length: 64 }).notNull().default("bull"),
   cluster: boolean("cluster").notNull().default(false),

@@ -9,7 +9,7 @@
  */
 import Redis, { Cluster, type ClusterNode, type ClusterOptions, type RedisOptions } from "ioredis";
 import type { ConnectionOptions as BullConnectionOptions } from "bullmq";
-import type { InspectorConnectionConfig } from "./types.js";
+import type { InspectorConnectionConfig } from "@bullpane/inspector";
 
 export interface ParsedRedisUrl {
   host: string;

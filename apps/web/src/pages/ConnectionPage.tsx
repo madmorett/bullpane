@@ -109,7 +109,7 @@ export function ConnectionPage() {
         description={
           connection && (
             <span className="font-mono">
-              {connection.url} · prefix <span className="text-fg">{connection.prefix}</span>
+              {connection.url} · {connection.kind === "postgres" ? "schema" : "prefix"} <span className="text-fg">{connection.prefix}</span>
               {connection.cluster && " · cluster"}
               {connection.queueFilter && ` · filter ${connection.queueFilter}`}
             </span>
@@ -138,18 +138,32 @@ export function ConnectionPage() {
 
       {status && !status.ok && (
         <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
-          Redis unreachable: {status.error ?? "unknown error"}
+          {connection?.kind === "postgres" ? "Postgres" : "Redis"} unreachable: {status.error ?? "unknown error"}
         </div>
       )}
 
       <div className="card mb-4 grid grid-cols-2 gap-px overflow-hidden bg-border sm:grid-cols-4 lg:grid-cols-8">
-        <Info label="Redis" value={info?.redisVersion} />
-        <Info label="Mode" value={info?.mode} />
-        <Info label="Uptime" value={info ? formatUptime(info.uptimeSeconds) : undefined} />
-        <Info label="Clients" value={info ? formatNumber(info.connectedClients) : undefined} />
-        <Info label="Memory" value={info ? `${formatBytes(info.usedMemoryBytes)}${info.maxMemoryBytes ? ` / ${formatBytes(info.maxMemoryBytes)}` : ""}` : undefined} />
-        <Info label="Keys" value={info ? (info.totalKeys != null ? formatNumber(info.totalKeys) : "–") : undefined} />
-        <Info label="Ops / s" value={info ? (info.opsPerSec != null ? formatNumber(info.opsPerSec) : "–") : undefined} />
+        {info?.backend === "postgres" ? (
+          <>
+            <Info label="Postgres" value={info.serverVersion} />
+            <Info label="Schema" value={info.schema} />
+            <Info label="Uptime" value={formatUptime(info.uptimeSeconds)} />
+            <Info label="Connections" value={`${formatNumber(info.connectedClients)} / ${formatNumber(info.maxConnections)}`} />
+            <Info label="Database" value={formatBytes(info.databaseSizeBytes)} />
+            <Info label="Jobs table" value={formatBytes(info.jobTableBytes)} />
+            <Info label="Events table" value={formatBytes(info.eventTableBytes)} />
+          </>
+        ) : (
+          <>
+            <Info label="Redis" value={info?.redisVersion} />
+            <Info label="Mode" value={info?.mode} />
+            <Info label="Uptime" value={info ? formatUptime(info.uptimeSeconds) : undefined} />
+            <Info label="Clients" value={info ? formatNumber(info.connectedClients) : undefined} />
+            <Info label="Memory" value={info ? `${formatBytes(info.usedMemoryBytes)}${info.maxMemoryBytes ? ` / ${formatBytes(info.maxMemoryBytes)}` : ""}` : undefined} />
+            <Info label="Keys" value={info ? (info.totalKeys != null ? formatNumber(info.totalKeys) : "–") : undefined} />
+            <Info label="Ops / s" value={info ? (info.opsPerSec != null ? formatNumber(info.opsPerSec) : "–") : undefined} />
+          </>
+        )}
         <Info label="Latency" value={status ? (status.latencyMs != null ? `${status.latencyMs} ms` : "–") : undefined} />
       </div>
 

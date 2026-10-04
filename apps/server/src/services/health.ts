@@ -1,5 +1,6 @@
 /**
- * Redis health sampling for the homepage monitor.
+ * Server health sampling for the homepage monitor: INFO on Redis, pg_stat_* on
+ * Postgres (see PgInspector.serverInfo).
  *
  * Why this lives on the server and not in the browser:
  *  - INFO gives CUMULATIVE counters (total_commands_processed, used_cpu_*).
@@ -11,7 +12,7 @@
  *
  * Cost: one INFO per connection per poll. INFO is O(1).
  */
-import type { ConnectionHealth, HealthPoint, HealthWarning, RedisServerInfo } from "@bullpane/shared";
+import type { ConnectionHealth, HealthPoint, HealthWarning, PostgresServerInfo, RedisServerInfo, ServerInfo } from "@bullpane/shared";
 import type { ConnectionsService } from "./connections";
 import type { ConnectionRow } from "../db/schema";
 
@@ -20,9 +21,15 @@ const MIN_SAMPLE_INTERVAL_MS = 2_000;
 /** ~10 minutes of history at a 3 s poll. Kept in memory only; this is a live view, not a TSDB. */
 const HISTORY_POINTS = 200;
 
+/**
+ * BullMQ's Postgres backend never trims the `event` table (trimEvents() is not
+ * implemented in 6.x). Past this size the monitor says so.
+ */
+const EVENT_TABLE_WARN_BYTES = 1024 * 1024 * 1024;
+
 interface Snapshot {
   at: number;
-  info: RedisServerInfo | null;
+  info: ServerInfo | null;
   error: string | null;
   commandsPerSec: number | null;
   cpuCores: number | null;
@@ -54,13 +61,14 @@ export class HealthService {
     const snap = await this.sample(row, st);
     const info = snap.info;
     const memoryUsedPct =
-      info && info.maxMemoryBytes && info.maxMemoryBytes > 0
+      info && info.backend !== "postgres" && info.maxMemoryBytes && info.maxMemoryBytes > 0
         ? Math.round((info.usedMemoryBytes / info.maxMemoryBytes) * 1000) / 10
         : null;
 
     return {
       connectionId: row.id,
       connectionName: row.name,
+      kind: row.kind,
       ok: snap.error === null,
       error: snap.error,
       info,
@@ -68,7 +76,10 @@ export class HealthService {
       cpuCores: snap.cpuCores,
       memoryUsedPct,
       history: [...st.history],
-      warnings: buildWarnings(info, snap.error, memoryUsedPct),
+      warnings:
+        row.kind === "postgres"
+          ? buildPostgresWarnings(info?.backend === "postgres" ? info : null, snap.error)
+          : buildWarnings(info?.backend === "postgres" ? null : info, snap.error, memoryUsedPct),
     };
   }
 
@@ -106,8 +117,9 @@ export class HealthService {
           at,
           info,
           error: null,
-          commandsPerSec: rate(previous?.info?.totalCommandsProcessed, info.totalCommandsProcessed, elapsedSec),
-          cpuCores: rate(previous?.info?.cpuSecondsTotal, info.cpuSecondsTotal, elapsedSec),
+          // Postgres: transactions/sec from xact_commit + xact_rollback. No CPU counter there.
+          commandsPerSec: rate(throughputCounter(previous?.info), throughputCounter(info), elapsedSec),
+          cpuCores: info.backend === "postgres" ? null : rate(redisInfo(previous?.info)?.cpuSecondsTotal, info.cpuSecondsTotal, elapsedSec),
         };
         pushHistory(st, snap);
         return snap;
@@ -142,12 +154,23 @@ function rate(before: number | null | undefined, after: number | null | undefine
   return Math.round((delta / elapsedSec) * 100) / 100;
 }
 
+function redisInfo(info: ServerInfo | null | undefined): RedisServerInfo | null {
+  return info && info.backend !== "postgres" ? info : null;
+}
+
+/** The cumulative counter commandsPerSec is derived from, per backend. */
+function throughputCounter(info: ServerInfo | null | undefined): number | null {
+  if (!info) return null;
+  return info.backend === "postgres" ? info.totalTransactions : info.totalCommandsProcessed;
+}
+
 function pushHistory(st: ConnectionState, snap: Snapshot): void {
   if (!snap.info) return;
   st.history.push({
     t: snap.at,
     latencyMs: snap.info.latencyMs,
-    memoryBytes: snap.info.usedMemoryBytes,
+    // Postgres has no memory ceiling to plot; the database size is what grows.
+    memoryBytes: snap.info.backend === "postgres" ? snap.info.databaseSizeBytes : snap.info.usedMemoryBytes,
     commandsPerSec: snap.commandsPerSec,
     cpuCores: snap.cpuCores,
     connectedClients: snap.info.connectedClients,
@@ -213,6 +236,36 @@ export function buildWarnings(
   }
   if (info.latencyMs >= 250) {
     out.push({ level: "warn", code: "latency_high", message: `INFO round trip took ${info.latencyMs} ms` });
+  }
+  return out;
+}
+
+/** What breaks a BullMQ Postgres backend, as opposed to a queue Redis. */
+export function buildPostgresWarnings(info: PostgresServerInfo | null, error: string | null): HealthWarning[] {
+  if (error !== null || info === null) {
+    const detail = error?.trim();
+    return [{ level: "critical", code: "unreachable", message: detail ? `Postgres is unreachable: ${detail}` : "Postgres is unreachable" }];
+  }
+  const out: HealthWarning[] = [];
+  if (info.maxConnections > 0 && info.connectedClients / info.maxConnections >= 0.9) {
+    out.push({
+      level: "critical",
+      code: "connections_high",
+      message: `${info.connectedClients} of ${info.maxConnections} connections in use: new workers will be refused`,
+    });
+  } else if (info.maxConnections > 0 && info.connectedClients / info.maxConnections >= 0.75) {
+    out.push({ level: "warn", code: "connections_high", message: `${info.connectedClients} of ${info.maxConnections} connections in use` });
+  }
+  if (info.eventTableBytes >= EVENT_TABLE_WARN_BYTES) {
+    const gib = Math.round((info.eventTableBytes / 1024 ** 3) * 10) / 10;
+    out.push({
+      level: "warn",
+      code: "event_table_large",
+      message: `BullMQ's event table is ${gib} GiB and is never trimmed by BullMQ 6: delete old rows on a schedule`,
+    });
+  }
+  if (info.latencyMs >= 250) {
+    out.push({ level: "warn", code: "latency_high", message: `Health query round trip took ${info.latencyMs} ms` });
   }
   return out;
 }

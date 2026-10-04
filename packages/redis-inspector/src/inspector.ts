@@ -77,7 +77,7 @@ import type {
   WindowCounts,
   WindowMetrics,
   WindowMetricsRequest,
-} from "./types.js";
+} from "@bullpane/inspector";
 import { errorMessage, globToRegExp, parseRedisInfo, toFloatOrNull, toInt, toIntOrNull, totalKeysFromInfo } from "./util.js";
 
 const DEFAULTS: Required<InspectorOptions> = {
@@ -161,8 +161,10 @@ export class RedisInspector implements Inspector {
   private closed = false;
 
   constructor(config: InspectorConnectionConfig, options: InspectorOptions = {}) {
+    if (config.kind && config.kind !== "redis") throw new Error(`RedisInspector cannot open a ${config.kind} connection`);
     this.config = {
       ...config,
+      kind: "redis",
       prefix: config.prefix ?? "bull",
       cluster: config.cluster ?? false,
     };

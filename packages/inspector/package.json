@@ -1,5 +1,5 @@
 {
-  "name": "@bullpane/redis-inspector",
+  "name": "@bullpane/inspector",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,13 +11,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "echo 'consumed as source'",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@bullpane/inspector": "workspace:*",
-    "@bullpane/shared": "workspace:*",
-    "bullmq": "^6.3.4",
-    "ioredis": "^5.4.2"
+    "@bullpane/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

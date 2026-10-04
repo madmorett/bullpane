@@ -16,6 +16,20 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # packages/pg-inspector runs against a real Postgres (BullMQ 6's Postgres
+    # backend). Setting BULLPANE_TEST_PG_URL makes that suite fail instead of
+    # skipping when the database is not there.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: bullpane
+          POSTGRES_DB: bullpane
+        ports: ["5440:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      BULLPANE_TEST_PG_URL: postgres://postgres:bullpane@127.0.0.1:5440/bullpane
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

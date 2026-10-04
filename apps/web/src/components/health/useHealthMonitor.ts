@@ -96,7 +96,8 @@ export function aggregate(health: ConnectionHealth[]): HealthAggregate {
 
   for (const h of health) {
     if (!h.ok) down++;
-    if (h.commandsPerSec != null) commandsPerSec = (commandsPerSec ?? 0) + h.commandsPerSec;
+    // Redis commands only: a Postgres connection reports transactions/sec, a different unit.
+    if (h.commandsPerSec != null && h.kind !== "postgres") commandsPerSec = (commandsPerSec ?? 0) + h.commandsPerSec;
     if (h.memoryUsedPct != null) memoryPct = Math.max(memoryPct ?? 0, h.memoryUsedPct);
     // The busiest single Redis, not a sum: CPU across separate servers does not add up.
     if (h.cpuCores != null) cpuCores = Math.max(cpuCores ?? 0, h.cpuCores);

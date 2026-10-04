@@ -1,20 +1,6 @@
 /** Small pure helpers shared by the inspector. No Redis here. */
 
-/**
- * Convert a simple glob (`*` and `?` only) into an anchored RegExp.
- * Everything else is escaped, so `payments-*` never becomes a regex surprise.
- */
-export function globToRegExp(glob: string): RegExp {
-  const escaped = glob
-    .split("")
-    .map((ch) => {
-      if (ch === "*") return ".*";
-      if (ch === "?") return ".";
-      return ch.replace(/[.+^${}()|[\]\\/]/g, "\\$&");
-    })
-    .join("");
-  return new RegExp(`^${escaped}$`);
-}
+export { globToRegExp } from "@bullpane/inspector";
 
 /** JSON.parse that never throws: returns `fallback` (default: the raw string) on bad input. */
 export function safeJsonParse(raw: string | null | undefined, fallback?: unknown): unknown {

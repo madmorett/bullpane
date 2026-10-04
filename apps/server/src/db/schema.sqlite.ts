@@ -9,7 +9,7 @@
  * JSON → TEXT parsed by drizzle, ENUM/VARCHAR → TEXT. Lengths are not enforced
  * by SQLite; inputs are bounded by the zod schemas before they get here.
  */
-import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, McpGrantAccess, Role, SsoKind } from "@bullpane/shared";
+import type { AlertChannel, AlertCondition, AlertEventStatus, AlertKind, AuditAction, AuditResult, ConnectionKind, McpGrantAccess, Role, SsoKind } from "@bullpane/shared";
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type * as mysql from "./schema.mysql";
 
@@ -65,6 +65,7 @@ export const ssoProviders = sqliteTable(
 export const connections = sqliteTable("connections", {
   id: id(),
   name: text("name").notNull(),
+  kind: text("kind").$type<ConnectionKind>().notNull().default("redis"),
   url: text("url").notNull(),
   prefix: text("prefix").notNull().default("bull"),
   cluster: bool("cluster").notNull().default(false),

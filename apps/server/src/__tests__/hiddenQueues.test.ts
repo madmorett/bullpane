@@ -24,6 +24,7 @@ import type { ConnectionRow } from "../db/schema";
 const CONNECTION: ConnectionRow = {
   id: "conn-1",
   name: "prod",
+  kind: "redis",
   url: "redis://localhost:6379",
   prefix: "bull",
   cluster: false,

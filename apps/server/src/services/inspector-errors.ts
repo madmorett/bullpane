@@ -25,6 +25,16 @@ const CONNECTION_ERROR_PATTERNS = [
   /Failed to refresh slots cache/i,
   /All sentinels are unreachable/i,
   /socket closed unexpectedly/i,
+  // Postgres (node-postgres / BullMQ's Postgres backend)
+  /password authentication failed/i,
+  /no pg_hba\.conf entry/i,
+  /Connection terminated/i,
+  /timeout exceeded when trying to connect/i,
+  /the database system is (starting up|shutting down)/i,
+  /too many clients already/i,
+  /postgres_schema_missing/,
+  /the PostgreSQL schema requires BullMQ/i,
+  /the PostgreSQL backend requires server version/i,
 ];
 
 const NOT_FOUND_PATTERNS = [/missing key for job/i, /job .* not found/i, /could not be found/i, /does not exist/i];
@@ -35,6 +45,9 @@ export function isRedisConnectionError(err: unknown): boolean {
     if (name === "MaxRetriesPerRequestError" || name === "ClusterAllFailedError") return true;
     const code = (err as { code?: string }).code;
     if (code && CONNECTION_ERROR_PATTERNS.some((p) => p.test(code))) return true;
+    // Postgres SQLSTATE: class 08 (connection exception), 28 (invalid authorization),
+    // 3D000 (database does not exist), 57P0x (admin shutdown / cannot connect now).
+    if (code && /^(08...|28...|3D000|57P0\d)$/.test(code)) return true;
   }
   const message = errorMessage(err);
   return CONNECTION_ERROR_PATTERNS.some((p) => p.test(message));

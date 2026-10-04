@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cpuMeterTone, cpuTooltip } from "./cpu";
 import { DetailRow, StatTile, Unknown, WarningBanner } from "./parts";
+import { PostgresHealthCard } from "./PostgresHealthCard";
 
 /** Rates the server could not derive yet. Same wording everywhere. */
 const NO_RATE_YET =
@@ -31,26 +32,29 @@ export function sampleAgeSeconds(h: ConnectionHealth, now: number): number | nul
   return Math.max(0, Math.round((now - t) / 1000));
 }
 
-function series<K extends keyof HealthPoint>(history: HealthPoint[], key: K): (number | null)[] {
+export function series<K extends keyof HealthPoint>(history: HealthPoint[], key: K): (number | null)[] {
   return history.map((p) => {
     const v = p[key];
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   });
 }
 
-export function HealthConnectionCard({
-  health,
-  big,
-  paused,
-}: {
+export interface HealthCardProps {
   health: ConnectionHealth;
   /** the /health page variant: bigger charts, details open by default */
   big?: boolean;
   paused?: boolean;
-}) {
+}
+
+/** One card per connection; Redis and Postgres measure different things. */
+export function HealthConnectionCard(props: HealthCardProps) {
+  return props.health.kind === "postgres" ? <PostgresHealthCard {...props} /> : <RedisHealthCard {...props} />;
+}
+
+function RedisHealthCard({ health, big, paused }: HealthCardProps) {
   const [open, setOpen] = useState(false);
   const now = useNow(1_000);
-  const info = health.info;
+  const info = health.info && health.info.backend !== "postgres" ? health.info : null;
   const down = !health.ok;
   const age = sampleAgeSeconds(health, now);
   const history = health.history ?? [];

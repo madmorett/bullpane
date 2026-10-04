@@ -9,11 +9,11 @@ import {
   type QueueSummary,
   type RedisConnection,
   reorderSchema,
-  type RedisServerInfo,
+  type ServerInfo,
   testConnectionSchema,
   updateConnectionSchema,
 } from "@bullpane/shared";
-import type { PingResult } from "@bullpane/redis-inspector";
+import type { PingResult } from "@bullpane/inspector";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";
@@ -41,7 +41,7 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
     const created = await app.ctx.connections.create(input);
     // Name and prefix, never the URL: it carries the Redis password.
     request.auditTarget({ connectionId: created.id, connectionName: created.name });
-    request.auditDetail({ prefix: created.prefix, cluster: created.cluster, queueFilter: created.queueFilter });
+    request.auditDetail({ kind: created.kind, prefix: created.prefix, cluster: created.cluster, queueFilter: created.queueFilter });
     reply.status(201);
     return created;
   });
@@ -50,7 +50,7 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
     const input = testConnectionSchema.parse(request.body);
     // Throwaway inspector keyed by a unique id so it never collides with a stored connection.
     const id = `test:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    const inspector = app.ctx.pool.get({ id, url: input.url, prefix: input.prefix ?? "bull", cluster: input.cluster ?? false });
+    const inspector = app.ctx.pool.get({ id, kind: input.kind, url: input.url, prefix: input.prefix, cluster: input.cluster ?? false });
     try {
       return await inspector.ping();
     } catch (err) {
@@ -96,7 +96,7 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [viewer] },
     async (
       request,
-    ): Promise<{ info: RedisServerInfo; queues: QueueSummary[]; status: ConnectionStatus; hiddenCount: number; discovery: DiscoveryStatus }> => {
+    ): Promise<{ info: ServerInfo; queues: QueueSummary[]; status: ConnectionStatus; hiddenCount: number; discovery: DiscoveryStatus }> => {
       const row = await app.ctx.connections.getRow(request.params.id);
       const inspector = app.ctx.connections.inspectorFor(row);
       const [info, queues, status, hidden] = await Promise.all([

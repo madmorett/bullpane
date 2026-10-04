@@ -52,6 +52,7 @@ export async function seedDemo(
   if (!connection && (await ctx.connections.count()) === 0) {
     const created = await ctx.connections.create({
       name: DEMO_CONNECTION_NAME,
+      kind: "redis",
       url: config.demoRedisUrl,
       prefix: "bull",
       cluster: false,

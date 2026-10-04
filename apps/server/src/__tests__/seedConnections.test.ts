@@ -14,7 +14,19 @@ describe("BULLPANE_CONNECTIONS", () => {
       { BULLPANE_CONNECTIONS: '[{"name":"Demo","url":"redis://localhost:6379"}]' },
       quiet,
     );
-    expect(cfg.seedConnections).toEqual([{ name: "Demo", url: "redis://localhost:6379", prefix: "bull", cluster: false }]);
+    expect(cfg.seedConnections).toEqual([{ name: "Demo", kind: "redis", url: "redis://localhost:6379", prefix: "bull", cluster: false }]);
+  });
+
+  it("seeds a BullMQ Postgres connection with the bullmq schema by default", () => {
+    const cfg = loadConfig(
+      { BULLPANE_CONNECTIONS: '[{"name":"Jobs","kind":"postgres","url":"postgres://app:pw@db:5432/app"}]' },
+      quiet,
+    );
+    expect(cfg.seedConnections).toEqual([
+      { name: "Jobs", kind: "postgres", url: "postgres://app:pw@db:5432/app", prefix: "bullmq", cluster: false },
+    ]);
+    const mismatched = () => loadConfig({ BULLPANE_CONNECTIONS: '[{"name":"J","kind":"postgres","url":"redis://x"}]' }, quiet);
+    expect(mismatched).toThrow(/\[0\]\.url: Must start with postgres:\/\//);
   });
 
   it("names the bad field and never echoes the URL", () => {
@@ -45,8 +57,8 @@ describe("BULLPANE_CONNECTIONS", () => {
     };
     const log = { info: (obj: object) => logs.push(JSON.stringify(obj)) };
     const wanted = [
-      { name: "Kept", url: "redis://kept", prefix: "bull", cluster: false },
-      { name: "New", url: "redis://user:pw@new", prefix: "bull", cluster: false },
+      { name: "Kept", kind: "redis" as const, url: "redis://kept", prefix: "bull", cluster: false },
+      { name: "New", kind: "redis" as const, url: "redis://user:pw@new", prefix: "bull", cluster: false },
     ];
 
     expect(await seedConnections(store, wanted, log)).toBe(1);
