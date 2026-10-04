@@ -39,15 +39,21 @@ Requirements:
 ## What it costs your database
 
 - **Reads** use a pool of at most 4 connections per Bullpane connection, named
-  `bullpane-dashboard` in `pg_stat_activity`, with `statement_timeout = 10s`.
-  Every read is one SQL statement; queue lists read all queues of a connection
-  in one statement.
+  `bullpane-dashboard` in `pg_stat_activity`, with `statement_timeout = 10s` and
+  **no parallel query** (`max_parallel_workers_per_gather = 0`): a count over a
+  big state would otherwise take 3 cores at once from the workers. Every read is
+  one SQL statement; queue lists read all queues of a connection in one statement.
+- **Reads take no locks a worker could wait on.** Only `AccessShareLock` on the
+  tables (what every `SELECT` takes; it conflicts with nothing BullMQ does) —
+  no row locks, no open transactions. `pnpm smoke:postgres` checks this every
+  25 ms under load.
 - **Writes** open one bullmq `Queue` per queue touched, each with a pool of
   `max: 1` that closes when idle for 10 s.
 - **Counts are real counts.** Postgres has no O(1) `LLEN`/`ZCARD`; each state is
   counted on its partial index, which is an index-only scan when autovacuum has
-  kept the visibility map current. Identical stats reads within 2 s share one
-  statement (open tabs and the alerts engine do not multiply the load).
+  kept the visibility map current. Counts are cached per queue for 2 s and
+  shared by the overview, queue pages, job-list totals and the alerts engine, so
+  ten open tabs cost what one does. Actions taken from Bullpane drop the cache.
 
 Measured on 1M jobs across 20 queues (Postgres 16, after autovacuum):
 
@@ -58,6 +64,15 @@ Measured on 1M jobs across 20 queues (Postgres 16, after autovacuum):
 | Page at offset 39 000 | 133 ms |
 | Search (1 000 jobs scanned) | 9 ms |
 | Discovery | < 1 ms |
+
+Under a steady workload (20 workers, ~1 600 jobs/s, 320k jobs of history),
+measured by `pnpm smoke:postgres`:
+
+| Dashboard use | Worker throughput | Locks |
+|---|---|---|
+| 10 tabs polling like the UI | 98% of baseline (machine noise: 3%) | only AccessShareLock; no worker ever blocked |
+| 20 clients, heavy reads, no pause (~800 req/s) | 54% (CPU shared on one 4-core box) | same |
+| Retry 20k + clean 20k while workers run | 92% | workers blocked: 0 ms |
 
 Right after a bulk load, before autovacuum runs, the same stats read took
 3.3 s: the counts have to visit the heap. A queue table with heavy churn
@@ -79,6 +94,14 @@ benefits from a more aggressive `autovacuum_vacuum_scale_factor` on `job`.
   `DELETE FROM bullmq.event WHERE created_at_ms < (extract(epoch FROM now() - interval '7 days') * 1000)`.
 
 ## Developing
+
+End to end (real server, real workers, real browser, load and lock checks):
+
+```bash
+pnpm smoke:postgres
+```
+
+See `apps/smoke/README.md`. Unit-level:
 
 The pg-inspector integration suite runs against a real Postgres:
 

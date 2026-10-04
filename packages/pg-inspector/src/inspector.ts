@@ -82,10 +82,12 @@ const DEFAULT_RATE_WINDOW_MINUTES = 60;
 const SETUP_CACHE_MS = 10_000;
 /**
  * Queue stats are COUNTs: unlike Redis' LLEN/ZCARD they cost O(rows in the
- * state). Measured on 1M jobs / 20 queues: 60 ms when the visibility map is
- * current (index-only scans), 3.3 s right after a bulk load before autovacuum.
- * So identical reads within this window share one statement: ten open tabs and
- * the alerts engine polling the same queues cost one count, not eleven.
+ * state) — 300k completed jobs is ~25 ms of CPU even as an index-only scan. So
+ * every queue's stats (and therefore its per-state counts) are cached for this
+ * long, PER QUEUE: the overview, a queue page, a jobs page's total and the
+ * alerts engine all reuse the same count, and ten open tabs cost what one does.
+ * Writes from this inspector drop the cache, so an action is never followed by
+ * a count from before it.
  */
 const STATS_CACHE_MS = 2_000;
 const DETAIL_LOG_TAIL = 100;
@@ -118,7 +120,10 @@ export class PgInspector implements Inspector {
   private discovered: { at: number; names: string[] } | null = null;
   private discovering: Promise<string[]> | null = null;
   private readonly setupCache = new Map<string, { at: number; value: QueueSetup }>();
-  private readonly statsCache = new Map<string, { at: number; value: Promise<Record<string, QueueStats>> }>();
+  /** per queue + rate window; see STATS_CACHE_MS */
+  private readonly statsCache = new Map<string, { at: number; value: Promise<QueueStats | undefined> }>();
+  /** per queue + state, filled by stats reads and by job pages; see STATS_CACHE_MS */
+  private readonly countCache = new Map<string, { at: number; n: number }>();
   /** bullmq Queue per queue name, created lazily for writes only. */
   private readonly queues = new Map<string, Queue>();
   private closed = false;
@@ -139,7 +144,11 @@ export class PgInspector implements Inspector {
       application_name: APPLICATION_NAME,
       // Every connection resolves BullMQ's unqualified table names in the
       // connection's schema, and no read can hold the database for long.
-      options: `-c search_path=${quoteIdent(this.config.prefix)} -c statement_timeout=${STATEMENT_TIMEOUT_MS}`,
+      // No parallel query: a count over a big state would otherwise run as a
+      // parallel index scan on 3 cores at once, and the smoke test measured
+      // what that does to the workers sharing the database (throughput down to
+      // a third under a read storm). A dashboard gets one core per query, ever.
+      options: `-c search_path=${quoteIdent(this.config.prefix)} -c statement_timeout=${STATEMENT_TIMEOUT_MS} -c max_parallel_workers_per_gather=0`,
     });
     // An idle client dropped by the server emits 'error' on the pool; without a
     // listener that crashes the process when a customer database restarts.
@@ -270,24 +279,46 @@ export class PgInspector implements Inspector {
     opts: { withMetrics?: boolean; rateWindowMinutes?: number } = {},
   ): Promise<Record<string, QueueStats>> {
     if (queueNames.length === 0) return {};
-    const key = JSON.stringify([queueNames, opts.withMetrics === true, opts.rateWindowMinutes ?? null]);
+    const windowMinutes = opts.rateWindowMinutes ?? DEFAULT_RATE_WINDOW_MINUTES;
     const now = Date.now();
-    const cached = this.statsCache.get(key);
-    if (cached && now - cached.at < STATS_CACHE_MS) return cached.value;
     for (const [k, v] of this.statsCache) if (now - v.at >= STATS_CACHE_MS) this.statsCache.delete(k);
-    const value = this.readQueueStats(queueNames, opts);
-    this.statsCache.set(key, { at: now, value });
-    value.catch(() => this.statsCache.delete(key));
-    return value;
+    const key = (q: string) => `${windowMinutes}\u0000${q}`;
+    // Only the queues without a fresh entry are read, all in ONE statement.
+    const stale = queueNames.filter((q) => !this.statsCache.has(key(q)));
+    if (stale.length > 0) {
+      const read = this.readQueueStats(stale, windowMinutes);
+      for (const q of stale) {
+        const value = read.then((all) => all[q]);
+        this.statsCache.set(key(q), { at: now, value });
+        value.catch(() => this.statsCache.delete(key(q)));
+      }
+    }
+    const out: Record<string, QueueStats> = {};
+    for (const q of queueNames) {
+      const stats = await this.statsCache.get(key(q))?.value;
+      if (!stats) continue;
+      // metrics are always read (an array per side, same statement) and only
+      // handed out when asked for; the cached object itself is never mutated
+      const { metrics: _metrics, ...withoutMetrics } = stats;
+      out[q] = opts.withMetrics ? stats : withoutMetrics;
+    }
+    return out;
   }
 
-  private async readQueueStats(
-    queueNames: string[],
-    opts: { withMetrics?: boolean; rateWindowMinutes?: number },
-  ): Promise<Record<string, QueueStats>> {
+  /** A count read in the last STATS_CACHE_MS, from stats or from a job page. */
+  private cachedCount(queue: string, state: JobState): number | null {
+    const c = this.countCache.get(`${queue}\u0000${state}`);
+    return c && Date.now() - c.at < STATS_CACHE_MS ? c.n : null;
+  }
+
+  private rememberCount(queue: string, state: JobState, n: number): void {
+    this.countCache.set(`${queue}\u0000${state}`, { at: Date.now(), n });
+    if (this.countCache.size > 10_000) this.countCache.clear(); // bounded, whatever happens
+  }
+
+  private async readQueueStats(queueNames: string[], windowMinutes: number): Promise<Record<string, QueueStats>> {
     const out: Record<string, QueueStats> = {};
     const now = Date.now();
-    const windowMinutes = opts.rateWindowMinutes ?? DEFAULT_RATE_WINDOW_MINUTES;
     const points = Math.max(STATS_METRIC_POINTS, windowMinutes);
     const rows = await this.query<Record<string, unknown>>(SQL.QUEUE_STATS, [queueNames, now, points, now - windowMinutes * 60_000]);
     for (const r of rows) {
@@ -322,10 +353,10 @@ export class PgInspector implements Inspector {
         schedulersCount: num(r.schedulers),
         stalledCount: num(r.stalled),
       };
-      if (opts.withMetrics) {
-        stats.metrics = { completed: metricsCompleted.slice(-STATS_METRIC_POINTS), failed: metricsFailed.slice(-STATS_METRIC_POINTS) };
-      }
-      out[String(r.queue)] = stats;
+      stats.metrics = { completed: metricsCompleted.slice(-STATS_METRIC_POINTS), failed: metricsFailed.slice(-STATS_METRIC_POINTS) };
+      const queue = String(r.queue);
+      for (const [state, n] of Object.entries(stats.counts)) this.rememberCount(queue, state as JobState, n);
+      out[queue] = stats;
     }
     return out;
   }
@@ -368,7 +399,9 @@ export class PgInspector implements Inspector {
   /**
    * A page of one state: the ids come off the state's partial index (OFFSET over
    * a narrow index, never over full rows), then only that page is joined to
-   * `job` for its columns. Total in the same statement.
+   * `job` for its columns. The total comes from the count cache when a stats read
+   * just counted the state (the usual case: the queue page polls both), and is
+   * counted in the same statement otherwise.
    */
   async getJobs(
     queueName: string,
@@ -379,12 +412,13 @@ export class PgInspector implements Inspector {
     if (!s) return { jobs: [], total: 0, start: opts.start, end: opts.end };
     const ob = SQL.orderBy(state, opts.order);
     const limit = Math.max(0, opts.end - opts.start + 1);
+    const known = this.cachedCount(queueName, state);
     const sql = `
       WITH page AS (
         SELECT id, row_number() OVER (ORDER BY ${ob}) AS ord
         FROM job WHERE queue = $1 AND ${s.where} ORDER BY ${ob} OFFSET $2 LIMIT $3
       )
-      SELECT (SELECT count(*) FROM job WHERE queue = $1 AND ${s.where}) AS total,
+      SELECT ${known === null ? `(SELECT count(*) FROM job WHERE queue = $1 AND ${s.where})` : "NULL::bigint"} AS total,
         (SELECT json_agg(r ORDER BY r.ord) FROM (
            SELECT page.ord, ${SQL.summaryColumns("j", 4, 5)}
            FROM page JOIN job j ON j.queue = $1 AND j.id = page.id) r) AS rows`;
@@ -395,9 +429,11 @@ export class PgInspector implements Inspector {
       this.opts.previewBytes,
       this.opts.listFieldCapBytes,
     ]);
+    const total = known ?? num(r?.total);
+    if (known === null) this.rememberCount(queueName, state, total);
     return {
       jobs: (r?.rows ?? []).map((row) => rowToSummary(this.config.prefix, row, this.opts.previewBytes)),
-      total: num(r?.total),
+      total,
       start: opts.start,
       end: opts.end,
     };
@@ -421,6 +457,7 @@ export class PgInspector implements Inspector {
     const cursor = Math.max(0, Math.trunc(Number(opts.cursor ?? 0)) || 0);
     const limit = Math.max(1, opts.limit);
     const ob = SQL.orderBy(state, "desc");
+    const known = this.cachedCount(queueName, state);
     const sql = `
       WITH scan AS (
         SELECT id, row_number() OVER (ORDER BY ${ob}) AS rn
@@ -441,7 +478,7 @@ export class PgInspector implements Inspector {
            OR (NOT b.too_big AND j.data::text ILIKE $4 ESCAPE '\\')
         ORDER BY b.rn LIMIT $5
       )
-      SELECT (SELECT count(*) FROM job WHERE queue = $1 AND ${s.where}) AS total,
+      SELECT ${known === null ? `(SELECT count(*) FROM job WHERE queue = $1 AND ${s.where})` : "NULL::bigint"} AS total,
         (SELECT count(*) FROM budgeted) AS scanned,
         (SELECT json_agg(rn) FROM budgeted WHERE too_big) AS big,
         (SELECT json_agg(h ORDER BY h.rn) FROM hits h) AS rows`;
@@ -456,7 +493,8 @@ export class PgInspector implements Inspector {
       this.opts.previewBytes,
       this.opts.listFieldCapBytes,
     ]);
-    const total = num(r?.total);
+    const total = known ?? num(r?.total);
+    if (known === null) this.rememberCount(queueName, state, total);
     const rows = r?.rows ?? [];
     // rn is 1-based and absolute (row_number runs before OFFSET), so a job's rn is
     // also the 0-based index of the one after it.
@@ -704,6 +742,7 @@ export class PgInspector implements Inspector {
    */
   private invalidateStats(): void {
     this.statsCache.clear();
+    this.countCache.clear();
   }
 
   private async getBullJob(queueName: string, jobId: string): Promise<Job> {
@@ -789,13 +828,13 @@ export class PgInspector implements Inspector {
   async pauseQueue(queueName: string): Promise<void> {
     await (await this.getQueue(queueName)).pause();
     this.setupCache.delete(queueName);
-    this.statsCache.clear();
+    this.invalidateStats();
   }
 
   async resumeQueue(queueName: string): Promise<void> {
     await (await this.getQueue(queueName)).resume();
     this.setupCache.delete(queueName);
-    this.statsCache.clear();
+    this.invalidateStats();
   }
 
   async cleanQueue(queueName: string, state: CleanableState, graceMs: number, limit: number): Promise<{ removed: number }> {

@@ -1,0 +1,23 @@
+{
+  "name": "@bullpane/smoke",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end smoke tests: a real server, a real database, real BullMQ workers, a real browser.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "smoke:postgres": "tsx src/postgres.ts"
+  },
+  "dependencies": {
+    "@bullpane/shared": "workspace:*",
+    "bullmq": "^6.3.4",
+    "pg": "^8.13.1",
+    "playwright": "^1.56.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

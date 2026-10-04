@@ -545,7 +545,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
               selection={isOperator ? selection : undefined}
             />
             <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-fg-subtle">
-              <span>Each scan reads a bounded slice of the state to keep Redis happy.</span>
+              <span>Each scan reads a bounded slice of the state to keep the database happy.</span>
               {search.hasNextPage && (
                 <Button size="sm" onClick={() => search.fetchNextPage()} loading={search.isFetchingNextPage}>
                   Scan more

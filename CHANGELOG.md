@@ -30,6 +30,15 @@ written from this file — when you add an entry here, mirror it there
 
 - The health monitor is now "Server health": its wording no longer assumes Redis.
 
+### Tested
+
+- `pnpm smoke:postgres` (apps/smoke): every feature end to end against a real
+  Postgres, real BullMQ workers and a real browser, plus a load test proving
+  the dashboard's reads take no locks a worker can wait on and leave worker
+  throughput within noise with 10 tabs open. It found that counts on big
+  states ran as 3-core parallel scans and starved the workers; dashboard
+  queries are now single-core and counts are shared per queue for 2 s.
+
 ## [0.5.1] — 2026-10-04
 
 ### Added
