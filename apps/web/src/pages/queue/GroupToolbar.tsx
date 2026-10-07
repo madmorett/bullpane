@@ -73,7 +73,7 @@ export function GroupToolbar({ connectionId, queue, groupId }: { connectionId: s
         loading={groupAction.isPending}
         onConfirm={() => run("drain")}
       />
-      <PromoteMatchingDialog open={promoteOpen} onClose={() => setPromoteOpen(false)} connectionId={connectionId} queue={queue} match={{ groupId }} />
+      <PromoteMatchingDialog open={promoteOpen} onClose={() => setPromoteOpen(false)} connectionId={connectionId} queue={queue} matches={[{ groupId }]} />
     </div>
   );
 }

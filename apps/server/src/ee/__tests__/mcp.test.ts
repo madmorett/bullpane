@@ -109,7 +109,8 @@ function fakeInspector() {
     retryJob: vi.fn(async () => undefined),
     removeJob: vi.fn(async () => undefined),
     pauseGroup: vi.fn(async () => undefined),
-    promoteMatching: vi.fn(async () => ({ matched: 1, promoted: 1, failed: [], failedCount: 0, scanned: 10, total: 10, nextCursor: null })),
+    promoteMatching: vi.fn(async () => ({ matched: 1, promoted: 1, rescheduled: 0, unchanged: 0, failed: [], failedCount: 0, scanned: 10, total: 10, nextCursor: null })),
+    countMatching: vi.fn(async () => ({ matched: 42, scanned: 10, total: 10, nextCursor: null })),
     getJob: vi.fn(async (_q: string, id: string) => ({ id, name: "send-invoice", state: "failed", data: { invoice: 42 } })),
     searchJobs: vi.fn(async () => ({ jobs: [], nextCursor: null, scanned: 0, total: 0, skippedLargePayloads: 0 })),
   };
@@ -337,12 +338,30 @@ describe("MCP: who can do what", () => {
     await w.app.close();
   });
 
+  it("previews with count_matching (read) and spreads with promote_matching", async () => {
+    const w = await build({ ceiling: "write" });
+    const { access_token } = await connect(w, "op", "write");
+    const counted = await callTool(w, access_token, "count_matching", { connection_id: "c1", queue: "payments", group_id: "tenant-a" });
+    expect(JSON.parse(counted.content[0]!.text)).toMatchObject({ matched: 42 });
+    expect(w.inspector.countMatching).toHaveBeenCalledWith("payments", { groupId: "tenant-a" }, { cursor: null });
+    const spread = { connection_id: "c1", queue: "payments", group_id: "tenant-a", spread_from: 1_000, spread_until: 3_601_000, spread_total: 42 };
+    expect((await callTool(w, access_token, "promote_matching", spread)).isError).toBeUndefined();
+    expect(w.inspector.promoteMatching).toHaveBeenCalledWith(
+      "payments",
+      { groupId: "tenant-a" },
+      { cursor: null, limit: expect.any(Number), spread: { from: 1_000, until: 3_601_000, total: 42, offset: 0 } },
+    );
+    const half = await callTool(w, access_token, "promote_matching", { connection_id: "c1", queue: "payments", group_id: "tenant-a", spread_from: 1_000 });
+    expect(half.isError).toBe(true);
+    await w.app.close();
+  });
+
   it("promotes every delayed job of a group with promote_matching", async () => {
     const w = await build({ ceiling: "write" });
     const { access_token } = await connect(w, "op", "write");
     const res = await callTool(w, access_token, "promote_matching", { connection_id: "c1", queue: "payments", group_id: "tenant-a" });
     expect(res.isError).toBeUndefined();
-    expect(w.inspector.promoteMatching).toHaveBeenCalledWith("payments", { groupId: "tenant-a" }, { cursor: null, limit: expect.any(Number) });
+    expect(w.inspector.promoteMatching).toHaveBeenCalledWith("payments", { groupId: "tenant-a" }, { cursor: null, limit: expect.any(Number), spread: undefined });
     const neither = await callTool(w, access_token, "promote_matching", { connection_id: "c1", queue: "payments" });
     expect(neither.isError).toBe(true);
     await w.app.close();

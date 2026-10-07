@@ -3,8 +3,12 @@
 
   KEYS[1]     the state key (list or zset)
 
-  ARGV[1]     "list" | "zset"
-  ARGV[2]     cursor: index (newest = 0) of the first job to inspect
+  ARGV[1]     "list" | "zset" | "zset-asc"
+  ARGV[2]     cursor: index (newest = 0) of the first job to inspect. For "zset-asc"
+              (lowest score first) it is "" or "<score>:<jobId>" of the last job
+              read instead, so jobs that leave the zset, or move to an earlier score,
+              while a caller pages through neither shift it nor come back (used by
+              promote-matching, which removes or reschedules what it reads).
   ARGV[3]     batch: max number of job hashes inspected in THIS call (maxScanPerCall)
   ARGV[4]     needle, already lower-cased by the caller
   ARGV[5]     limit: stop early once this many matches are found
@@ -42,7 +46,11 @@
 local rcall = redis.call
 local key = KEYS[1]
 local kind = ARGV[1]
-local cursor = tonumber(ARGV[2])
+local cursor = tonumber(ARGV[2]) or 0
+local afterScore, afterId = nil, nil
+if kind == "zset-asc" then
+  afterScore, afterId = string.match(ARGV[2], "^([^:]+):(.+)$")
+end
 local batch = tonumber(ARGV[3])
 local needle = ARGV[4]
 local limit = tonumber(ARGV[5])
@@ -75,6 +83,25 @@ local scores = {}
 if kind == "list" then
   total = rcall("LLEN", key)
   ids = rcall("LRANGE", key, cursor, cursor + batch - 1)   -- head = newest
+elseif kind == "zset-asc" then
+  total = rcall("ZCARD", key)
+  ids = {}
+  -- jobs with the cursor's score whose id sorts after it (ties are rare), then higher scores
+  if afterScore then
+    for _, m in ipairs(rcall("ZRANGEBYSCORE", key, afterScore, afterScore)) do
+      if m > afterId and #ids < batch then
+        ids[#ids + 1] = m
+        scores[m] = afterScore
+      end
+    end
+  end
+  if #ids < batch then
+    local flat = rcall("ZRANGEBYSCORE", key, afterScore and ("(" .. afterScore) or "-inf", "+inf", "WITHSCORES", "LIMIT", 0, batch - #ids)
+    for i = 1, #flat, 2 do
+      ids[#ids + 1] = flat[i]
+      scores[flat[i]] = flat[i + 1]
+    end
+  end
 else
   total = rcall("ZCARD", key)
   local flat = rcall("ZREVRANGE", key, cursor, cursor + batch - 1, "WITHSCORES") -- highest score = newest
@@ -84,6 +111,7 @@ else
     scores[flat[i]] = flat[i + 1]
   end
 end
+local lastRead = nil
 
 local matches = {}
 local scanned = 0
@@ -114,6 +142,7 @@ end
 
 for _, id in ipairs(ids) do
   scanned = scanned + 1
+  lastRead = id
   if string.sub(id, 1, 2) ~= "0:" and (group == "" or inGroup(qprefix .. id)) then
     local hkey = qprefix .. id
     local dataBytes = dataIdx and rcall("HSTRLEN", hkey, "data") or 0
@@ -169,7 +198,10 @@ end
 
 local nextCursor = cursor + scanned
 -- Exhausted when we walked past the end of the state and did not stop early.
-if not stoppedEarly and (#ids < batch or nextCursor >= total) then
+if kind == "zset-asc" then
+  nextCursor = -1
+  if lastRead and (stoppedEarly or #ids >= batch) then nextCursor = scores[lastRead] .. ":" .. lastRead end
+elseif not stoppedEarly and (#ids < batch or nextCursor >= total) then
   nextCursor = -1
 end
 

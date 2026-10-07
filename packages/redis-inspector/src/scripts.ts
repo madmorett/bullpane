@@ -28,6 +28,8 @@ export const SCRIPTS = {
   sampleParents: { numberOfKeys: undefined, readOnly: true },
   /** groups, groups:limit, groups:max, groups:paused, groups:active:count, groups:concurrency */
   getGroups: { numberOfKeys: 6, readOnly: true },
+  /** the delayed zset: groups that have delayed jobs, counted (BullMQ Pro) */
+  getDelayedGroups: { numberOfKeys: 1, readOnly: true },
   /** the `repeat` zset (job schedulers); the per-scheduler hashes are built inside Lua */
   getSchedulers: { numberOfKeys: 1, readOnly: true },
   /** meta, limiter, groups, groups:limit, groups:max, groups:paused, groups:active:count, groups:metas, metrics:completed */

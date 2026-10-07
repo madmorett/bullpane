@@ -19,6 +19,8 @@ import {
   type BulkJobActionResult,
   type BulkJobFailure,
   type PromoteMatchingResult,
+  type CountMatchingResult,
+  type DelayedGroupsPage,
   type DiscoveryStatus,
   type GroupsPage,
   type JobDetail,
@@ -44,6 +46,7 @@ import {
   type MetricsCounters,
   type PingResult,
   type QueueStats,
+  type SpreadPlan,
   type WindowCounts,
   type WindowMetrics,
   type WindowMetricsRequest,
@@ -692,6 +695,10 @@ export class PgInspector implements Inspector {
     return { jobs: [], total: 0, start: opts.start, end: opts.end };
   }
 
+  async getDelayedGroups(): Promise<DelayedGroupsPage> {
+    return { groups: [], ungrouped: 0, scanned: 0, total: 0, nextCursor: null };
+  }
+
   readonly bullmqProApi = false;
 
   async pauseGroup(): Promise<void> {
@@ -934,11 +941,14 @@ export class PgInspector implements Inspector {
   async promoteMatching(
     queueName: string,
     match: { query?: string; groupId?: string },
-    opts: { cursor?: string | null; limit: number },
+    opts: { cursor?: string | null; limit: number; spread?: SpreadPlan },
   ): Promise<PromoteMatchingResult> {
     const query = match.query?.trim() ?? "";
-    if (match.groupId !== undefined) return { matched: 0, promoted: 0, failed: [], failedCount: 0, scanned: 0, total: 0, nextCursor: null };
+    if (match.groupId !== undefined) return { matched: 0, promoted: 0, rescheduled: 0, unchanged: 0, failed: [], failedCount: 0, scanned: 0, total: 0, nextCursor: null };
     if (!query) throw new Error("query_or_group_required");
+    // The search here pages by index, newest first: a job moved to an earlier run
+    // time would be read again. Spreading needs a position cursor this backend lacks.
+    if (opts.spread) throw new Error("spread_not_supported: spreading over a window is Redis-only for now");
     const limit = Math.max(1, opts.limit);
     const ids: string[] = [];
     let cursor: string | null = opts.cursor ?? "0";
@@ -968,7 +978,26 @@ export class PgInspector implements Inspector {
     for (let i = 0; i < ids.length; i += BULK_CONCURRENCY) {
       await Promise.all(ids.slice(i, i + BULK_CONCURRENCY).map(run));
     }
-    return { matched: ids.length, promoted, failed, failedCount, scanned, total, nextCursor: cursor === null ? null : String(Math.max(0, end - promoted)) };
+    return { matched: ids.length, promoted, rescheduled: 0, unchanged: 0, failed, failedCount, scanned, total, nextCursor: cursor === null ? null : String(Math.max(0, end - promoted)) };
+  }
+
+  /** See Inspector.countMatching. No groups on Postgres, so a group matches nothing. */
+  async countMatching(queueName: string, match: { query?: string; groupId?: string }, opts: { cursor?: string | null }): Promise<CountMatchingResult> {
+    const query = match.query?.trim() ?? "";
+    if (match.groupId !== undefined) return { matched: 0, scanned: 0, total: 0, nextCursor: null };
+    if (!query) throw new Error("query_or_group_required");
+    let cursor: string | null = opts.cursor ?? "0";
+    let matched = 0;
+    let scanned = 0;
+    let total = 0;
+    for (let call = 0; call < 50 && cursor !== null; call++) {
+      const page = await this.searchJobs(queueName, "delayed", query, { cursor, limit: 200 });
+      matched += page.jobs.length;
+      scanned += page.scanned;
+      total = page.total;
+      cursor = page.nextCursor;
+    }
+    return { matched, scanned, total, nextCursor: cursor };
   }
 
   /** Operator "discard": an active job straight to failed, no retry (see RedisInspector.discardJob). */

@@ -15,6 +15,7 @@ export type {
   MetricsCounters,
   PingResult,
   QueueStats,
+  SpreadPlan,
   WindowCounts,
   WindowDuration,
   WindowMetrics,

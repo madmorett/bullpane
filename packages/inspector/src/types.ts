@@ -18,6 +18,7 @@
 import type {
   BulkJobAction,
   BulkJobActionResult,
+  DelayedGroupsPage,
   DiscoveryStatus,
   GroupsPage,
   JobScheduler,
@@ -30,6 +31,7 @@ import type {
   JobState,
   PromoteJobResult,
   PromoteMatchingResult,
+  CountMatchingResult,
   SchedulerPromoteMode,
   QueueCounts,
   QueueMetrics,
@@ -66,6 +68,12 @@ export interface InspectorOptions {
    * more of the state. default 10000
    */
   groupScanPerCall?: number;
+  /**
+   * max jobs one "groups with delayed jobs" call inspects. Each job is one HMGET and
+   * each distinct group four ZSCOREs, so the worst case (every job its own group) is
+   * ~2.6 ms of Redis per 1000 jobs, measured. default 2500 (~6.5 ms)
+   */
+  delayedGroupsScanPerCall?: number;
   /** ms connect timeout. default 5000 */
   connectTimeoutMs?: number;
   /**
@@ -237,6 +245,18 @@ export type CleanableState =
   | "paused"
   | "prioritized";
 
+/**
+ * promoteMatching's optional "spread" mode: lay the matching jobs out evenly from
+ * `from` to `until` (unix ms), soonest first, never later than they already were.
+ * `total` jobs in all, `offset` of them handled by earlier calls.
+ */
+export interface SpreadPlan {
+  from: number;
+  until: number;
+  total: number;
+  offset: number;
+}
+
 export interface Inspector {
   readonly config: Required<Pick<InspectorConnectionConfig, "id" | "kind" | "url" | "prefix" | "cluster">> &
     InspectorConnectionConfig;
@@ -306,6 +326,8 @@ export interface Inspector {
   // --- BullMQ Pro groups (read) ------------------------------------------
   getGroups(queueName: string, opts: { start: number; end: number }): Promise<GroupsPage>;
   getGroupJobs(queueName: string, groupId: string, opts: { start: number; end: number }): Promise<JobsPage>;
+  /** Groups that have delayed jobs, from one bounded slice of `delayed` (getDelayedGroups.lua). */
+  getDelayedGroups(queueName: string, opts: { cursor?: string | null }): Promise<DelayedGroupsPage>;
 
   // --- job schedulers (repeatable jobs) -----------------------------------
   /**
@@ -364,8 +386,10 @@ export interface Inspector {
   promoteMatching(
     queueName: string,
     match: { query?: string; groupId?: string },
-    opts: { cursor?: string | null; limit: number },
+    opts: { cursor?: string | null; limit: number; spread?: SpreadPlan },
   ): Promise<PromoteMatchingResult>;
+  /** How many delayed jobs promoteMatching would act on (bounded slices, nothing written). */
+  countMatching(queueName: string, match: { query?: string; groupId?: string }, opts: { cursor?: string | null }): Promise<CountMatchingResult>;
   /** Move an active/stalled job back to failed with a reason (operator "discard") */
   discardJob(queueName: string, jobId: string): Promise<void>;
   pauseQueue(queueName: string): Promise<void>;

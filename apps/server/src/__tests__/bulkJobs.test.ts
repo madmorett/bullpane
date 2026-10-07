@@ -93,9 +93,13 @@ function fakeInspector() {
         : { mode: "ran_copy", jobId: "copy-1", schedulerId: "nightly" };
     }),
     bullmqProApi: true,
+    getDelayedGroups: vi.fn(async () => ({ groups: [{ id: "tenant-a", delayed: 3, nextRunAt: 1, status: null }], ungrouped: 0, scanned: 3, total: 3, nextCursor: null })),
+    countMatching: vi.fn(async () => ({ matched: 1234, scanned: 5000, total: 5000, nextCursor: null })),
     promoteMatching: vi.fn(async () => ({
       matched: 3,
       promoted: 2,
+      rescheduled: 0,
+      unchanged: 0,
       failed: [{ jobId: "9", reason: "job_not_found" }],
       failedCount: 1,
       scanned: 1000,
@@ -317,6 +321,15 @@ describe("BullMQ Pro group actions", () => {
 
   const group = (gid: string, action: string) => `/api/connections/c1/queues/payments/groups/${gid}/${action}`;
 
+  it("lists the groups that have delayed jobs, resuming from a cursor", async () => {
+    const w = await build("viewer");
+    const res = await w.app.inject({ method: "GET", url: "/api/connections/c1/queues/payments/groups-delayed?cursor=7331234567890123:job-42" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().groups[0]).toEqual({ id: "tenant-a", delayed: 3, nextRunAt: 1, status: null });
+    expect(w.inspector.getDelayedGroups).toHaveBeenCalledWith("payments", { cursor: "7331234567890123:job-42" });
+    await w.app.close();
+  });
+
   it("says on the groups list whether BullMQ Pro's API is installed", async () => {
     const w = await build("viewer");
     const res = await w.app.inject({ method: "GET", url: "/api/connections/c1/queues/payments/groups" });
@@ -366,7 +379,7 @@ describe("promote matching", () => {
     const res = await w.app.inject({ method: "POST", url, payload: { groupId: "tenant-a", query: "spring", cursor: "1000" } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ promoted: 2, failedCount: 1, nextCursor: "998" });
-    expect(w.inspector.promoteMatching).toHaveBeenCalledWith("payments", { query: "spring", groupId: "tenant-a" }, { cursor: "1000", limit: expect.any(Number) });
+    expect(w.inspector.promoteMatching).toHaveBeenCalledWith("payments", { query: "spring", groupId: "tenant-a" }, { cursor: "1000", limit: expect.any(Number), spread: undefined });
     await w.app.close();
     const row = w.db.__audit[0]!;
     expect(row.action).toBe("job.promote_matching");
@@ -383,3 +396,39 @@ describe("promote matching", () => {
     await v.app.close();
   });
 });
+
+describe("promote matching: preview and spread", () => {
+  const url = "/api/connections/c1/queues/payments/jobs/promote-matching";
+
+  it("counts the matches for the preview as a viewer, with no audit row", async () => {
+    const w = await build("viewer");
+    const res = await w.app.inject({ method: "GET", url: "/api/connections/c1/queues/payments/jobs/count-matching?groupId=tenant-a&query=spring" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ matched: 1234, nextCursor: null });
+    expect(w.inspector.countMatching).toHaveBeenCalledWith("payments", { query: "spring", groupId: "tenant-a" }, { cursor: null });
+    await w.app.close();
+    expect(w.db.__audit).toHaveLength(0);
+  });
+
+  it("passes a spread window through and audits it", async () => {
+    const w = await build("operator");
+    const spread = { from: 1_000_000, until: 1_000_000 + 3_600_000, total: 1234, offset: 0 };
+    const res = await w.app.inject({ method: "POST", url, payload: { groupId: "tenant-a", spread } });
+    expect(res.statusCode).toBe(200);
+    expect(w.inspector.promoteMatching).toHaveBeenCalledWith("payments", { query: undefined, groupId: "tenant-a" }, { cursor: null, limit: expect.any(Number), spread });
+    await w.app.close();
+    expect(w.db.__audit[0]!.detail).toMatchObject({ groupId: "tenant-a", spreadFrom: spread.from, spreadUntil: spread.until });
+  });
+
+  it("refuses a window that ends before it starts or is longer than 7 days", async () => {
+    const w = await build("operator");
+    const bad = [
+      { from: 2_000, until: 1_000, total: 1, offset: 0 },
+      { from: 0, until: 8 * 24 * 3_600_000, total: 1, offset: 0 },
+    ];
+    for (const spread of bad) expect((await w.app.inject({ method: "POST", url, payload: { groupId: "tenant-a", spread } })).statusCode).toBe(400);
+    expect(w.inspector.promoteMatching).not.toHaveBeenCalled();
+    await w.app.close();
+  });
+});
+
