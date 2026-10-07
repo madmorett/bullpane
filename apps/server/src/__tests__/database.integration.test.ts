@@ -11,9 +11,8 @@
  *           mysql://root:root@127.0.0.1:3306  — a throwaway database is
  *           created on that server and dropped afterwards.
  *
- * Redis is only needed for the connection status probe; connections point at
- * BULLPANE_TEST_REDIS_URL (default redis://127.0.0.1:6379) and nothing here
- * fails if it is down.
+ * Redis: BULLPANE_TEST_REDIS_URL, or a throwaway one (helpers/testRedis.ts). The
+ * flow maps test writes real jobs to it.
  */
 import { generateKeyPairSync } from "node:crypto";
 import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -30,9 +29,13 @@ import { MIGRATIONS_DIR, runMigrations } from "../db/migrate";
 import { signLicense } from "../license";
 import { DrizzleMcpStore } from "../ee/mcp/store";
 import { DrizzleSettingsStore } from "../services/settings-store";
+import { testRedis } from "./helpers/testRedis";
 
 const MYSQL_URL = process.env.BULLPANE_TEST_MYSQL_URL;
-const REDIS_URL = process.env.BULLPANE_TEST_REDIS_URL ?? "redis://127.0.0.1:6379";
+const redis = testRedis(6396);
+const REDIS_URL = redis.url;
+beforeAll(() => redis.start());
+afterAll(() => redis.stop());
 const SESSION_SECRET = "integration-".repeat(4);
 const quietLog = { info: () => undefined, warn: () => undefined };
 

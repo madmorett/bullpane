@@ -3,9 +3,9 @@
  * FlowProducer: the real sampleFlowEdges Lua must turn "a parent with two
  * children" into ONE detected map whose root is the parent.
  *
- * Uses BULLPANE_TEST_REDIS_URL (default the local redis://127.0.0.1:6379) with a
- * prefix unique to this run, and obliterates its queues afterwards, so it never
- * touches anything else on that Redis. SQLite in a temp dir for the app's own data.
+ * Redis: BULLPANE_TEST_REDIS_URL, or a throwaway one (helpers/testRedis.ts). A prefix
+ * unique to this run, and its queues obliterated afterwards, so it never touches
+ * anything else on a shared Redis. SQLite in a temp dir for the app's own data.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,8 +19,10 @@ import { buildApp } from "../../app";
 import { loadConfig } from "../../config";
 import { createDatabase, type Database } from "../../db";
 import { runMigrations } from "../../db/migrate";
+import { testRedis } from "../../__tests__/helpers/testRedis";
 
-const REDIS_URL = process.env.BULLPANE_TEST_REDIS_URL ?? "redis://127.0.0.1:6379";
+const redis = testRedis(6397);
+const REDIS_URL = redis.url;
 const PREFIX = `bp-fm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 /** children first: removing a child moves a waiting parent back to `wait`, so the parent goes last */
 const QUEUES = ["fm-child-a", "fm-child-b", "fm-parent"];
@@ -47,6 +49,7 @@ const get = <T>(url: string): Promise<T> =>
   });
 
 beforeAll(async () => {
+  await redis.start();
   const connection = { url: REDIS_URL };
   const producer = new FlowProducer({ connection, prefix: PREFIX });
   // Workers are not started: the children wait, the parent waits for them —
@@ -91,6 +94,7 @@ afterAll(async () => {
     await q.obliterate({ force: true }).catch(() => undefined);
     await q.close();
   }
+  redis.stop();
 });
 
 describe("detected flow maps on a real Redis", () => {

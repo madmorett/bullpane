@@ -61,7 +61,7 @@ const LICENSE = {
 
 function deps(fetchImpl: typeof fetch, extra: Partial<Deps> = {}): Deps {
   return {
-    store: new CreemClient({ base: "https://creem.test", apiKey: API_KEY, fetchImpl }),
+    store: new CreemClient({ base: "https://creem.test", apiKey: API_KEY, fetchImpl, now: () => extra.now?.() ?? NOW }),
     now: () => NOW,
     privateKey,
     leaseDays: 7,
@@ -95,6 +95,16 @@ describe("license API (Creem)", () => {
       billing: "subscription",
     });
     expect(seen[0]).toEqual({ path: "/v1/licenses/activate", body: { key: KEY, instance_name: "prod-01 · queues.acme.io" }, apiKey: API_KEY });
+  });
+
+  it("checks a subscription's expiry against the injected clock, not the machine's", async () => {
+    const after = Date.parse(LICENSE.expires_at) + DAY;
+    const res = await handle(
+      post("/v1/license/activate", { key: KEY, instance: { label: "prod-01", version: "0.1.0" } }),
+      deps(creem({ "/v1/licenses/activate": () => jsonRes(200, LICENSE) }), { now: () => after }),
+    );
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toBe("license_expired");
   });
 
   it("maps an activation-limit refusal to 409 license_activation_limit", async () => {

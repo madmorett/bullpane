@@ -14,14 +14,16 @@ export default {
       });
     }
     cachedKey ??= importPrivateKey(env.LICENSE_PRIVATE_KEY_PEM);
+    const now = (): number => Date.now();
     const deps: Deps = {
       store: new CreemClient({
         base: (env.CREEM_API_BASE ?? "https://api.creem.io").replace(/\/+$/, ""),
         apiKey: env.CREEM_API_KEY,
         // Bound: a detached `fetch` throws "Illegal invocation" in the Workers runtime.
         fetchImpl: (input, init) => fetch(input, init),
+        now,
       }),
-      now: () => Date.now(),
+      now,
       privateKey: await cachedKey,
       leaseDays: Math.max(1, Number.parseInt(env.LEASE_DAYS ?? "7", 10) || 7),
     };

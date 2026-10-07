@@ -39,6 +39,8 @@ export interface CreemClientOptions {
   base: string;
   apiKey: string;
   fetchImpl: typeof fetch;
+  /** the clock of the expiry check: the handler's own, so a lease and its check agree */
+  now?: () => number;
 }
 
 function codeFor(status: number, detail: string): ApiFail["code"] {
@@ -67,10 +69,10 @@ function toStoreLicense(lic: CreemLicense, activationId: string): StoreLicense {
 }
 
 /** A 200 whose body says the key is not usable is still a refusal. */
-function assertUsable(lic: CreemLicense, expectedInstance: string | null): void {
+function assertUsable(lic: CreemLicense, expectedInstance: string | null, now: number): void {
   if (lic.status === "expired") throw new ApiFail("license_expired", HUMAN.license_expired, 403);
   if (lic.status !== "active") throw new ApiFail("license_revoked", HUMAN.license_revoked, 403);
-  if (lic.expires_at && Date.parse(lic.expires_at) <= Date.now()) throw new ApiFail("license_expired", HUMAN.license_expired, 403);
+  if (lic.expires_at && Date.parse(lic.expires_at) <= now) throw new ApiFail("license_expired", HUMAN.license_expired, 403);
   if (expectedInstance) {
     if (!lic.instance || lic.instance.id !== expectedInstance || lic.instance.status !== "active") {
       throw new ApiFail("license_activation_mismatch", HUMAN.license_activation_mismatch, 403);
@@ -81,16 +83,20 @@ function assertUsable(lic: CreemLicense, expectedInstance: string | null): void 
 export class CreemClient implements StoreClient {
   constructor(private readonly opts: CreemClientOptions) {}
 
+  private now(): number {
+    return (this.opts.now ?? Date.now)();
+  }
+
   async activate(key: string, label: string, _meta: Record<string, string>): Promise<StoreLicense> {
     const lic = await this.post("/v1/licenses/activate", { key, instance_name: label });
     if (!lic.instance?.id) throw new ApiFail("upstream_unavailable", "store answered without an instance id", 502);
-    assertUsable(lic, null);
+    assertUsable(lic, null, this.now());
     return toStoreLicense(lic, lic.instance.id);
   }
 
   async validate(key: string, activationId: string): Promise<StoreLicense> {
     const lic = await this.post("/v1/licenses/validate", { key, instance_id: activationId });
-    assertUsable(lic, activationId);
+    assertUsable(lic, activationId, this.now());
     return toStoreLicense(lic, activationId);
   }
 
