@@ -67,7 +67,7 @@ export function QueueAttentionSection({
             </Link>
           )}
         </p>
-        {unmeasured && <span className="ml-auto">{unmeasured}</span>}
+        {unmeasured}
       </section>
     );
   }
@@ -83,7 +83,8 @@ export function QueueAttentionSection({
             · showing the {items.length} worst, the rest are in the table below
           </span>
         )}
-        {unmeasured && <span className="ml-auto font-normal normal-case tracking-normal">{unmeasured}</span>}
+        {/* Next to the heading it qualifies, not pushed to the far right where it read as unrelated. */}
+        {unmeasured && <span className="ml-1 font-normal normal-case tracking-normal">· {unmeasured}</span>}
       </h2>
 
       <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>

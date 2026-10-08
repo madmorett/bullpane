@@ -39,6 +39,8 @@ export interface SortableTableProps<T> extends Omit<TableProps, "children"> {
   messageClassName?: string;
   /** skip sorting (e.g. the caller already sorted) */
   presorted?: boolean;
+  /** rows kept above the rest whatever the sort (the user's pins), sorted among themselves */
+  pinned?: (row: T) => boolean;
 }
 
 /** Compare two sort values: numbers numerically, strings with localeCompare, null/undefined last. */
@@ -86,10 +88,14 @@ export function SortableTable<T>({
   message,
   messageClassName,
   presorted,
+  pinned,
   className,
   ...tableProps
 }: SortableTableProps<T>) {
-  const sorted = useMemo(() => (presorted ? rows : sortRows(rows, columns, sort)), [rows, columns, sort, presorted]);
+  const sorted = useMemo(() => {
+    const out = presorted ? rows : sortRows(rows, columns, sort);
+    return pinned ? [...out.filter(pinned), ...out.filter((r) => !pinned(r))] : out;
+  }, [rows, columns, sort, presorted, pinned]);
 
   const toggle = (col: SortableColumn<T>) => {
     if (!col.sortValue) return;

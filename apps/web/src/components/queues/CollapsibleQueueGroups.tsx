@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder as FolderIcon, FolderOpen, Server } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder as FolderIcon, FolderOpen, Pin, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatCompact } from "@/lib/format";
 import { totals, type QueueSection } from "@/lib/groupQueues";
@@ -52,7 +52,7 @@ function Group({
   const [open, toggle] = usePersistedToggle(`${storagePrefix}.${section.id}`, defaultOpen);
   const sums = totals(section.items);
 
-  const Icon = section.kind === "folder" ? FolderIcon : section.kind === "connection" ? Server : FolderOpen;
+  const Icon = section.kind === "folder" ? FolderIcon : section.kind === "connection" ? Server : section.kind === "pinned" ? Pin : FolderOpen;
 
   return (
     <section className="card overflow-hidden" aria-label={section.title}>

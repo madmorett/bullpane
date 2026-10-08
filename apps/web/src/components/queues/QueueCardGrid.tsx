@@ -1,4 +1,4 @@
-import { Folder as FolderIcon, FolderOpen, Server } from "lucide-react";
+import { Folder as FolderIcon, FolderOpen, Pin, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { entryKey, type QueueEntry, type QueueSection } from "@/lib/groupQueues";
 import { QueueCard } from "./QueueCard";
@@ -34,6 +34,8 @@ export function QueueCardGrid({
                 <FolderIcon className="size-3.5" style={{ color: s.color ?? "var(--fg-subtle)" }} aria-hidden />
               ) : s.kind === "connection" ? (
                 <Server className="size-3.5" aria-hidden />
+              ) : s.kind === "pinned" ? (
+                <Pin className="size-3.5" aria-hidden />
               ) : (
                 <FolderOpen className="size-3.5" aria-hidden />
               )}

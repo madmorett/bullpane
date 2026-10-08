@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import type { JobState } from "@bullpane/shared";
 import { Link, useNavigate } from "react-router-dom";
-import { EyeOff, Pause, Play, Search } from "lucide-react";
+import { EyeOff, Pause, Pin, PinOff, Play, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber, formatPercent } from "@/lib/format";
@@ -16,6 +16,7 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { SuccessBar, windowLabel } from "./QueueCard";
 import { SkewWarning, isSkewed, rateSourceHint } from "./RateSource";
 import { HIDE_TOOLTIP } from "./hideQueue";
+import { useSidebarLayout } from "@/lib/sidebarLayout";
 
 export const QUEUE_TABLE_KEYS = ["queue", "connection", "waiting", "active", "completed", "failed", "delayed", "prioritized", "waiting-children", "success", "paused", "groups", "trend", "actions"] as const;
 export const DEFAULT_QUEUE_SORT: SortState = { key: "failed", dir: "desc" };
@@ -36,10 +37,14 @@ export interface QueuesTableProps {
    */
   onHide?: (entry: QueueEntry) => void;
   hidePendingKey?: string | null;
+  /** the user's pinned queues: kept on top whatever the sort, with a pin icon */
+  isPinned?: (entry: QueueEntry) => boolean;
 }
 
-export function QueuesTable({ rows, showConnection, sort, onSort, message, messageClassName, onToggle, pendingKey, onHide, hidePendingKey }: QueuesTableProps) {
+export function QueuesTable({ rows, showConnection, sort, onSort, message, messageClassName, onToggle, pendingKey, onHide, hidePendingKey, isPinned }: QueuesTableProps) {
   const navigate = useNavigate();
+  const { layout, togglePin } = useSidebarLayout();
+  const pins = layout.pinned;
 
   const columns = useMemo<SortableColumn<QueueEntry>[]>(() => {
     const cols: SortableColumn<QueueEntry>[] = [
@@ -48,9 +53,12 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
         header: "Queue",
         sortValue: (e) => e.queue.name,
         render: (e) => (
-          <Link to={routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts))} className="font-mono text-xs font-medium hover:underline" title={`${e.queue.prefix}:${e.queue.name}`}>
-            {e.queue.name}
-          </Link>
+          <>
+            {isPinned?.(e) && <Pin className="mr-1.5 inline size-3 text-fg-subtle" aria-label="Pinned" />}
+            <Link to={routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts))} className="font-mono text-xs font-medium hover:underline" title={`${e.queue.prefix}:${e.queue.name}`}>
+              {e.queue.name}
+            </Link>
+          </>
         ),
         className: "max-w-72 truncate",
       },
@@ -139,6 +147,15 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
             <Button size="icon-xs" variant="ghost" title="Search jobs" aria-label={`Search jobs in ${e.queue.name}`} onClick={() => navigate(routes.queueSearch(e.connection.id, e.queue.name))}>
               <Search />
             </Button>
+            {pins.includes(entryKey(e)) ? (
+              <Button size="icon-xs" variant="ghost" title="Unpin" aria-label={`Unpin ${e.queue.name}`} onClick={() => togglePin(entryKey(e))}>
+                <PinOff />
+              </Button>
+            ) : (
+              <Button size="icon-xs" variant="ghost" title="Pin to top" aria-label={`Pin ${e.queue.name}`} onClick={() => togglePin(entryKey(e))}>
+                <Pin />
+              </Button>
+            )}
             {onToggle && (
               <Button size="icon-xs" variant="ghost" loading={pendingKey === entryKey(e)} title={e.queue.isPaused ? "Resume queue" : "Pause queue"} aria-label={e.queue.isPaused ? "Resume queue" : "Pause queue"} onClick={() => onToggle(e)}>
                 {e.queue.isPaused ? <Play /> : <Pause />}
@@ -154,9 +171,9 @@ export function QueuesTable({ rows, showConnection, sort, onSort, message, messa
       },
     );
     return cols;
-  }, [showConnection, onToggle, pendingKey, onHide, hidePendingKey, navigate, rows]);
+  }, [showConnection, onToggle, pendingKey, onHide, hidePendingKey, navigate, rows, isPinned, pins, togglePin]);
 
-  return <SortableTable columns={columns} rows={rows} rowKey={entryKey} sort={sort} onSort={onSort} onRowActivate={(e) => navigate(routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts)))} message={message} messageClassName={messageClassName} className="min-w-[1100px]" />;
+  return <SortableTable columns={columns} rows={rows} rowKey={entryKey} sort={sort} onSort={onSort} pinned={isPinned} onRowActivate={(e) => navigate(routes.queue(e.connection.id, e.queue.name, queueLandingState(e.queue.counts)))} message={message} messageClassName={messageClassName} className="min-w-[1100px]" />;
 }
 
 /**
