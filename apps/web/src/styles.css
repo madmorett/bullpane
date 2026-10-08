@@ -276,7 +276,7 @@
    * not take part in the overflow, and the text wraps instead of growing.
    */
   .tooltip {
-    @apply pointer-events-none invisible absolute z-50 max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
+    @apply pointer-events-none invisible absolute z-50 w-max max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
     text-wrap: pretty;
   }
   .has-tooltip:hover .tooltip,
