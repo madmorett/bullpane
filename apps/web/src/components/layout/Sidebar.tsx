@@ -104,7 +104,7 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
           className="flex h-8 w-full items-center gap-2 rounded-md border border-border bg-bg px-2.5 text-xs text-fg-subtle hover:border-border-strong hover:text-fg-muted"
         >
           <Search className="size-3.5" aria-hidden />
-          <span className="flex-1 text-left">Jump to queue…</span>
+          <span className="flex-1 text-left">Search…</span>
           <Kbd>{modKeyLabel}</Kbd>
           <Kbd>K</Kbd>
         </button>
