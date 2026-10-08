@@ -9,6 +9,8 @@ import {
   FolderLock,
   LayoutDashboard,
   CalendarClock,
+  Pin,
+  PinOff,
   ScrollText,
   Search,
   Settings,
@@ -22,6 +24,8 @@ import { queueLandingState } from "@/lib/queueLanding";
 import { SHOW_FLOWS } from "@/lib/featureFlags";
 import { formatCompact } from "@/lib/format";
 import { usePersistedToggle } from "@/lib/usePersistedToggle";
+import { applyOrder, folderRef, queueRef, useSidebarLayout, type SidebarLayout } from "@/lib/sidebarLayout";
+import { SortableList, useSortableRow } from "./SortableList";
 import { modKeyLabel } from "@/lib/useHotkey";
 import { useAllQueues, useFolders } from "@/api/hooks";
 import { useAuth } from "@/auth/AuthProvider";
@@ -55,8 +59,24 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
   const { isAdmin } = useAuth();
   const { has } = useEdition();
   const { byConnection, isLoading } = useAllQueues();
+  const { layout, move } = useLayout();
   const foldersEnabled = has("folders");
   const folders = useFolders(foldersEnabled);
+  const folderList = foldersEnabled ? (folders.data ?? []) : [];
+  const lookup = lookupIn(byConnection);
+  // Root folders and connections are one list, so a connection can be dragged
+  // above a folder. Default: folders (admin order) first, then connections.
+  const tree = applyOrder(
+    [
+      ...folderChildren(folderList, null, layout.order).map((folder) => ({ id: folderRef(folder.id), folder, conn: null })),
+      ...byConnection.map((conn) => ({ id: `conn:${conn.connection.id}`, folder: null, conn })),
+    ],
+    (item) => item.id,
+    layout.order.tree,
+  );
+  const treeIds = tree.map((item) => item.id);
+  const pinned = new Set(layout.pinned);
+  const shownTree = tree.filter((item) => !pinned.has(item.id));
 
   const proNav: { to: string; label: string; icon: typeof Bell; feature: ProFeature; adminOnly?: boolean }[] = [
     { to: routes.alerts, label: "Alerts", icon: Bell, feature: "alerts" },
@@ -96,22 +116,29 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
       </nav>
 
       <div className="mt-2 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-2">
+        <Pinned byConnection={byConnection} folders={folderList} onNavigate={onNavigate} />
+
         <SectionLabel>Queues</SectionLabel>
 
-        {foldersEnabled && folders.data && folders.data.length > 0 && (
-          <FolderTree folders={folders.data} byConnection={byConnection} onNavigate={onNavigate} />
-        )}
-
-        {byConnection.map(({ connection, queues, error }) => (
-          <ConnectionGroup
-            key={connection.id}
-            connection={connection}
-            queues={queues}
-            error={error}
-            onNavigate={onNavigate}
-            defaultOpen={byConnection.length <= SIDEBAR_COLLAPSE_ABOVE}
-          />
-        ))}
+        <SortableList ids={shownTree.map((item) => item.id)} onMove={(d, t) => move("tree", treeIds, d, t)}>
+          {shownTree.map(({ id, folder, conn }) =>
+            folder ? (
+              <FolderNode key={id} sortId={id} folder={folder} folders={folderList} lookup={lookup} onNavigate={onNavigate} depth={0} />
+            ) : (
+              conn && (
+                <ConnectionGroup
+                  key={id}
+                  sortId={id}
+                  connection={conn.connection}
+                  queues={conn.queues}
+                  error={conn.error}
+                  onNavigate={onNavigate}
+                  defaultOpen={byConnection.length <= SIDEBAR_COLLAPSE_ABOVE}
+                />
+              )
+            ),
+          )}
+        </SortableList>
 
         {!isLoading && byConnection.length === 0 && (
           <p className="px-2 py-3 text-xs text-fg-subtle">
@@ -179,6 +206,110 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-fg-subtle uppercase">{children}</div>;
 }
 
+/** Personal sidebar layout (pins and drag order) of whoever is signed in. */
+function useLayout() {
+  const { user } = useAuth();
+  return useSidebarLayout(user?.id);
+}
+
+/** The row being dragged floats above its siblings. */
+const DRAGGING = "data-[dragging]:bg-surface-2 data-[dragging]:shadow-[var(--shadow)]";
+
+type Lookup = (connectionId: string, queueName: string) => { connection: RedisConnection; queue: QueueSummary } | null;
+
+function lookupIn(byConnection: { connection: RedisConnection; queues: QueueSummary[] }[]): Lookup {
+  return (connectionId, queueName) => {
+    const c = byConnection.find((b) => b.connection.id === connectionId);
+    const q = c?.queues.find((qq) => qq.name === queueName);
+    return c && q ? { connection: c.connection, queue: q } : null;
+  };
+}
+
+/**
+ * A folder's subfolders (or the roots): the admin's order (`position`), then
+ * each user's drag order on top. The roots' drag order lives in the sidebar
+ * tree, mixed with connections.
+ */
+function folderChildren(folders: FolderModel[], parentId: string | null, order: SidebarLayout["order"]): FolderModel[] {
+  return applyOrder(
+    folders.filter((f) => (f.parentId ?? null) === parentId).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)),
+    (f) => f.id,
+    parentId ? order[`folders.${parentId}`] : undefined,
+  );
+}
+
+function Pinned({
+  byConnection,
+  folders,
+  onNavigate,
+}: {
+  byConnection: { connection: RedisConnection; queues: QueueSummary[] }[];
+  folders: FolderModel[];
+  onNavigate?: () => void;
+}) {
+  const { layout, move } = useLayout();
+  const lookup = lookupIn(byConnection);
+  // ponytail: a pin whose queue or folder is gone (or not loaded yet, or folders
+  // are locked) is just not shown; it comes back if the target does.
+  type Item = { ref: string; folder: FolderModel | null; hit: ReturnType<Lookup> };
+  const items = layout.pinned.flatMap((ref): Item[] => {
+    const folder = folders.find((f) => folderRef(f.id) === ref);
+    if (folder) return [{ ref, folder, hit: null }];
+    const slash = ref.indexOf("/");
+    const hit = slash > 0 ? lookup(ref.slice(0, slash), ref.slice(slash + 1)) : null;
+    return hit ? [{ ref, folder: null, hit }] : [];
+  });
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-2">
+      <SectionLabel>Pinned</SectionLabel>
+      {/* Moves within the full pinned list, so hidden pins keep their place.
+          Every other list leaves out what is pinned here (one place per item)
+          but also moves within its full list, so an unpinned item returns
+          to where it was. */}
+      <SortableList ids={items.map((i) => i.ref)} onMove={(d, t) => move("pinned", layout.pinned, d, t)}>
+        <ul>
+          {items.map(({ ref, folder, hit }) =>
+            folder ? (
+              <li key={ref}>
+                <FolderNode sortId={ref} folder={folder} folders={folders} lookup={lookup} onNavigate={onNavigate} depth={0} />
+              </li>
+            ) : (
+              hit && (
+                <QueueRow
+                  key={ref}
+                  sortId={ref}
+                  connectionId={hit.connection.id}
+                  queue={hit.queue}
+                  hint={byConnection.length > 1 ? hit.connection.name : undefined}
+                  onNavigate={onNavigate}
+                />
+              )
+            ),
+          )}
+        </ul>
+      </SortableList>
+    </div>
+  );
+}
+
+/** Pin or unpin a queue or folder. Zero width until its row (`group/pin`) is hovered or it is focused. */
+function PinButton({ pinRef, label }: { pinRef: string; label: string }) {
+  const { layout, togglePin } = useLayout();
+  const pinned = layout.pinned.includes(pinRef);
+  return (
+    <button
+      type="button"
+      onClick={() => togglePin(pinRef)}
+      aria-label={pinned ? `Unpin ${label}` : `Pin ${label}`}
+      title={pinned ? "Unpin" : "Pin to top"}
+      className="flex h-6 w-0 shrink-0 items-center justify-center overflow-hidden rounded text-fg-subtle opacity-0 group-hover/pin:w-5 group-hover/pin:opacity-100 hover:text-fg focus-visible:w-5 focus-visible:opacity-100"
+    >
+      {pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+    </button>
+  );
+}
+
 function NavItem({
   to,
   icon: Icon,
@@ -224,17 +355,26 @@ function ConnectionGroup({
   error,
   onNavigate,
   defaultOpen,
+  sortId,
 }: {
   connection: RedisConnection;
   queues: QueueSummary[];
   error: unknown;
   onNavigate?: () => void;
   defaultOpen: boolean;
+  /** id in the surrounding SortableList */
+  sortId: string;
 }) {
+  const row = useSortableRow(sortId);
   const params = useParams();
   const isCurrent = params.connectionId === connection.id;
   const [open, toggle, setOpen] = useExpanded(`conn.${connection.id}`, defaultOpen);
-  const sorted = useMemo(() => [...queues].sort((a, b) => a.name.localeCompare(b.name)), [queues]);
+  const { layout, move } = useLayout();
+  const list = `conn.${connection.id}`;
+  const byName = useMemo(() => [...queues].sort((a, b) => a.name.localeCompare(b.name)), [queues]);
+  const sorted = applyOrder(byName, (q) => q.name, layout.order[list]);
+  const names = sorted.map((q) => q.name);
+  const shown = sorted.filter((q) => !layout.pinned.includes(queueRef(connection.id, q.name)));
   const failed = queues.reduce((s, q) => s + q.counts.failed, 0);
   const waiting = queues.reduce((s, q) => s + q.counts.waiting + q.counts.prioritized, 0);
 
@@ -247,8 +387,8 @@ function ConnectionGroup({
   }, [isCurrent, connection.id]);
 
   return (
-    <div className="mt-0.5">
-      <div className={cn("group flex h-7 items-center gap-1 rounded-md pr-1 pl-1 hover:bg-surface-2", isCurrent && !params.queue && "bg-surface-3")}>
+    <div {...row.node} className={cn("mt-0.5 rounded-md", DRAGGING)}>
+      <div {...row.handle} className={cn("group flex h-7 items-center gap-1 rounded-md pr-1 pl-1 hover:bg-surface-2", isCurrent && !params.queue && "bg-surface-3")}>
         <button type="button" onClick={toggle} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"} className="rounded p-0.5 text-fg-subtle hover:text-fg">
           {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
@@ -273,30 +413,46 @@ function ConnectionGroup({
         <ConnectionStatusDot status={connection.status} pulse />
       </div>
       {open && (
-        <ul className="ml-3 border-l border-border pl-1">
-          {!!error && <li className="px-2 py-1 text-xs text-danger">Could not load queues</li>}
-          {!error && sorted.length === 0 && <li className="px-2 py-1 text-xs text-fg-subtle">No queues discovered</li>}
-          {sorted.map((q) => (
-            <QueueRow key={q.name} connectionId={connection.id} queue={q} onNavigate={onNavigate} />
-          ))}
-        </ul>
+        <SortableList ids={shown.map((q) => q.name)} onMove={(d, t) => move(list, names, d, t)}>
+          <ul className="ml-3 border-l border-border pl-1">
+            {!!error && <li className="px-2 py-1 text-xs text-danger">Could not load queues</li>}
+            {!error && queues.length === 0 && <li className="px-2 py-1 text-xs text-fg-subtle">No queues discovered</li>}
+            {shown.map((q) => (
+              <QueueRow key={q.name} sortId={q.name} connectionId={connection.id} queue={q} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </SortableList>
       )}
     </div>
   );
 }
 
-function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: string; queue: QueueSummary; onNavigate?: () => void; hint?: string }) {
+function QueueRow({
+  connectionId,
+  queue,
+  onNavigate,
+  hint,
+  sortId,
+}: {
+  connectionId: string;
+  queue: QueueSummary;
+  onNavigate?: () => void;
+  hint?: string;
+  /** id in the surrounding SortableList */
+  sortId: string;
+}) {
   const params = useParams();
+  const row = useSortableRow(sortId);
   const active = params.connectionId === connectionId && params.queue === queue.name;
   return (
-    <li>
+    <li {...row.node} {...row.handle} className={cn("group/pin flex items-center rounded-md", DRAGGING)}>
       <NavLink
         // Same rule as the card and the table: the click lands on the state that
         // matters (failed → waiting → completed), not on the default `waiting`. See
         // lib/queueLanding.ts.
         to={routes.queue(connectionId, queue.name, queueLandingState(queue.counts))}
         onClick={onNavigate}
-        className={cn("nav-item h-6.5 pr-1.5 pl-2 text-xs", active && "active")}
+        className={cn("nav-item h-6.5 flex-1 pr-1.5 pl-2 text-xs", active && "active")}
         title={hint ? `${hint} / ${queue.name}` : queue.name}
       >
         <span className="min-w-0 flex-1 truncate">
@@ -319,56 +475,48 @@ function QueueRow({ connectionId, queue, onNavigate, hint }: { connectionId: str
           </Tooltip>
         )}
       </NavLink>
+      {/* A sibling of the link, not inside it: a button inside an <a> is invalid HTML. */}
+      <PinButton pinRef={queueRef(connectionId, queue.name)} label={queue.name} />
     </li>
-  );
-}
-
-function FolderTree({
-  folders,
-  byConnection,
-  onNavigate,
-}: {
-  folders: FolderModel[];
-  byConnection: { connection: RedisConnection; queues: QueueSummary[] }[];
-  onNavigate?: () => void;
-}) {
-  const roots = folders.filter((f) => !f.parentId).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  const childrenOf = (id: string) =>
-    folders.filter((f) => f.parentId === id).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  const lookup = (connectionId: string, queueName: string) => {
-    const c = byConnection.find((b) => b.connection.id === connectionId);
-    const q = c?.queues.find((qq) => qq.name === queueName);
-    return c && q ? { connection: c.connection, queue: q } : null;
-  };
-  return (
-    <div className="mb-2">
-      {roots.map((f) => (
-        <FolderNode key={f.id} folder={f} children={childrenOf(f.id)} lookup={lookup} onNavigate={onNavigate} depth={0} />
-      ))}
-    </div>
   );
 }
 
 function FolderNode({
   folder,
-  children,
+  folders,
   lookup,
   onNavigate,
   depth,
+  sortId,
 }: {
   folder: FolderModel;
-  children: FolderModel[];
-  lookup: (cid: string, q: string) => { connection: RedisConnection; queue: QueueSummary } | null;
+  folders: FolderModel[];
+  lookup: Lookup;
   onNavigate?: () => void;
   depth: number;
+  /** id in the surrounding SortableList */
+  sortId: string;
 }) {
   const [open, toggle] = useExpanded(`folder.${folder.id}`);
   const params = useParams();
+  const row = useSortableRow(sortId);
+  const { layout, move } = useLayout();
   const isCurrent = params.folderId === folder.id;
-  const resolved = folder.queues.map((r) => ({ ref: r, hit: lookup(r.connectionId, r.queueName) }));
+  // Two levels, as before: a subfolder does not list its own subfolders.
+  const children = depth === 0 ? folderChildren(folders, folder.id, layout.order) : [];
+  const childIds = children.map((c) => c.id);
+  const shownChildren = children.filter((c) => !layout.pinned.includes(folderRef(c.id)));
+  const queueList = `folder.${folder.id}`;
+  const resolved = applyOrder(
+    folder.queues.map((r) => ({ ref: r, key: queueRef(r.connectionId, r.queueName), hit: lookup(r.connectionId, r.queueName) })),
+    (r) => r.key,
+    layout.order[queueList],
+  );
+  const queueKeys = resolved.map((r) => r.key);
+  const shownQueues = resolved.filter((r) => !layout.pinned.includes(r.key));
   return (
-    <div className="mt-0.5" style={{ marginLeft: depth * 12 }}>
-      <div className={cn("group flex h-7 items-center gap-1 rounded-md pr-1 pl-1 hover:bg-surface-2", isCurrent && "bg-surface-3")}>
+    <div {...row.node} className={cn("mt-0.5 rounded-md", DRAGGING)} style={{ ...row.node.style, marginLeft: depth * 12 }}>
+      <div {...row.handle} className={cn("group/pin flex h-7 items-center gap-1 rounded-md pr-1 pl-1 hover:bg-surface-2", isCurrent && "bg-surface-3")}>
         <button type="button" onClick={toggle} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"} className="rounded p-0.5 text-fg-subtle hover:text-fg">
           {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
@@ -382,24 +530,29 @@ function FolderNode({
           <span className="truncate">{folder.name}</span>
         </NavLink>
         <span className="num text-[10px] text-fg-subtle">{folder.queues.length}</span>
+        <PinButton pinRef={folderRef(folder.id)} label={folder.name} />
       </div>
       {open && (
         <>
-          {children.map((c) => (
-            <FolderNode key={c.id} folder={c} children={[]} lookup={lookup} onNavigate={onNavigate} depth={depth + 1} />
-          ))}
-          <ul className="ml-3 border-l border-border pl-1">
-            {resolved.length === 0 && children.length === 0 && <li className="px-2 py-1 text-xs text-fg-subtle">Empty folder</li>}
-            {resolved.map(({ ref, hit }) =>
-              hit ? (
-                <QueueRow key={`${ref.connectionId}/${ref.queueName}`} connectionId={hit.connection.id} queue={hit.queue} hint={hit.connection.name} onNavigate={onNavigate} />
-              ) : (
-                <li key={`${ref.connectionId}/${ref.queueName}`} className="nav-item h-6.5 pl-2 text-xs text-fg-subtle line-through" title="Queue not found on its connection">
-                  {ref.queueName}
-                </li>
-              ),
-            )}
-          </ul>
+          <SortableList ids={shownChildren.map((c) => c.id)} onMove={(d, t) => move(`folders.${folder.id}`, childIds, d, t)}>
+            {shownChildren.map((c) => (
+              <FolderNode key={c.id} sortId={c.id} folder={c} folders={folders} lookup={lookup} onNavigate={onNavigate} depth={depth + 1} />
+            ))}
+          </SortableList>
+          <SortableList ids={shownQueues.map((r) => r.key)} onMove={(d, t) => move(queueList, queueKeys, d, t)}>
+            <ul className="ml-3 border-l border-border pl-1">
+              {resolved.length === 0 && children.length === 0 && <li className="px-2 py-1 text-xs text-fg-subtle">Empty folder</li>}
+              {shownQueues.map(({ ref, key, hit }) =>
+                hit ? (
+                  <QueueRow key={key} sortId={key} connectionId={hit.connection.id} queue={hit.queue} hint={hit.connection.name} onNavigate={onNavigate} />
+                ) : (
+                  <li key={key} className="nav-item h-6.5 pl-2 text-xs text-fg-subtle line-through" title="Queue not found on its connection">
+                    {ref.queueName}
+                  </li>
+                ),
+              )}
+            </ul>
+          </SortableList>
         </>
       )}
     </div>
