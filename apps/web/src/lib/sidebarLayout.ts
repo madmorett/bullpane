@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { useAuth } from "@/auth/AuthProvider";
 import { readStorage, writeStorage } from "./storage";
 
 /**
@@ -72,8 +73,9 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
-export function useSidebarLayout(userId: string | undefined) {
-  const id = userId ?? "anonymous";
+/** The layout of whoever is signed in. Pins are set from the sidebar, the Overview's cards and its table. */
+export function useSidebarLayout() {
+  const id = useAuth().user?.id ?? "anonymous";
   const layout = useSyncExternalStore(subscribe, () => load(id));
 
   const togglePin = useCallback(

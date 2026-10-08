@@ -10,7 +10,7 @@ export interface QueueSection {
   title: string;
   /** folder colour or undefined for implicit / leftover sections */
   color?: string | null;
-  kind: "folder" | "connection" | "leftover";
+  kind: "folder" | "connection" | "leftover" | "pinned";
   items: QueueEntry[];
 }
 
@@ -66,6 +66,34 @@ export function groupQueues(entries: QueueEntry[], folders: Folder[] | undefined
   }
   for (const s of byConn.values()) s.items = sortItems(s.items);
   return [...byConn.values()];
+}
+
+/** The user's pinned queues (see lib/sidebarLayout.ts) as a "Pinned" section, in pin order; null when none is in `entries`. */
+export function pinnedSection(entries: QueueEntry[], pinned: string[]): QueueSection | null {
+  const byKey = new Map(entries.map((e) => [entryKey(e), e]));
+  const items = pinned.flatMap((ref) => byKey.get(ref) ?? []);
+  return items.length > 0 ? { id: "pinned", title: "Pinned", kind: "pinned", items } : null;
+}
+
+/**
+ * The rest of the page around `pinnedSection`: pinned folders' sections
+ * first, in pin order. As in the sidebar, a pinned queue leaves the other
+ * sections, and a section left empty goes away.
+ */
+export function pinFirst(sections: QueueSection[], pinned: string[]): QueueSection[] {
+  if (pinned.length === 0) return sections;
+  const pinnedSet = new Set(pinned);
+  const rank = (s: QueueSection) => {
+    const i = pinned.indexOf(s.id);
+    return i < 0 ? pinned.length : i;
+  };
+  const rest = sections
+    .map((s) => ({ ...s, items: s.items.filter((e) => !pinnedSet.has(entryKey(e))) }))
+    .filter((s) => s.items.length > 0)
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i)
+    .map((x) => x.s);
+  return rest;
 }
 
 function byPosition(a: Folder, b: Folder) {

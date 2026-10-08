@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Database, Plus } from "lucide-react";
 import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";
-import { groupQueues, matchesFilter, totals, type QueueEntry } from "@/lib/groupQueues";
+import { entryKey, groupQueues, matchesFilter, pinFirst, pinnedSection, totals, type QueueEntry } from "@/lib/groupQueues";
+import { useSidebarLayout } from "@/lib/sidebarLayout";
 import { splitByAttention } from "@/lib/queueAttention";
 import { useTableState } from "@/lib/useTableState";
 import { useAttention, useAttentionThresholds, useConnectionOverviews, useFolders } from "@/api/hooks";
@@ -30,6 +31,10 @@ const CARD_WALL_LIMIT = 2;
 
 export function OverviewPage() {
   const { isAdmin, isOperator } = useAuth();
+  // Queues and folders pinned in the sidebar come first here too.
+  const { layout } = useSidebarLayout();
+  const pinned = layout.pinned;
+  const isPinned = useCallback((e: QueueEntry) => pinned.includes(entryKey(e)), [pinned]);
   const { has } = useEdition();
   const { connections, entries, isLoading } = useConnectionOverviews();
   const thresholds = useAttentionThresholds();
@@ -90,13 +95,14 @@ export function OverviewPage() {
     const unmeasured = attention.data.unmeasured.filter((u) => shown.has(`${u.connectionId}\u0000${u.queueName}`)).length;
     return { rules: attention.data.rules, unmeasured };
   }, [rulesEnabled, attention.data, visible]);
+  const pinnedCards = useMemo(() => pinnedSection(visible, pinned), [visible, pinned]);
   const restSections = useMemo(
-    () => groupQueues(split.rest, foldersEnabled ? folders.data : undefined),
-    [split.rest, foldersEnabled, folders.data],
+    () => pinFirst(groupQueues(split.rest, foldersEnabled ? folders.data : undefined), pinned),
+    [split.rest, foldersEnabled, folders.data, pinned],
   );
   const allSections = useMemo(
-    () => groupQueues(visible, foldersEnabled ? folders.data : undefined),
-    [visible, foldersEnabled, folders.data],
+    () => pinFirst(groupQueues(visible, foldersEnabled ? folders.data : undefined), pinned),
+    [visible, foldersEnabled, folders.data, pinned],
   );
 
   if (!isLoading && connectionCount === 0) {
@@ -161,6 +167,9 @@ export function OverviewPage() {
               that repetition is deliberate, the grid is the inventory and this
               is the triage.
             */}
+            {/* The user's own pins come before everything, triage included. A
+                pinned queue that needs attention shows in both, like the grid. */}
+            {pinnedCards && <QueueCardGrid sections={[pinnedCards]} showConnection onHide={onHide} />}
             <QueueAttentionSection items={split.attention} hidden={split.hidden} showConnection={dense} filtered={!!filter} rules={rulesInfo} />
             {dense ? (
               <CollapsibleQueueGroups sections={restSections} showConnection defaultOpen={false} />
@@ -177,6 +186,7 @@ export function OverviewPage() {
             sort={sort}
             onSort={setSort}
             onHide={onHide}
+            isPinned={isPinned}
             message={queuesLoading && all.length === 0 ? "Loading queues…" : filter ? "No queue matches the filter" : "No queues discovered yet"}
           />
         </div>

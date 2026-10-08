@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
-import { EyeOff, Search } from "lucide-react";
+import { EyeOff, Pin, PinOff, Search } from "lucide-react";
 import type { QueueRates } from "@bullpane/shared";
 import { cn } from "@/lib/cn";
 import { routes } from "@/lib/routes";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { PRIMARY_STATES, SECONDARY_STATES, STATE_COLORS } from "@/lib/stateColors";
 import { queueLandingState } from "@/lib/queueLanding";
-import type { QueueEntry } from "@/lib/groupQueues";
+import { entryKey, type QueueEntry } from "@/lib/groupQueues";
+import { useSidebarLayout } from "@/lib/sidebarLayout";
 import { Badge } from "@/components/ui/Badge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { StateChip } from "@/components/StateBadge";
@@ -31,6 +32,8 @@ export function QueueCard({
   // not to the default `waiting`. See lib/queueLanding.ts: before, a queue with 1,000
   // failures opened on "No jobs in this state".
   const href = routes.queue(connection.id, queue.name, queueLandingState(c));
+  const { layout, togglePin } = useSidebarLayout();
+  const pinned = layout.pinned.includes(entryKey(entry));
 
   return (
     <article className={cn("queue-card", queue.isPaused && "opacity-90", c.failed > 0 && "border-state-failed/40")} data-testid="queue-card">
@@ -56,6 +59,15 @@ export function QueueCard({
           <Link to={routes.queueSearch(connection.id, queue.name)} className="rounded p-0.5 text-fg-subtle hover:bg-surface-2 hover:text-fg" title="Search jobs in this queue" aria-label={`Search jobs in ${queue.name}`}>
             <Search className="size-3.5" />
           </Link>
+          <button
+            type="button"
+            onClick={() => togglePin(entryKey(entry))}
+            className="rounded p-0.5 text-fg-subtle hover:bg-surface-2 hover:text-fg"
+            title={pinned ? "Unpin" : "Pin to top"}
+            aria-label={pinned ? `Unpin ${queue.name}` : `Pin ${queue.name}`}
+          >
+            {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          </button>
           {onHide && (
             <button
               type="button"

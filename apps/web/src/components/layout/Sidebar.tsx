@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Database,
   Folder,
-  FolderLock,
   LayoutDashboard,
   CalendarClock,
   Pin,
@@ -59,7 +58,7 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
   const { isAdmin } = useAuth();
   const { has } = useEdition();
   const { byConnection, isLoading } = useAllQueues();
-  const { layout, move } = useLayout();
+  const { layout, move } = useSidebarLayout();
   const foldersEnabled = has("folders");
   const folders = useFolders(foldersEnabled);
   const folderList = foldersEnabled ? (folders.data ?? []) : [];
@@ -81,6 +80,9 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
   const proNav: { to: string; label: string; icon: typeof Bell; feature: ProFeature; adminOnly?: boolean }[] = [
     { to: routes.alerts, label: "Alerts", icon: Bell, feature: "alerts" },
     ...(SHOW_FLOWS ? [{ to: routes.flows(), label: "Flows", icon: Workflow, feature: "flows" as ProFeature }] : []),
+    // Down here, not at the end of the queue tree: with many queues that
+    // link scrolled out of sight.
+    { to: routes.folders, label: "Folders", icon: Folder, feature: "folders" },
     { to: routes.users, label: "Users", icon: Users, feature: "users", adminOnly: true },
     // Audit is admin-only: the trail shows actions only an admin performs
     // (connections, users, license), so reading it is a different right from pausing a queue.
@@ -161,20 +163,6 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
           </div>
         )}
 
-        {foldersEnabled ? (
-          <NavItem to={routes.folders} icon={Folder} label="Manage folders" className="mt-1 text-xs" onNavigate={onNavigate} />
-        ) : (
-          <button
-            type="button"
-            onClick={() => openUpsell("folders")}
-            className="nav-item mt-1 w-full text-left"
-            title="Custom folders are a Pro feature"
-          >
-            <FolderLock className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
-            <span className="flex-1 truncate text-xs">Custom folders</span>
-            <LockIcon />
-          </button>
-        )}
       </div>
 
       <nav className="border-t border-border px-2 py-2" aria-label="Secondary">
@@ -204,12 +192,6 @@ export function Sidebar({ onOpenSwitcher, onNavigate, className }: SidebarProps)
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-fg-subtle uppercase">{children}</div>;
-}
-
-/** Personal sidebar layout (pins and drag order) of whoever is signed in. */
-function useLayout() {
-  const { user } = useAuth();
-  return useSidebarLayout(user?.id);
 }
 
 /** The row being dragged floats above its siblings. */
@@ -247,7 +229,7 @@ function Pinned({
   folders: FolderModel[];
   onNavigate?: () => void;
 }) {
-  const { layout, move } = useLayout();
+  const { layout, move } = useSidebarLayout();
   const lookup = lookupIn(byConnection);
   // ponytail: a pin whose queue or folder is gone (or not loaded yet, or folders
   // are locked) is just not shown; it comes back if the target does.
@@ -295,7 +277,7 @@ function Pinned({
 
 /** Pin or unpin a queue or folder. Zero width until its row (`group/pin`) is hovered or it is focused. */
 function PinButton({ pinRef, label }: { pinRef: string; label: string }) {
-  const { layout, togglePin } = useLayout();
+  const { layout, togglePin } = useSidebarLayout();
   const pinned = layout.pinned.includes(pinRef);
   return (
     <button
@@ -369,7 +351,7 @@ function ConnectionGroup({
   const params = useParams();
   const isCurrent = params.connectionId === connection.id;
   const [open, toggle, setOpen] = useExpanded(`conn.${connection.id}`, defaultOpen);
-  const { layout, move } = useLayout();
+  const { layout, move } = useSidebarLayout();
   const list = `conn.${connection.id}`;
   const byName = useMemo(() => [...queues].sort((a, b) => a.name.localeCompare(b.name)), [queues]);
   const sorted = applyOrder(byName, (q) => q.name, layout.order[list]);
@@ -500,7 +482,7 @@ function FolderNode({
   const [open, toggle] = useExpanded(`folder.${folder.id}`);
   const params = useParams();
   const row = useSortableRow(sortId);
-  const { layout, move } = useLayout();
+  const { layout, move } = useSidebarLayout();
   const isCurrent = params.folderId === folder.id;
   // Two levels, as before: a subfolder does not list its own subfolders.
   const children = depth === 0 ? folderChildren(folders, folder.id, layout.order) : [];
