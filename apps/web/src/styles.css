@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/* Design tokens. Dark is the default; light follows the OS setting.   */
+/* Design tokens. Dark is the default; light when <html data-theme="light"> */
+/* (set by index.html and src/lib/theme.ts from the user's choice or OS). */
 /* ------------------------------------------------------------------ */
 :root {
   color-scheme: dark;
@@ -45,45 +46,43 @@
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
+:root[data-theme="light"] {
+  color-scheme: light;
 
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --surface-2: #f1f3f5;
-    --surface-3: #e7eaee;
-    --border: #e1e4e8;
-    --border-strong: #c9cfd6;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f1f3f5;
+  --surface-3: #e7eaee;
+  --border: #e1e4e8;
+  --border-strong: #c9cfd6;
 
-    --fg: #1b1f24;
-    --fg-muted: #57606a;
-    --fg-subtle: #8b949e;
+  --fg: #1b1f24;
+  --fg-muted: #57606a;
+  --fg-subtle: #8b949e;
 
-    --accent: #2f6feb;
-    --accent-hover: #1f5fd6;
-    --accent-fg: #ffffff;
+  --accent: #2f6feb;
+  --accent-hover: #1f5fd6;
+  --accent-fg: #ffffff;
 
-    --success: #1a7f37;
-    --warning: #9a6700;
-    --danger: #cf222e;
-    --info: #0969da;
-    --violet: #8250df;
-    --teal: #0f8a83;
-    --pro: #8250df;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --danger: #cf222e;
+  --info: #0969da;
+  --violet: #8250df;
+  --teal: #0f8a83;
+  --pro: #8250df;
 
-    --state-completed: #1a7f37;
-    --state-active: #0969da;
-    --state-waiting: #9a6700;
-    --state-delayed: #8250df;
-    --state-failed: #cf222e;
-    --state-prioritized: #6e7781;
-    --state-paused: #6e7781;
-    --state-waiting-children: #6e7781;
-    --state-unknown: #8b949e;
+  --state-completed: #1a7f37;
+  --state-active: #0969da;
+  --state-waiting: #9a6700;
+  --state-delayed: #8250df;
+  --state-failed: #cf222e;
+  --state-prioritized: #6e7781;
+  --state-paused: #6e7781;
+  --state-waiting-children: #6e7781;
+  --state-unknown: #8b949e;
 
-    --shadow: 0 8px 30px rgba(15, 23, 42, 0.14);
-  }
+  --shadow: 0 8px 30px rgba(15, 23, 42, 0.14);
 }
 
 @theme inline {
@@ -277,7 +276,7 @@
    * not take part in the overflow, and the text wraps instead of growing.
    */
   .tooltip {
-    @apply pointer-events-none invisible absolute z-50 max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
+    @apply pointer-events-none invisible absolute z-50 w-max max-w-xs rounded-md border border-border bg-surface-3 px-2 py-1 text-[11px] text-fg opacity-0 shadow-lg transition-opacity;
     text-wrap: pretty;
   }
   .has-tooltip:hover .tooltip,

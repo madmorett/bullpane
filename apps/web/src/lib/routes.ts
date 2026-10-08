@@ -47,7 +47,7 @@ export const routes = {
   flows: (cid?: string) => (cid ? `/flows/${e(cid)}` : "/flows"),
   /** one flow map, manual or detected (`detected:<cid>:<root>`) */
   flowMap: (id: string) => `/flows?map=${e(id)}`,
-  settings: (tab: "connections" | "license" | "about" = "connections") => `/settings/${tab}`,
+  settings: (tab: "connections" | "attention" | "sso" | "mcp" | "license" | "appearance" | "about" = "connections") => `/settings/${tab}`,
 };
 
 /** queueKey "bull:orders" -> "orders"; handles prefixes with colons via the known prefix. */

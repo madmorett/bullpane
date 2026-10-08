@@ -99,12 +99,13 @@ export function TopBar({ onOpenSwitcher, onToggleSidebar }: { onOpenSwitcher: ()
         </div>
       )}
       <HealthTopBarSummary />
-      <Button variant="ghost" size="icon-sm" aria-label="Search queues" onClick={onOpenSwitcher} className="sm:hidden">
+      <Button variant="ghost" size="icon-sm" aria-label="Search" onClick={onOpenSwitcher} className="sm:hidden">
         <Search />
       </Button>
       <button
         type="button"
         onClick={onOpenSwitcher}
+        aria-label="Search"
         className="hidden h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs text-fg-subtle hover:border-border-strong hover:text-fg-muted sm:inline-flex"
       >
         <Search className="size-3.5" aria-hidden />
