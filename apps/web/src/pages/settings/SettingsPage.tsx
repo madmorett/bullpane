@@ -1,15 +1,16 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Bot, Database, Info, KeyRound, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Bot, Database, Info, KeyRound, Palette, ShieldCheck } from "lucide-react";
 import { Page, PageHeader } from "@/components/layout/AppShell";
 import { Tabs } from "@/components/ui/Tabs";
 import { AttentionTab } from "./AttentionTab";
 import { ConnectionsTab } from "./ConnectionsTab";
 import { LicenseTab } from "./LicenseTab";
 import { AboutTab } from "./AboutTab";
+import { AppearanceTab } from "./AppearanceTab";
 import { SsoTab } from "@/ee/pages/settings/SsoTab";
 import { McpTab } from "@/ee/pages/settings/McpTab";
 
-const TABS = ["connections", "attention", "sso", "mcp", "license", "about"] as const;
+const TABS = ["connections", "attention", "sso", "mcp", "license", "appearance", "about"] as const;
 type Tab = (typeof TABS)[number];
 
 export function SettingsPage() {
@@ -32,6 +33,7 @@ export function SettingsPage() {
           { value: "sso", label: "SSO", icon: <ShieldCheck className="size-3.5" /> },
           { value: "mcp", label: "MCP", icon: <Bot className="size-3.5" /> },
           { value: "license", label: "License", icon: <KeyRound className="size-3.5" /> },
+          { value: "appearance", label: "Appearance", icon: <Palette className="size-3.5" /> },
           { value: "about", label: "About", icon: <Info className="size-3.5" /> },
         ]}
       />
@@ -40,6 +42,7 @@ export function SettingsPage() {
       {current === "sso" && <SsoTab />}
       {current === "mcp" && <McpTab />}
       {current === "license" && <LicenseTab />}
+      {current === "appearance" && <AppearanceTab />}
       {current === "about" && <AboutTab />}
     </Page>
   );
