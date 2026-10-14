@@ -1,4 +1,4 @@
-import type { GroupsResponse, JobsPage } from "@bullpane/shared";
+import type { DelayedGroupsPage, GroupsResponse, JobsPage } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../auth/guards";
@@ -25,6 +25,15 @@ export async function groupRoutes(app: FastifyInstance): Promise<void> {
     const { start, end } = pageToRange(query.page, query.pageSize);
     const page = await withRedis(() => inspector.getGroups(request.params.queue, { start, end }));
     return { ...page, bullmqProApi: inspector.bullmqProApi };
+  });
+
+  // Groups with delayed jobs (BullMQ Pro indexes none of them). Not `/groups/delayed`:
+  // "delayed" is a valid group id, and its page lives at `/groups/:groupId`.
+  app.get<QueueParams>(`${base}-delayed`, { preHandler: [viewer] }, async (request): Promise<DelayedGroupsPage> => {
+    // "<score>:<jobId>" of the last job read
+    const query = z.object({ cursor: z.string().max(300).regex(/^[^:]+:.+$/).optional() }).parse(request.query);
+    const inspector = await app.ctx.connections.getInspector(request.params.id);
+    return withRedis(() => inspector.getDelayedGroups(request.params.queue, { cursor: query.cursor ?? null }));
   });
 
   app.get<GroupParams>(`${base}/:groupId/jobs`, { preHandler: [viewer] }, async (request): Promise<JobsPage> => {

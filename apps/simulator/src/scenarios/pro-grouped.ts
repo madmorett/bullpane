@@ -31,7 +31,8 @@ export async function startProGrouped(ctx: SimContext, redis: Redis): Promise<vo
   await groups.setMeta("tenant-initech", { concurrency: 2, limit: { max: 100, duration: 10_000 } });
   await groups.setPaused(PAUSED, true);
   await groups.setRateLimited(LIMITED, Date.now() + 60_000);
-  ctx.loop("pro.limit", 60_000, () => groups.setRateLimited(LIMITED, Date.now() + 60_000), 60_000);
+  // jitter 0: the limit must be re-armed right as it lifts (the 4th argument is a jitter fraction)
+  ctx.loop("pro.limit", 60_000, () => groups.setRateLimited(LIMITED, Date.now() + 60_000), 0);
 
   // Seed every tenant so the groups view is full from the first refresh.
   for (const gid of R.TENANTS) {
@@ -54,6 +55,27 @@ export async function startProGrouped(ctx: SimContext, redis: Redis): Promise<vo
     if (job.id) await groups.enqueue(gid, job.id);
     stats.added(QUEUE);
   }
+
+  // Scheduled campaigns: delayed jobs of groups Pro has not indexed yet (it indexes a
+  // group once one of its jobs is due), so the groups page shows its "delayed only"
+  // rows, the Delayed column and promote-all / spread. The group id is on the hash
+  // (`gid`) as Pro writes it; nothing is mirrored into a group list until it is due.
+  const CAMPAIGNS = ["campaign-spring-sale", "campaign-renewals", "campaign-winback"];
+  async function schedule(gid: string, count: number): Promise<void> {
+    const startIn = R.int(20, 90) * 60_000;
+    const jobs = Array.from({ length: count }, (_, i) => ({
+      name: "send-campaign-email",
+      data: { campaign: gid, recipient: R.email(), template: R.pick(["promo-a", "promo-b", "reminder"]) },
+      opts: { group: { id: gid }, delay: startIn + i * R.int(5, 40) * 1000 } as JobsOptions,
+    }));
+    const added = await queue.addBulk(jobs);
+    const pipe = redis.pipeline();
+    for (const job of added) if (job.id) pipe.hset(`${prefix}:${QUEUE}:${job.id}`, "gid", gid);
+    await pipe.exec();
+    for (let i = 0; i < added.length; i++) stats.added(QUEUE);
+  }
+  for (const gid of CAMPAIGNS) await schedule(gid, R.int(40, 240));
+  ctx.loop("pro.campaigns", 10 * 60_000, () => schedule(R.pick(CAMPAIGNS), R.int(20, 80)));
 
   // Producer: skewed so a couple of tenants are always "noisy".
   ctx.loop("pro.produce", ctx.every(700), async () => {

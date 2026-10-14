@@ -11,6 +11,7 @@ import {
   type BulkJobAction,
   type BulkJobActionResult,
   type BulkJobFailure,
+  type DelayedGroupsPage,
   type DiscoveryStatus,
   GROUP_STATUSES,
   type GroupStatus,
@@ -25,6 +26,7 @@ import {
   type JobSummary,
   type PromoteJobResult,
   type PromoteMatchingResult,
+  type CountMatchingResult,
   type SchedulerPromoteMode,
   type QueueCounts,
   type QueueMetrics,
@@ -59,6 +61,7 @@ import {
   hashToDetail,
   hashToSummary,
   parseScore,
+  delayedUntilFromScore,
   metricPoints,
   parseGroupId,
   parseOpts,
@@ -70,6 +73,7 @@ import {
 } from "./parse.js";
 import { callScript, defineScripts, pipelineScript, type RedisClient } from "./scripts.js";
 import type {
+  SpreadPlan,
   CleanableState,
   FlowEdgeSample,
   Inspector,
@@ -90,6 +94,7 @@ const DEFAULTS: Required<InspectorOptions> = {
   previewBytes: 2048,
   maxScanPerCall: 1000,
   groupScanPerCall: 10_000,
+  delayedGroupsScanPerCall: 2500,
   connectTimeoutMs: 5000,
   maxScanIterations: 2000,
   discoveryScanBudgetMs: 1500,
@@ -129,8 +134,10 @@ const STATS_METRIC_POINTS = 60;
  * about the same time and keeps Redis breathing.
  */
 const BULK_CONCURRENCY = 8;
-/** Search slices one promoteMatching call may run before handing back a cursor. */
+/** Search slices one promoteMatching / countMatching call may run before handing back a cursor. */
 const PROMOTE_MATCHING_MAX_CALLS = 50;
+/** Matches one countMatching call may count (it keeps only ids, nothing is written). */
+const COUNT_MATCHING_LIMIT = 50_000;
 /** Trailing window for QueueRates (success / failure %). */
 const DEFAULT_RATE_WINDOW_MINUTES = 60;
 /**
@@ -725,31 +732,33 @@ export class RedisInspector implements Inspector {
   }
 
   /**
-   * The search script over `delayed`, with payload previews cut to 0 bytes: only
-   * the ids are needed. Runs slice after slice until `limit` matches or
-   * PROMOTE_MATCHING_MAX_CALLS calls, so one request stays bounded on a state of
-   * millions. Each slice is the same bounded call the search box makes.
+   * The search script over `delayed`, soonest first, with payload previews cut to 0
+   * bytes: only ids and scores are needed. Runs slice after slice until `limit`
+   * matches or PROMOTE_MATCHING_MAX_CALLS calls, so one request stays bounded on a
+   * state of millions. The cursor is the score and id of the last job read: what
+   * promote-matching removes or reschedules earlier ends up behind it, never read
+   * twice and never shifting what is left.
    */
-  private async scanDelayedIds(
+  private async scanDelayedMatches(
     queueName: string,
     match: { query: string; groupId: string },
-    cursor: number,
+    cursor: string,
     limit: number,
-  ): Promise<{ ids: string[]; scanned: number; total: number; end: number; exhausted: boolean }> {
+  ): Promise<{ jobs: { id: string; runAt: number }[]; scanned: number; total: number; nextCursor: string | null }> {
     const c = await this.ensureConnected();
-    const ids: string[] = [];
+    const jobs: { id: string; runAt: number }[] = [];
     let scanned = 0;
     let total = 0;
     let at = cursor;
-    for (let call = 0; call < PROMOTE_MATCHING_MAX_CALLS && ids.length < limit; call++) {
+    for (let call = 0; call < PROMOTE_MATCHING_MAX_CALLS && jobs.length < limit; call++) {
       const reply = asArray(
         await callScript(c, "getJobsSearch", [
           stateKey(this.config.prefix, queueName, "delayed"),
-          STATE_KEY.delayed.type,
+          "zset-asc",
           at,
           match.groupId && !match.query ? this.opts.groupScanPerCall : this.opts.maxScanPerCall,
           match.query.toLowerCase(),
-          limit - ids.length,
+          limit - jobs.length,
           queueKeyPrefix(this.config.prefix, queueName),
           0,
           this.opts.searchFieldCapBytes,
@@ -759,14 +768,27 @@ export class RedisInspector implements Inspector {
           ...JOB_SUMMARY_FIELDS,
         ]),
       );
-      for (const row of asArray(reply[0])) ids.push(String(asArray(row)[0]));
+      for (const row of asArray(reply[0])) {
+        const r = asArray(row);
+        jobs.push({ id: String(r[0]), runAt: delayedUntilFromScore("delayed", parseScore(r[r.length - 1])) ?? 0 });
+      }
       scanned += asNumber(reply[2]);
       total = asNumber(reply[3]);
-      const next = asNumber(reply[1], -1);
-      if (next < 0) return { ids, scanned, total, end: at + asNumber(reply[2]), exhausted: true };
+      const next = reply[1];
+      if (typeof next !== "string") return { jobs, scanned, total, nextCursor: null };
       at = next;
     }
-    return { ids, scanned, total, end: at, exhausted: false };
+    return { jobs, scanned, total, nextCursor: at };
+  }
+
+  async countMatching(queueName: string, match: { query?: string; groupId?: string }, opts: { cursor?: string | null }): Promise<CountMatchingResult> {
+    const query = match.query?.trim() ?? "";
+    const groupId = match.groupId ?? "";
+    if (!query && !groupId) throw new Error("query_or_group_required");
+    // Counting keeps no state between calls, so a call may count far more than one
+    // promote-matching call acts on; the slices stay bounded the same way.
+    const scan = await this.scanDelayedMatches(queueName, { query, groupId }, opts.cursor ?? "", COUNT_MATCHING_LIMIT);
+    return { matched: scan.jobs.length, scanned: scan.scanned, total: scan.total, nextCursor: scan.nextCursor };
   }
 
   async getJob(queueName: string, jobId: string): Promise<JobDetail | null> {
@@ -969,6 +991,39 @@ export class RedisInspector implements Inspector {
       ...opts,
       order: "desc",
     });
+  }
+
+  /**
+   * One EVALSHA over a slice of `delayed` (delayedGroupsScanPerCall jobs, soonest first, the
+   * cursor a score so jobs leaving `delayed` meanwhile do not shift it):
+   * one HMGET of the group fields + opts per job, never the payload, and the
+   * search byte budget on the opts read. See getDelayedGroups.lua.
+   */
+  async getDelayedGroups(queueName: string, opts: { cursor?: string | null }): Promise<DelayedGroupsPage> {
+    const c = await this.ensureConnected();
+    const reply = asArray(
+      await callScript(c, "getDelayedGroups", [
+        stateKey(this.config.prefix, queueName, "delayed"),
+        opts.cursor ?? "",
+        this.opts.delayedGroupsScanPerCall,
+        queueKeyPrefix(this.config.prefix, queueName),
+        GROUP_ID_FIELDS.join(","),
+        this.opts.searchByteBudget,
+      ]),
+    );
+    const rows = asArray(reply[4]);
+    const groups: DelayedGroupsPage["groups"] = [];
+    for (let i = 0; i + 3 < rows.length; i += 4) {
+      const status = rows[i + 3];
+      groups.push({
+        id: String(rows[i]),
+        delayed: asNumber(rows[i + 1]),
+        nextRunAt: delayedUntilFromScore("delayed", parseScore(rows[i + 2])) ?? 0,
+        status: typeof status === "string" && isGroupStatus(status) ? status : null,
+      });
+    }
+    const next = typeof reply[0] === "string" ? reply[0] : "";
+    return { groups, ungrouped: asNumber(reply[3]), scanned: asNumber(reply[1]), total: asNumber(reply[2]), nextCursor: next === "" ? null : next };
   }
 
   // ---------------------------------------------------------------------------
@@ -1373,33 +1428,68 @@ export class RedisInspector implements Inspector {
   async promoteMatching(
     queueName: string,
     match: { query?: string; groupId?: string },
-    opts: { cursor?: string | null; limit: number },
+    opts: { cursor?: string | null; limit: number; spread?: SpreadPlan },
   ): Promise<PromoteMatchingResult> {
     const query = match.query?.trim() ?? "";
     const groupId = match.groupId ?? "";
     if (!query && !groupId) throw new Error("query_or_group_required");
-    const cursor = Math.max(0, toInt(opts.cursor ?? "0", 0));
-    const scan = await this.scanDelayedIds(queueName, { query, groupId }, cursor, Math.max(1, opts.limit));
+    const scan = await this.scanDelayedMatches(queueName, { query, groupId }, opts.cursor ?? "", Math.max(1, opts.limit));
 
     let promoted = 0;
+    let rescheduled = 0;
+    let unchanged = 0;
     const failed: BulkJobFailure[] = [];
     let failedCount = 0;
-    const run = async (jobId: string): Promise<void> => {
+    const spread = opts.spread;
+    const run = async (job: { id: string; runAt: number }, index: number): Promise<void> => {
       try {
-        await this.promoteJob(queueName, jobId);
-        promoted++;
+        if (!spread) {
+          await this.promoteJob(queueName, job.id);
+          promoted++;
+          return;
+        }
+        // Even slots from `from` to `until` in the soonest-first order the scan reads,
+        // so the relative order is kept; a job already due sooner than its slot stays.
+        const k = spread.offset + index;
+        const slot = spread.total <= 1 ? spread.from : spread.from + ((spread.until - spread.from) * Math.min(k, spread.total - 1)) / (spread.total - 1);
+        const target = Math.round(Math.min(job.runAt, slot));
+        if (target >= job.runAt) {
+          unchanged++;
+          return;
+        }
+        await this.rescheduleJob(queueName, job.id, target);
+        rescheduled++;
       } catch (err) {
         failedCount++;
-        if (failed.length < 20) failed.push({ jobId, reason: errorMessage(err) });
+        if (failed.length < 20) failed.push({ jobId: job.id, reason: errorMessage(err) });
       }
     };
-    for (let i = 0; i < scan.ids.length; i += BULK_CONCURRENCY) {
-      await Promise.all(scan.ids.slice(i, i + BULK_CONCURRENCY).map(run));
+    for (let i = 0; i < scan.jobs.length; i += BULK_CONCURRENCY) {
+      await Promise.all(scan.jobs.slice(i, i + BULK_CONCURRENCY).map((job, j) => run(job, i + j)));
     }
-    // The cursor is an index into `delayed`, newest first. Every promoted job left
-    // the part already scanned, so the rest of the state moved up by that many.
-    const next = scan.exhausted ? null : String(Math.max(0, scan.end - promoted));
-    return { matched: scan.ids.length, promoted, failed, failedCount, scanned: scan.scanned, total: scan.total, nextCursor: next };
+    return {
+      matched: scan.jobs.length,
+      promoted,
+      rescheduled,
+      unchanged,
+      failed,
+      failedCount,
+      scanned: scan.scanned,
+      total: scan.total,
+      nextCursor: scan.nextCursor,
+    };
+  }
+
+  /**
+   * Official API: Job.changeDelay moves a delayed job to a new run time in the
+   * `delayed` zset. It does not touch the group (a BullMQ Pro job keeps its `gid` and
+   * joins its group when due), so it is safe on Pro queues with core bullmq too.
+   */
+  private async rescheduleJob(queueName: string, jobId: string, runAt: number): Promise<void> {
+    const job = await this.getBullJob(queueName, jobId);
+    const state = await job.getState();
+    if (state !== "delayed") throw new Error(`cannot_reschedule_job_in_state_${state}`);
+    await job.changeDelay(Math.max(0, runAt - Date.now()));
   }
 
   /**

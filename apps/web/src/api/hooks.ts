@@ -18,6 +18,7 @@ import type {
   PromoteJobResult,
   PromoteMatchingInput,
   PromoteMatchingResult,
+  CountMatchingResult,
   SchedulerPromoteMode,
   AuditAction,
   AuditPage,
@@ -39,6 +40,7 @@ import type {
   Folder,
   DiscoveryStatus,
   GroupsResponse,
+  DelayedGroupsPage,
   HiddenQueue,
   JobDetail,
   JobSearchResult,
@@ -567,12 +569,33 @@ export function useGroups(cid: string | undefined, queue: string | undefined, pa
   });
 }
 
+/** One bounded call of GET /jobs/count-matching (the preview); PromoteMatchingDialog loops over the cursor. */
+export function useCountMatching(cid: string, queue: string) {
+  return useMutation({
+    mutationFn: (input: { query?: string; groupId?: string; cursor?: string }) =>
+      api.get<CountMatchingResult>(`${queuePath(cid, queue)}/jobs/count-matching`, { query: { query: input.query, groupId: input.groupId, cursor: input.cursor } }),
+  });
+}
+
 /** One bounded call of POST /jobs/promote-matching; PromoteMatchingDialog loops over the cursor. */
 export function usePromoteMatching(cid: string, queue: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: PromoteMatchingInput) => api.post<PromoteMatchingResult>(`${queuePath(cid, queue)}/jobs/promote-matching`, input),
     onSettled: () => qc.invalidateQueries({ queryKey: qk.queue(cid, queue) }),
+  });
+}
+
+/** Groups with delayed jobs: pages of a bounded scan of `delayed`, continued by cursor. */
+export function useDelayedGroups(cid: string | undefined, queue: string | undefined, opts: { enabled?: boolean; refetchMs?: number | false } = {}) {
+  return useInfiniteQuery({
+    queryKey: [...qk.queue(cid ?? "", queue ?? ""), "delayed-groups"] as const,
+    queryFn: ({ pageParam }) => api.get<DelayedGroupsPage>(`${queuePath(cid!, queue!)}/groups-delayed`, { query: { cursor: pageParam } }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: !!cid && !!queue && (opts.enabled ?? true),
+    staleTime: 30_000,
+    refetchInterval: opts.refetchMs ?? false,
   });
 }
 

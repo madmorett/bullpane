@@ -1634,4 +1634,106 @@ describe("promoteMatching", () => {
   it("needs a query or a group", async () => {
     await expect(inspector.promoteMatching("promote-query", {}, { limit: 10 })).rejects.toThrow(/query_or_group_required/);
   });
+  it("counts the matches without touching them (the preview)", async () => {
+    const queue = q("promote-count");
+    for (let i = 0; i < 4; i++) await queue.add("send", { tag: "count-me", i }, { delay: 60_000 });
+    await queue.add("send", { tag: "other" }, { delay: 60_000 });
+    const res = await inspector.countMatching("promote-count", { query: '"tag":"count-me"' }, {});
+    expect(res).toMatchObject({ matched: 4, total: 5, nextCursor: null });
+    expect(await queue.getDelayedCount()).toBe(5);
+  });
+  it("spreads the matches over a window instead: soonest first, order kept, never later", async () => {
+    const queue = q("promote-spread");
+    const now = Date.now();
+    const ids: string[] = [];
+    // due in 20, 30, 40, 50 minutes; one more due in 10 s, sooner than its slot
+    for (const min of [20, 30, 40, 50]) ids.push((await queue.add("send", { tag: "spread", min }, { delay: min * 60_000 })).id!);
+    const early = (await queue.add("send", { tag: "spread", early: true }, { delay: 10_000 })).id!;
+    // a window starting in 1 minute: the job due in 10 s is already sooner than its slot
+    const from = now + 60_000;
+    const until = now + 10 * 60_000;
+    const res = await inspector.promoteMatching(
+      "promote-spread",
+      { query: '"tag":"spread"' },
+      { limit: 100, spread: { from, until, total: 5, offset: 0 } },
+    );
+    expect(res).toMatchObject({ matched: 5, promoted: 0, rescheduled: 4, unchanged: 1, failedCount: 0 });
+    const runAt = async (id: string) => Number((await raw.zscore("bull:promote-spread:delayed", id)) ?? 0) / 0x1000;
+    const times = [];
+    for (const id of ids) times.push(await runAt(id));
+    // the early job (slot 0) kept its 10 s; the four others got slots 1..4 of 0..4
+    expect(await runAt(early)).toBeLessThan(now + 15_000);
+    expect([...times].sort((a, b) => a - b)).toEqual(times);
+    // slot k of 0..4 = from + 9 min * k / 4: the first of the four gets slot 1
+    expect(times[0]!).toBeGreaterThanOrEqual(from + 2.25 * 60_000 - 2000);
+    expect(times[0]!).toBeLessThanOrEqual(from + 2.25 * 60_000 + 2000);
+    expect(times[3]!).toBeLessThanOrEqual(until + 2000);
+    for (const id of ids) expect(await (await queue.getJob(id))!.getState()).toBe("delayed");
+  });
+});
+
+describe("getDelayedGroups", () => {
+  // Delayed grouped jobs are marked by `gid` on the hash or opts.group.id (Pro layout, by hand).
+  beforeAll(async () => {
+    const queue = q("delayed-groups");
+    const add = async (delay: number, mark: { gid?: string; optsGroup?: string }) => {
+      const job = await queue.add("send", { n: delay }, { delay });
+      const key = `bull:delayed-groups:${job.id}`;
+      if (mark.gid) await raw.hset(key, "gid", mark.gid);
+      if (mark.optsGroup) {
+        const opts = JSON.parse((await raw.hget(key, "opts")) ?? "{}");
+        await raw.hset(key, "opts", JSON.stringify({ ...opts, group: { id: mark.optsGroup } }));
+      }
+    };
+    await add(60_000, { gid: "tenant-a" });
+    await add(120_000, { gid: "tenant-a" });
+    await add(90_000, { optsGroup: "tenant-b" });
+    await add(30_000, {});
+    // tenant-b also has a waiting job, so Pro indexes it; tenant-a has only delayed jobs
+    await raw.zadd("bull:delayed-groups:groups:paused", Date.now(), "tenant-b");
+  });
+
+  it("counts the delayed jobs of each group, with its soonest run, and the ungrouped ones", async () => {
+    const before = Date.now();
+    const page = await inspector.getDelayedGroups("delayed-groups", {});
+    expect(page).toMatchObject({ scanned: 4, total: 4, ungrouped: 1, nextCursor: null });
+    const byId = Object.fromEntries(page.groups.map((g) => [g.id, g]));
+    expect(byId["tenant-a"]?.delayed).toBe(2);
+    expect(byId["tenant-b"]?.delayed).toBe(1);
+    // read from Pro's status zsets in the same script, for every group of the slice
+    expect(byId["tenant-a"]?.status).toBeNull();
+    expect(byId["tenant-b"]?.status).toBe("paused");
+    expect(byId["tenant-a"]?.nextRunAt).toBeGreaterThanOrEqual(before + 50_000);
+    expect(byId["tenant-a"]?.nextRunAt).toBeLessThan(before + 70_000);
+  });
+  it("scans delayedGroupsScanPerCall jobs per call and resumes from the cursor", async () => {
+    const small = new RedisInspector({ id: "dg", url: URL }, { delayedGroupsScanPerCall: 3 });
+    const first = await small.getDelayedGroups("delayed-groups", {});
+    expect(first.scanned).toBe(3);
+    expect(first.nextCursor).toMatch(/^\d+:.+$/);
+    const second = await small.getDelayedGroups("delayed-groups", { cursor: first.nextCursor });
+    expect(second.scanned).toBe(1);
+    expect(second.nextCursor).toBeNull();
+    const delayed = [...first.groups, ...second.groups].reduce((n, g) => n + g.delayed, 0);
+    expect(delayed + first.ungrouped + second.ungrouped).toBe(4);
+    await small.close();
+  });
+  it("does not skip jobs when the soonest ones leave `delayed` between calls", async () => {
+    const queue = q("delayed-groups-moving");
+    for (let i = 0; i < 6; i++) await queue.add("send", { i }, { delay: 60_000 + i * 1000 });
+    const small = new RedisInspector({ id: "dgm", url: URL }, { delayedGroupsScanPerCall: 2 });
+    const first = await small.getDelayedGroups("delayed-groups-moving", {});
+    // the two soonest become due and a worker takes them: they leave the front of the zset
+    await raw.zpopmin("bull:delayed-groups-moving:delayed", 2);
+    let scanned = first.scanned;
+    let cursor = first.nextCursor;
+    while (cursor !== null) {
+      const page = await small.getDelayedGroups("delayed-groups-moving", { cursor });
+      scanned += page.scanned;
+      cursor = page.nextCursor;
+    }
+    // 2 read before they left + the 4 still delayed: none skipped, none read twice
+    expect(scanned).toBe(6);
+    await small.close();
+  });
 });

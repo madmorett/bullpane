@@ -15,6 +15,8 @@ import {
   PROMOTE_MATCHING_LIMIT,
   promoteMatchingSchema,
   type PromoteMatchingResult,
+  countMatchingQuerySchema,
+  type CountMatchingResult,
   searchJobsQuerySchema,
 } from "@bullpane/shared";
 import type { FastifyInstance } from "fastify";
@@ -198,14 +200,20 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const input = promoteMatchingSchema.parse(request.body ?? {});
     const inspector = await app.ctx.connections.getInspector(request.params.id);
     const result = await withRedis(() =>
-      inspector.promoteMatching(request.params.queue, { query: input.query, groupId: input.groupId }, { cursor: input.cursor ?? null, limit: PROMOTE_MATCHING_LIMIT }),
+      inspector.promoteMatching(
+        request.params.queue,
+        { query: input.query, groupId: input.groupId },
+        { cursor: input.cursor ?? null, limit: PROMOTE_MATCHING_LIMIT, spread: input.spread },
+      ),
     );
     // The query is the operator's own input, not job data; capped like everything else.
     request.auditDetail({
       ...(input.groupId ? { groupId: input.groupId } : {}),
       ...(input.query?.trim() ? { query: input.query.trim().slice(0, 100) } : {}),
+      ...(input.spread ? { spreadFrom: input.spread.from, spreadUntil: input.spread.until } : {}),
       matched: result.matched,
       promoted: result.promoted,
+      ...(input.spread ? { rescheduled: result.rescheduled, unchanged: result.unchanged } : {}),
       failed: result.failedCount,
       ...(result.failed.length > 0 ? { reasons: result.failed.slice(0, 10).map((f) => `${f.jobId}: ${f.reason}`) } : {}),
     });
@@ -214,5 +222,16 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       "promoted matching delayed jobs",
     );
     return result;
+  });
+
+  /**
+   * The preview of promote-matching: how many delayed jobs it would act on. Read only
+   * (viewer), the same bounded slices, no audit row. Promote-matching with `spread`
+   * needs this total to lay the jobs out.
+   */
+  app.get<QueueParams>(`${base}/count-matching`, { preHandler: [viewer] }, async (request): Promise<CountMatchingResult> => {
+    const query = countMatchingQuerySchema.parse(request.query);
+    const inspector = await app.ctx.connections.getInspector(request.params.id);
+    return withRedis(() => inspector.countMatching(request.params.queue, { query: query.query, groupId: query.groupId }, { cursor: query.cursor ?? null }));
   });
 }

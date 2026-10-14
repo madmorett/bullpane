@@ -1002,6 +1002,26 @@ export interface GroupsPage {
  * next to Bullpane: the group actions (pause, resume, drain) and group-aware
  * promote / retry / remove need it (docs/BULLMQ-PRO.md).
  */
+/**
+ * BullMQ Pro: groups that have delayed jobs. Pro keeps those jobs in the queue's
+ * `delayed` zset, not under the group, and a group whose jobs are all delayed is in
+ * no index, so GET /groups cannot list it. This comes from a bounded, resumable
+ * scan of `delayed` (soonest first); counts are for the slice scanned, so the UI
+ * adds them up across calls.
+ */
+export interface DelayedGroupsPage {
+  /**
+   * `status` is the group's place in Pro's index when it has one, null when Pro does
+   * not index it (all its jobs are delayed): read per group in the same script.
+   */
+  groups: { id: string; delayed: number; nextRunAt: number; status: GroupStatus | null }[];
+  /** delayed jobs without a group in this slice */
+  ungrouped: number;
+  scanned: number;
+  total: number;
+  nextCursor: string | null;
+}
+
 export interface GroupsResponse extends GroupsPage {
   bullmqProApi: boolean;
 }
@@ -1195,24 +1215,61 @@ export interface BulkJobActionResult {
  */
 export const PROMOTE_MATCHING_LIMIT = 2000;
 
+/** The longest window promote-matching may spread jobs over. */
+export const SPREAD_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+
+const matchFields = {
+  query: z.string().max(500).optional(),
+  groupId: z.string().min(1).max(200).optional(),
+  /** opaque, from a previous call's nextCursor: "<score>:<jobId>" of the last job read */
+  cursor: z.string().max(300).optional(),
+};
+const hasMatch = (v: { query?: string; groupId?: string }) => !!v.query?.trim() || v.groupId !== undefined;
+
 /**
  * Promote every delayed job that matches, not only the ones on screen: the jobs of
  * one BullMQ Pro group (`groupId`), the ones whose id / name / data contains
  * `query`, or both. `cursor` continues a previous call.
+ *
+ * `spread` (optional) reschedules them instead of running them now: the matching
+ * jobs, soonest first, are laid out evenly from `from` to `until` (unix ms), keeping
+ * their order, and a job never moves later than it was. `total` is how many will be
+ * laid out (from a count-matching preview) and `offset` how many earlier calls did.
  */
 export const promoteMatchingSchema = z
   .object({
-    query: z.string().max(500).optional(),
-    groupId: z.string().min(1).max(200).optional(),
-    cursor: z.string().max(20).optional(),
+    ...matchFields,
+    spread: z
+      .object({
+        from: z.number().int().nonnegative(),
+        until: z.number().int().nonnegative(),
+        total: z.number().int().min(1),
+        offset: z.number().int().nonnegative(),
+      })
+      .refine((s) => s.until > s.from, { message: "until must be after from", path: ["until"] })
+      .refine((s) => s.until - s.from <= SPREAD_MAX_MS, { message: "the window is at most 7 days", path: ["until"] })
+      .optional(),
   })
-  .refine((v) => !!v.query?.trim() || v.groupId !== undefined, { message: "query or groupId is required", path: ["query"] });
+  .refine(hasMatch, { message: "query or groupId is required", path: ["query"] });
 export type PromoteMatchingInput = z.infer<typeof promoteMatchingSchema>;
+
+/** Count the delayed jobs promote-matching would act on, without touching them. */
+export const countMatchingQuerySchema = z.object(matchFields).refine(hasMatch, { message: "query or groupId is required", path: ["query"] });
+
+export interface CountMatchingResult {
+  matched: number;
+  scanned: number;
+  total: number;
+  nextCursor: string | null;
+}
 
 export interface PromoteMatchingResult {
   /** delayed jobs that matched in this call */
   matched: number;
   promoted: number;
+  /** with `spread`: moved earlier, and already due before their slot (left alone) */
+  rescheduled: number;
+  unchanged: number;
   /** at most 20 of the failures, with BullMQ's reason; `failedCount` has them all */
   failed: BulkJobFailure[];
   failedCount: number;

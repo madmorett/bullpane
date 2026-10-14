@@ -271,11 +271,26 @@ now" is thousands of delayed jobs nobody selects by hand. `Inspector.promoteMatc
 reuses the search script over `delayed` (group filter and / or substring, payload
 previews cut to 0 bytes since only ids are needed), stops after `PROMOTE_MATCHING_LIMIT`
 matches or 50 slices, and promotes them through `promoteJob`, so grouped jobs go back
-into their group on a Pro queue. The cursor it returns is the scan position minus the
-jobs it promoted: they left the part already scanned, so the rest moved up. The UI
-loops over the cursor with a running count and a stop button. On the queue page a
+into their group on a Pro queue. It reads soonest first (`zset-asc` in the search
+script) and its cursor is the score and id of the last job read: what it promotes or
+moves earlier ends up behind the cursor, so nothing is read twice and nothing shifts.
+
+Before acting, the dialog counts (`countMatching`, the same slices, nothing written):
+the operator sees "N jobs" before any of them runs. Then either they run now or,
+optionally, they are **spread over a window**: `Job.changeDelay` lays the matches
+out evenly from now to the chosen time in the order they were already in, and a job
+already due sooner than its slot keeps its time, so nothing is ever postponed. The
+count is the `total` of that layout and each call passes how many earlier calls laid
+out. changeDelay only moves the job within `delayed` (it keeps its group id), so it is
+safe on BullMQ Pro queues with core bullmq too. Postgres refuses `spread`: its search
+pages by index, and a rescheduled job would be read again.
+
+The UI loops over the cursor with a running count and a stop button. On the queue page a
 group filter brings a toolbar with the group actions (pause, resume, promote all
-delayed, drain), so a group Pro has not indexed (only delayed jobs) gets them too.
+delayed, drain), so a group Pro has not indexed (only delayed jobs) gets them too; the
+groups table selects several groups and runs the same actions on all of them (4 at a
+time, one audited call each). `group:<id>` in the search box is the same group filter
+plus any text (`lib/searchQuery.ts`).
 
 On the web side the selection is keyed by **jobId, never by index**
 (`apps/web/src/lib/useJobSelection.ts`). The table repolls every 3 s and rows
@@ -657,6 +672,20 @@ against `@taskforcesh/bullmq-pro` 7.48.0. The facts that shape the reader:
   at `GROUP_WAITING_CAP` (1000) groups and flagged `complete: false` past it. Lists of
   queues (overview, sidebar) do not pay for it. With a group filter the waiting tab shows
   that group's own total.
+- The groups page lists what Pro indexes, which excludes every group whose jobs are all
+  delayed: often exactly the groups an operator wants to act on. The groups table therefore
+  has a Delayed column and "delayed only" rows, from `getDelayedGroups.lua`: a bounded slice
+  of `delayed` per call (soonest first, 2500 jobs: measured worst case, every job in its own
+  group, ~6.5 ms of Redis), one HMGET of the group fields and opts per job,
+  counts and soonest run per group, and per distinct group one ZSCORE in each of the four
+  status zsets, so the scan itself says whether Pro indexes the group (no client-side
+  guess, whatever the number of groups). Its cursor is the score and id of the last job
+  read, not an index: due jobs leave `delayed` from the front while the scan runs, and an
+  index would skip one job for each. The UI chains up to 40 calls and sums them (a "+"
+  while part of the state is unscanned), redoes a complete scan every 30 s when it fit in
+  one round, and never shows as "delayed only" a group the polled rows show as indexed. The "delayed only" rows (not indexed) continue the
+  indexed groups in one paginated row space: the server pages the indexed part, the page
+  fills the rest from the delayed-only list.
 
 Reads are read-only, one EVALSHA per page (`getGroups.lua`). The simulator writes the same
 layout so the demo shows groups without needing a Pro token.

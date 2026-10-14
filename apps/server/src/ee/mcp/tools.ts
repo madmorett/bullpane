@@ -391,18 +391,61 @@ export const MCP_TOOLS: McpTool[] = [
     name: "promote_matching",
     title: "Promote every matching delayed job",
     description:
-      "Promotes the delayed jobs of a BullMQ Pro group (group_id) and / or whose id, name or data contains query, beyond the 500-id limit of bulk_job_action. Each call promotes at most 2000 and returns next_cursor: call again with it until it is null. Grouped jobs go back into their group (needs BullMQ Pro's package next to Bullpane).",
+      "Promotes the delayed jobs of a BullMQ Pro group (group_id) and / or whose id, name or data contains query, beyond the 500-id limit of bulk_job_action. Each call acts on at most 2000 and returns next_cursor: call again with it until it is null. Grouped jobs go back into their group (needs BullMQ Pro's package next to Bullpane). With spread_from and spread_until (unix ms, at most 7 days apart) the jobs are rescheduled evenly over that window instead, soonest first, never later than they were: pass spread_total from count_matching and spread_offset = jobs matched by earlier calls.",
     access: "write",
     inputSchema: object(
-      { ...QUEUE, query: str("Text the job id, name or data must contain"), group_id: str("BullMQ Pro group id (exact)"), cursor: str("next_cursor of the previous call") },
+      {
+        ...QUEUE,
+        query: str("Text the job id, name or data must contain"),
+        group_id: str("BullMQ Pro group id (exact)"),
+        cursor: str("next_cursor of the previous call"),
+        spread_from: int("Spread: window start, unix ms", 0, Number.MAX_SAFE_INTEGER),
+        spread_until: int("Spread: window end, unix ms", 0, Number.MAX_SAFE_INTEGER),
+        spread_total: int("Spread: matching jobs in all (count_matching)", 1, Number.MAX_SAFE_INTEGER),
+        spread_offset: int("Spread: jobs matched by earlier calls", 0, Number.MAX_SAFE_INTEGER),
+      },
       ["connection_id", "queue"],
     ),
     annotations: rw(false, false),
     schema: zQueue
-      .extend({ query: z.string().max(500).optional(), group_id: z.string().min(1).max(200).optional(), cursor: z.string().max(20).optional() })
+      .extend({
+        query: z.string().max(500).optional(),
+        group_id: z.string().min(1).max(200).optional(),
+        cursor: z.string().max(300).optional(),
+        spread_from: z.number().int().nonnegative().optional(),
+        spread_until: z.number().int().nonnegative().optional(),
+        spread_total: z.number().int().min(1).optional(),
+        spread_offset: z.number().int().nonnegative().optional(),
+      })
+      .refine((a) => !!a.query?.trim() || !!a.group_id, { message: "query or group_id is required", path: ["query"] })
+      .refine((a) => (a.spread_from === undefined) === (a.spread_until === undefined), { message: "spread_from and spread_until go together", path: ["spread_until"] }),
+    run: (a, ctx) =>
+      forward(ctx, {
+        method: "POST",
+        url: `${queuePath(a)}/jobs/promote-matching`,
+        body: {
+          query: a.query,
+          groupId: a.group_id,
+          cursor: a.cursor,
+          ...(a.spread_from !== undefined && a.spread_until !== undefined
+            ? { spread: { from: a.spread_from, until: a.spread_until, total: a.spread_total ?? 1, offset: a.spread_offset ?? 0 } }
+            : {}),
+        },
+      }),
+  }),
+  tool({
+    name: "count_matching",
+    title: "Count matching delayed jobs",
+    description:
+      "How many delayed jobs promote_matching would act on: the jobs of a BullMQ Pro group (group_id) and / or whose id, name or data contains query. Read only. Returns next_cursor while part of the delayed state is uncounted: add up the calls.",
+    access: "read",
+    inputSchema: object({ ...QUEUE, query: str("Text the job id, name or data must contain"), group_id: str("BullMQ Pro group id (exact)"), cursor: str("next_cursor of the previous call") }, ["connection_id", "queue"]),
+    annotations: ro,
+    schema: zQueue
+      .extend({ query: z.string().max(500).optional(), group_id: z.string().min(1).max(200).optional(), cursor: z.string().max(300).optional() })
       .refine((a) => !!a.query?.trim() || !!a.group_id, { message: "query or group_id is required", path: ["query"] }),
     run: (a, ctx) =>
-      forward(ctx, { method: "POST", url: `${queuePath(a)}/jobs/promote-matching`, body: { query: a.query, groupId: a.group_id, cursor: a.cursor } }),
+      forward(ctx, { method: "GET", url: `${queuePath(a)}/jobs/count-matching${qs({ query: a.query || undefined, groupId: a.group_id, cursor: a.cursor })}` }),
   }),
   tool({
     name: "pause_group",

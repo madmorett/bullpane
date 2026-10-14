@@ -7,6 +7,7 @@ import { routes } from "@/lib/routes";
 import { formatNumber } from "@/lib/format";
 import { useHotkey } from "@/lib/useHotkey";
 import { STATE_COLORS } from "@/lib/stateColors";
+import { parseSearchQuery } from "@/lib/searchQuery";
 import { useBulkJobAction, useGroupJobs, useJobAction, useJobSearch, useJobs, useQueue, useQueueAction, type JobActionKind } from "@/api/hooks";
 import { useJobSelection } from "@/lib/useJobSelection";
 import { BulkActionBar, BulkResultPanel, bulkActionsFor } from "@/components/BulkActionBar";
@@ -111,10 +112,12 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
   /** any non-jobs tab: the search box, group filter and job tables are hidden */
   const showingPanel = showingMetrics || showingSchedulers;
   const jobs = useJobs(connectionId, queue, { state, page, pageSize, order, groupId: filteringByGroup ? groupId : undefined }, { enabled: !scanning && !showingPanel });
+  // `group:<id>` in the search box filters by group, the rest is the substring (lib/searchQuery.ts)
+  const parsedQ = useMemo(() => parseSearchQuery(q), [q]);
   const search = useJobSearch(
     connectionId,
     queue,
-    { state, q: q.trim(), groupId: groupScan ? groupId : undefined, limit: 50 },
+    { state, q: searching ? parsedQ.text : "", groupId: searching ? parsedQ.groupId : groupScan ? groupId : undefined, limit: 50 },
     { enabled: scanning && !showingPanel },
   );
   const jobAction = useJobAction(connectionId, queue);
@@ -133,12 +136,14 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
   // one bounded call at a time, until a page of them shows up or a round of
   // GROUP_SCAN_ROUND calls ends. "Scan more" starts the next round.
   const [scanRoundStart, setScanRoundStart] = useState(0);
-  useEffect(() => setScanRoundStart(0), [groupId, state]);
+  // the same for a `group:` filter typed in the search box
+  const autoScan = groupScan || (searching && !!parsedQ.groupId);
+  useEffect(() => setScanRoundStart(0), [groupId, state, q]);
   useEffect(() => {
-    if (!groupScan || !search.hasNextPage || search.isFetching) return;
+    if (!autoScan || !search.hasNextPage || search.isFetching) return;
     if (searchJobs.length >= 50 || searchPages.length - scanRoundStart >= GROUP_SCAN_ROUND) return;
     void search.fetchNextPage();
-  }, [groupScan, search, searchJobs.length, searchPages.length, scanRoundStart]);
+  }, [autoScan, search, searchJobs.length, searchPages.length, scanRoundStart]);
   const scanMore = () => {
     setScanRoundStart(searchPages.length);
     void search.fetchNextPage();
@@ -489,7 +494,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
         <Button type="submit" size="md" variant={searching ? "secondary" : "primary"} leftIcon={<Search />} disabled={!draft.trim() && !searching}>
           Search
         </Button>
-        <span className="hidden text-[11px] text-fg-subtle lg:inline">Enter to search · Esc to clear · substring match, server-side</span>
+        <span className="hidden text-[11px] text-fg-subtle lg:inline">Enter to search · Esc to clear · substring match, server-side · group:&lt;id&gt; filters by group</span>
       </form>
       )}
 
@@ -555,7 +560,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
               <span className="flex items-center gap-2 text-fg-muted">
                 <Search className="size-3.5 text-fg-subtle" aria-hidden />
                 {search.isFetching && !search.isFetchingNextPage ? (
-                  <Spinner label={searching ? `Scanning ${state} jobs for "${q}"…` : `Scanning ${state} jobs for group ${groupId}…`} />
+                  <Spinner label={searching ? `Scanning ${state} jobs for "${q.trim()}"…` : `Scanning ${state} jobs for group ${groupId}…`} />
                 ) : (
                   <>
                     <span className="num font-semibold text-fg">{formatNumber(searchJobs.length)}</span> {searching ? (searchJobs.length === 1 ? "match" : "matches") : `${searchJobs.length === 1 ? "job" : "jobs"} of group ${groupId}`} · scanned <span className="num text-fg">{formatNumber(Math.min(scanned, searchTotal))}</span> of{" "}
@@ -603,7 +608,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
                 search.hasNextPage
                   ? "No matches yet — scan more to keep looking"
                   : searching
-                    ? `No ${state} job contains "${q}"`
+                    ? `No ${state} job matches "${q.trim()}"`
                     : `No ${state} jobs in group ${groupId}`
               }
               canOperate={isOperator}
@@ -615,7 +620,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
                 clearSearch();
                 update({ group: gid, page: null });
               }}
-              highlight={searching ? q : undefined}
+              highlight={searching && parsedQ.text ? parsedQ.text : undefined}
               selection={isOperator ? selection : undefined}
             />
             <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-fg-subtle">
@@ -769,7 +774,7 @@ export function QueuePage({ view = "jobs" }: { view?: "jobs" | "metrics" | "sche
         onConfirm={() => runQueueAction({ action: "obliterate" }, `${queue} obliterated`)}
       />
       {searching && (
-        <PromoteMatchingDialog open={promoteMatchingOpen} onClose={() => setPromoteMatchingOpen(false)} connectionId={connectionId} queue={queue} match={{ query: q.trim() }} />
+        <PromoteMatchingDialog open={promoteMatchingOpen} onClose={() => setPromoteMatchingOpen(false)} connectionId={connectionId} queue={queue} matches={[{ query: parsedQ.text || undefined, groupId: parsedQ.groupId }]} />
       )}
     </Page>
   );

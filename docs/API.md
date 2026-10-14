@@ -110,8 +110,10 @@ Notes
 | GET | /connections/:id/queues/:queue/jobs?groupId= | viewer | | when `groupId` is set the page comes from that Pro group's list and `state` is ignored |
 | GET | /connections/:id/queues/:queue/jobs/search?groupId= | viewer | | only jobs of that Pro group (exact id: the `gid` hash field, else `opts.group.id`); `q` may then be empty. The way to list a group's delayed, failed, completed or active jobs, which Pro keeps in the queue-wide state keys |
 | GET | /connections/:id/queues/:queue/groups | viewer | | → `GroupsResponse` (`GroupsPage` + `bullmqProApi`: BullMQ Pro's package is installed) |
+| GET | /connections/:id/queues/:queue/groups-delayed | viewer | | `?cursor=` (opaque, from `nextCursor`) → `DelayedGroupsPage`: groups that have delayed jobs, counted over one bounded slice of `delayed` (soonest first, `delayedGroupsScanPerCall` = 2500 jobs, group fields only; the cursor is the score and id of the last job read, so due jobs leaving `delayed` between calls do not make it skip any), each with its `status` in Pro's index or null when Pro does not index it. Pro indexes no group whose jobs are all delayed, so `/groups` cannot list them. Not under `/groups/` because "delayed" is a valid group id |
 | POST | /connections/:id/queues/:queue/groups/:groupId/pause | operator | | `QueuePro.pauseGroup` → `{ ok }`; audited `group.pause`. Works on a group Pro has not indexed yet (only delayed jobs): Pro records the pause and the jobs join it paused |
-| POST | /connections/:id/queues/:queue/jobs/promote-matching | operator | | `promoteMatchingSchema` (`query` and / or `groupId`, `cursor`) → `PromoteMatchingResult`. Promotes every delayed job that matches, past the 500-id bulk ceiling: at most `PROMOTE_MATCHING_LIMIT` (2000) per call, then `nextCursor`. Audited `job.promote_matching` with the group, the query (100 chars) and counts |
+| POST | /connections/:id/queues/:queue/jobs/promote-matching | operator | | `promoteMatchingSchema` (`query` and / or `groupId`, `cursor`, optional `spread`) → `PromoteMatchingResult`. Promotes every delayed job that matches, past the 500-id bulk ceiling: at most `PROMOTE_MATCHING_LIMIT` (2000) per call, then `nextCursor` (opaque: score and id of the last job read, soonest first). With `spread: { from, until, total, offset }` (unix ms, at most 7 days) it reschedules them evenly over the window instead, soonest first, never later than they were (`rescheduled` / `unchanged`); Redis only. Audited `job.promote_matching` with the group, the query (100 chars), the window and counts |
+| GET | /connections/:id/queues/:queue/jobs/count-matching | viewer | | `countMatchingQuerySchema` (`query` and / or `groupId`, `cursor`) → `CountMatchingResult`: how many delayed jobs promote-matching would act on (the preview, and `spread.total`). Bounded slices, nothing written, not audited |
 | POST | /connections/:id/queues/:queue/groups/:groupId/resume | operator | | `QueuePro.resumeGroup` → `{ ok }`; audited `group.resume` |
 | POST | /connections/:id/queues/:queue/groups/:groupId/drain | admin | | `QueuePro.deleteGroup` (the group's waiting and prioritized jobs) → `{ ok }`; audited `group.drain` |
 
@@ -446,9 +448,9 @@ ARCHITECTURE.md → MCP.
 
 Scopes: `queues:read`, `queues:write` (a request for write; the consent screen decides).
 Tools: `list_connections`, `list_queues`, `get_queue`, `list_jobs`, `search_jobs`,
-`get_job`, `get_job_logs`, `list_schedulers`, `list_groups`, `request_destructive_action`
+`get_job`, `get_job_logs`, `list_schedulers`, `list_groups`, `count_matching`, `request_destructive_action`
 (read); `add_job`, `retry_job`, `promote_job`, `remove_job`, `discard_job`,
-`bulk_job_action`, `promote_matching`, `retry_all`, `pause_queue`, `resume_queue`, `pause_group`, `resume_group`
+`bulk_job_action`, `promote_matching` (with `spread_*`), `retry_all`, `pause_queue`, `resume_queue`, `pause_group`, `resume_group`
 (write). Draining a group is `request_destructive_action` with `drain_group` and `group_id`:
 a link to the group page's confirmation dialog (`?confirm=drain`).
 
